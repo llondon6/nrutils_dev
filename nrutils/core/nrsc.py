@@ -1608,7 +1608,7 @@ def lswfa( apx      ='IMRPhenomD',  # Approximant name; must be compatible with 
     if domain in ['time','t']:
         # Call the time domain function
         y = lswfatd( apx=apx,q=q,S1=S1,S2=S2,verbose=verbose )
-    elif: domain in ['freq','frequnecy','f']:
+    elif domain in ['freq','frequnecy','f']:
         # Call the frequency domain function
         y = lswfafd( apx=apx,q=q,S1=S1,S2=S2,verbose=verbose )
     else:
@@ -1702,7 +1702,10 @@ def lswfafd( apx      ='IMRPhenomD',    # Approximant name; must be compatible w
 
     #
     fmin_phys = 30.0
-    fmin_phys = 8*fmin_phys
+    fmax_phys = 8*fmin_phys
+
+    #
+    M_total = (m1+m2) * lal.MSUN_SI
 
     #
     df =  1.0 / (5500 * 0.5 * M_total * lal.MTSUN_SI / lal.MSUN_SI)
@@ -1732,14 +1735,11 @@ def lswfafd( apx      ='IMRPhenomD',    # Approximant name; must be compatible w
              'phaseO': -1,
              'approximant': lalsim.SimInspiralGetApproximantFromString(apx)}
 
-    #
-    M_total = (m1+m2) * lal.MSUN_SI
-
     # Use lalsimulation to calculate plus and cross in lslsim dataformat
     fd_hp, fd_hc  = lalsim.SimInspiralFD(**FD_arguments)
 
     #
-    D = 1e-6 * TD_arguments['r']/lal.PC_SI
+    D = 1e-6 * FD_arguments['r']/lal.PC_SI
     y = lalsim2gwf( fd_hp, fd_hc, m1+m2, D, domain='frequency' )
 
     #
@@ -1809,12 +1809,13 @@ def gwfend():
 def lalsim2gwf( hp,hc,M,D,domain='time' ):
 
     #
-    from numpy import linspace,array,double,sqrt
+    from numpy import linspace,array,double,sqrt,hstack
     from nrutils.tools.unit.conversion import codeh
 
     # Check that input is of the correct type
     # print type(hp).__name__
 
+    # IF TIME DOMAIN
     if domain.lower() in ['t','time']:
 
         # Extract plus and cross data. Divide out contribution from spherical harmonic towards NR scaling
@@ -1834,9 +1835,48 @@ def lalsim2gwf( hp,hc,M,D,domain='time' ):
         # Create gwf object
         h = gwf( harr, kind=r'$h^{\mathrm{lal}}_{22}$' )
 
-    elif domain.lower() in ['f','frequency','freq']:
+    elif domain.lower() in ['f','frequency','freq']: # IF FREQUENCY DOMAIN
 
-        # Convert frequency domain strain from physical iunits to code units 
+        # Convert frequency domain strain from physical iunits to code units
+
+        # Extract plus and cross data. Divide out contribution from spherical harmonic towards NR scaling
+        x = sYlm(-2,2,2,0,0)
+        h_plus  = hp.data.data/x
+        h_cross = hc.data.data/x
+
+        #
+        pad = zeros( len(h_plus)-1 )
+        h_plus = hstack([pad,h_plus])
+        h_cross = hstack([pad,h_cross])
+
+        # Create frequency series data
+        F = (h_plus.size-1.0)*hp.deltaF
+        f = linspace( -F, F, 2*len(h_plus)-1 )
+
+        #
+        from matplotlib.pyplot import *
+        figure()
+        ax = subplot(1,1,1)
+        plot(f,abs(h_plus),'-o')
+        ax.set_xscale('log', nonposx='clip')
+        ax.set_yscale('log', nonposx='clip')
+        show()
+        print dir(hp.data.data)
+        print hp.data
+        print len(f)
+        print len(h_plus)
+        # from matplotlib.pyplot import *
+        # plot(  )
+        raise
+
+        # Create waveform
+        fd_harr = array( [f,h_plus,h_cross] ).T
+
+        # Convert to code units, where Mtotal=1
+        harr = codehfd( fd_harr,M,D )
+
+        # Create gwf object
+        h = gwf( fd_harr, kind=r'$h^{\mathrm{lal}}_{22}$', domain='frequency' )
 
     #
     return h

@@ -11,7 +11,7 @@ system('clear')
 from nrutils.core.nrsc import *
 
 #
-q = 4
+q = 40
 S1 = array( [0.0,0.0,0.0] )
 S2 = array( [0.0,0.0,0.0] )
 
@@ -19,11 +19,14 @@ S2 = array( [0.0,0.0,0.0] )
 
 # Compute strain using lalsimulation. The default approximant is PhenomD.
 # SimInspiralTD is called internally.
-y = lswfa(q=q,S1=S1,S2=S2)
+y = lswfa(q=q,S1=S1,S2=S2,domain='freq')
+# y = lswfa(q=q,S1=S1,S2=S2)
+
+# #
+# y.plot(domain='time')
+# y.plot(domain='freq')
+#
+# pyplot.show()
 
 #
-y.plot(domain='time')
-y.plot(domain='freq')
-
-#
-pyplot.show()
+# system('deactivate')

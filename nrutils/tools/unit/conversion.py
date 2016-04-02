@@ -26,16 +26,37 @@ def codeh( harr, M, D ):
     # convert time series to physical units
     harr[:,0] = codet( harr[:,0], M )
 
-    # scale wave amplitude
+    # scale wave amplitude for mass and distance
     harr[:,1:] =  harr[:,1:] / (mass_mpc( M )/D)
 
     #
     return harr
 
 # --------------------------------------------------------------- #
+# Given FREQUENCY DOMAIN strain in physical units, convert to Code units
+# --------------------------------------------------------------- #
+def codehfd( fd_harr, M, D ):
+
+    # convert time series to physical units
+    fd_harr[:,0] = codef( fd_harr[:,0], M )
+
+    # scale wave amplitude for mass and distance
+    fd_harr[:,1:] =  fd_harr[:,1:] / (mass_mpc( M )/D)
+    # convert the integration factor, dt, to code units
+    fd_harr[:,1:] =  fd_harr[:,1:] / mass_sec(M)
+
+    #
+    return fd_harr
+
+# --------------------------------------------------------------- #
 # Convert physical time to code units
 # --------------------------------------------------------------- #
 def codet( t, M ): return t/mass_sec(M)
+
+# --------------------------------------------------------------- #
+# Convert physical frequency series to code units
+# --------------------------------------------------------------- #
+def codef( f, M ): return f*mass_sec(M)
 
 # --------------------------------------------------------------- #
 # Convert mass in code units to seconds
