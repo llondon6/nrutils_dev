@@ -13,7 +13,7 @@
 
 #
 from os.path import dirname, basename, isdir, realpath
-from numpy import array,ones,pi
+from numpy import array,ones,pi,linspace
 from matplotlib import pyplot
 from os import system
 system('clear')
@@ -21,22 +21,24 @@ system('clear')
 # from nrutils import *
 from nrutils.core.nrsc import *
 
-#
-q = 1.2
-S1 = array( [0.0,0.0,0.0] )
-S2 = array( [0.0,0.0,0.0] )
-
 # Make sure that pycbc is visible. I do this here by activating a virtual installation.
 system('source ~/.virtual_enviroments/pycbc-nr/bin/activate')
 
-# Compute strain using lalsimulation. The default approximant is PhenomD
-y = lswfa(q=q,S1=S1,S2=S2)
+#
+q_range = linspace(1,20,10)
+S1 = array( [0.0,0.0,0.0] )
+S2 = array( [0.0,0.0,0.0] )
+
+# Compute strain using lalsimulation. The default approximant is PhenomD.
+# SimInspiralTD is called internally.
+y = []
+pyplot.figure()
+for k,q in enumerate(q_range):
+    wf = lswfa(q=q,S1=S1,S2=S2)
+    y.append( wf.fd_amp )
+    pyplot.plot( wf.t, wf.plus )
+    msg = 'wf.dt = %f, wf.df = %f' % (wf.dt,wf.df)
+    alert(msg)
 
 #
-print d
-
-# #
-# y.plot(domain='time')
-# y.plot(domain='freq')
-#
-# pyplot.show()
+pyplot.show()

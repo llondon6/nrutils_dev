@@ -753,6 +753,9 @@ class gwf:
         # though the "reset" method (i.e. this.reset)
         this.__rawgwfarr__ = wfarr
 
+        # This property is used to undo compatible actions. NOTE that each new method must reset __prevarr__ at its onset for the method action to be compaitble with this.undo()
+        this.__prevarr__ = wfarr
+
     # set fields of standard wf object
     def setfields(this,wfarr=None,domain=None):
 
@@ -1167,6 +1170,9 @@ class gwf:
                                         # If a<b, then the taper is 1 at a and 0 at b.
                       window = None):   # optional input: use known taper/window
 
+        # Store the initial state of the waveform array just in case the user wishes to undo the window
+        this.__prevarr__ = this.wfarr
+
         # Use low level function
         if (state is not None) and (window is None):
             window = maketaper( this.t, state)
@@ -1188,6 +1194,9 @@ class gwf:
     # If desired, reset the waveform object to its original state (e.g. it's state just afer loading).
     # Note that after this methed is called, the current object will occupy a different address in memory.
     def reset(this): this.setfields( this.__rawgwfarr__ )
+
+    #
+    def undo(this): this.setfields( this.__prevarr__ )
 
     # RETURN a clone the current waveform object. NOTE that the copy package may also be used here
     def clone(this): return gwf(this.wfarr).meet(this)
@@ -1245,9 +1254,7 @@ class gwylm:
         this.extraction_parameter = extraction_parameter
 
         # Load the waveform data
-        if load==True:
-            #
-            this.__load__(lmax=lmax,lm=lm)
+        if load==True: this.__load__(lmax=lmax,lm=lm)
 
         # Characterize the waveform's start and store related information to this.starting
         this.starting = None # In charasterize_start(), the information about the start of the waveform is actually stored to "starting". Here this field is inintialized for visibility.
@@ -1524,7 +1531,6 @@ class gwylm:
             y22 = y22_list[0]
         # Use the l=m=2 psi4 multipole to determine the waveform start
         # store information about the start of the waveform to the current object
-        charstart = gwfcharstart( y22 )
         this.starting = gwfcharstart( y22 )
         # store the expected min frequency in the waveform to this object as:
         this.wstart = this.starting.right_dphi
@@ -1564,20 +1570,62 @@ class gwylm:
 
     # Reset each multipole object to its original state
     def reset(this):
-
         #
         for y in this.ylm:
             y.reset()
         for h in this.hlm:
             h.reset()
 
+    # Undo last action
+    def undo(this):
+        #
+        for y in this.ylm:
+            y.undo()
+        for h in this.hlm:
+            h.undo()
 
-# LALSimulation Waveform Approximant h_pluss and cross, but using nrutils conventions
-def lswfa( apx      ='IMRPhenomD',
-           q        = None,
-           S1       = None,
-           S2       = None,
-           verbose  = False ):
+    # return a copy of the current object
+    def copy(this):
+
+        #
+        from copy import deepcopy as copy
+
+        #
+        return copy(this)
+
+
+
+# General Domain LALSimulation Waveform Approximant h_pluss and cross, but using nrutils data conventions
+def lswfa( apx      ='IMRPhenomD',  # Approximant name; must be compatible with lal convenions
+           q        = None,         # mass ratio > 1
+           S1       = None,         # spin1 iterable
+           S2       = None,         # spin2 iterable
+           domain   = 'time',       # Choose the domain in which to generate the approximant (i.e. which lalsim function is used). NOTE that the nrutils datatypes hold both time and frequency domain information.
+           verbose  = False ):      # boolean toggle for verbosity
+
+    # parse the domain option and call the related function
+    domain = domain.lower()
+    if domain in ['time','t']:
+        # Call the time domain function
+        y = lswfatd( apx=apx,q=q,S1=S1,S2=S2,verbose=verbose )
+    elif: domain in ['freq','frequnecy','f']:
+        # Call the frequency domain function
+        y = lswfafd( apx=apx,q=q,S1=S1,S2=S2,verbose=verbose )
+    else:
+        msg = 'Unknown domain type given. Must be '+cyan('time')
+
+    # Return the desired waveform object
+    return y
+
+
+
+
+# Time Domain LALSimulation Waveform Approximant h_pluss and cross, but using nrutils data conventions
+def lswfatd( apx      ='IMRPhenomD',    # Approximant name; must be compatible with lal convenions
+             q        = None,           # mass ratio > 1
+             S1       = None,           # spin1 iterable
+             S2       = None,           # spin2 iterable
+             verbose  = False ):        # boolean toggle for verbosity
 
     #
     from numpy import array,linspace,double
@@ -1593,10 +1641,11 @@ def lswfa( apx      ='IMRPhenomD',
 
     #
     fmin_phys = 30.0
+    M_total_phys = (m1+m2) * lal.MSUN_SI
 
     #
     TD_arguments = {'phiRef': 0.,
-             'deltaT': 0.05,
+             'deltaT': 0.5 * M_total_phys * lal.MTSUN_SI / lal.MSUN_SI,
              'f_min': fmin_phys,
              'm1': m1 * lal.MSUN_SI,
              'm2' : m2 * lal.MSUN_SI,
@@ -1619,22 +1668,84 @@ def lswfa( apx      ='IMRPhenomD',
              'approximant': lalsim.SimInspiralGetApproximantFromString(apx)}
 
     #
-    M_total = (m1+m2) * lal.MSUN_SI
-    TD_arguments.update({'deltaT': M_total * lal.MTSUN_SI / lal.MSUN_SI})
-
-    #
-
 
     # Use lalsimulation to calculate plus and cross in lslsim dataformat
     hp, hc  = lalsim.SimInspiralTD(**TD_arguments)
 
     #
-    M = m1+m2
     D = 1e-6 * TD_arguments['r']/lal.PC_SI
-    y = lalsim2gwf( hp,hc,M, D )
+    y = lalsim2gwf( hp,hc,m1+m2, D )
 
     #
     return y
+
+
+
+# Frequency Domain LALSimulation Waveform Approximant h_pluss and cross, but using nrutils data conventions
+def lswfafd( apx      ='IMRPhenomD',    # Approximant name; must be compatible with lal convenions
+             q        = None,           # mass ratio > 1
+             S1       = None,           # spin1 iterable
+             S2       = None,           # spin2 iterable
+             verbose  = False ):        # boolean toggle for verbosity
+
+    #
+    from numpy import array,linspace,double
+    import lalsimulation as lalsim
+    import lal
+
+    # Standardize input mass ratio and convert to component masses
+    M = 70.0
+    q = double(q)
+    q = max( [q,1.0/q] )
+    m2 = M * 1.0 / (1.0+q)
+    m1 = float(q) * m2
+
+    #
+    fmin_phys = 30.0
+    fmin_phys = 8*fmin_phys
+
+    #
+    df =  1.0 / (5500 * 0.5 * M_total * lal.MTSUN_SI / lal.MSUN_SI)
+
+    #
+    FD_arguments = {'phiRef': 0.,
+             'deltaF': df,
+             'f_min': fmin_phys,
+             'f_max': fmax_phys,
+             'm1': m1 * lal.MSUN_SI,
+             'm2' : m2 * lal.MSUN_SI,
+             'S1x' : S1[0],
+             'S1y' : S1[1],
+             'S1z' : S1[2],
+             'S2x' : S2[0],
+             'S2y' : S2[1],
+             'S2z' : S2[2],
+             'f_ref': 100.,
+             'r': lal.PC_SI,
+             'z': 0,
+             'i': 0,
+             'lambda1': 0,
+             'lambda2': 0,
+             'waveFlags': None,
+             'nonGRparams': None,
+             'amplitudeO': -1,
+             'phaseO': -1,
+             'approximant': lalsim.SimInspiralGetApproximantFromString(apx)}
+
+    #
+    M_total = (m1+m2) * lal.MSUN_SI
+
+    # Use lalsimulation to calculate plus and cross in lslsim dataformat
+    fd_hp, fd_hc  = lalsim.SimInspiralFD(**FD_arguments)
+
+    #
+    D = 1e-6 * TD_arguments['r']/lal.PC_SI
+    y = lalsim2gwf( fd_hp, fd_hc, m1+m2, D, domain='frequency' )
+
+    #
+    return y
+
+
 
 
 # Characterize the START of a time domain waveform
@@ -1695,7 +1806,7 @@ def gwfend():
     return None
 
 # Function which converts lalsim waveform to gwf object
-def lalsim2gwf( hp,hc,M,D ):
+def lalsim2gwf( hp,hc,M,D,domain='time' ):
 
     #
     from numpy import linspace,array,double,sqrt
@@ -1704,22 +1815,28 @@ def lalsim2gwf( hp,hc,M,D ):
     # Check that input is of the correct type
     # print type(hp).__name__
 
-    # Extract plus and cross data. Divide out contribution from spherical harmonic towards NR scaling
-    x = sYlm(-2,2,2,0,0)
-    h_plus  = hp.data.data/x
-    h_cross = hc.data.data/x
+    if domain.lower() in ['t','time']:
 
-    # Create time series data
-    t = linspace( 0.0, (h_plus.size-1.0)*hp.deltaT, int(h_plus.size) )
+        # Extract plus and cross data. Divide out contribution from spherical harmonic towards NR scaling
+        x = sYlm(-2,2,2,0,0)
+        h_plus  = hp.data.data/x
+        h_cross = hc.data.data/x
 
-    # Create waveform
-    harr = array( [t,h_plus,h_cross] ).T
+        # Create time series data
+        t = linspace( 0.0, (h_plus.size-1.0)*hp.deltaT, int(h_plus.size) )
 
-    # Convert to code units, where Mtotal=1
-    harr = codeh( harr,M,D )
+        # Create waveform
+        harr = array( [t,h_plus,h_cross] ).T
 
-    # Create gwf object
-    h = gwf( harr, kind=r'$h^{\mathrm{lal}}_{22}$' )
+        # Convert to code units, where Mtotal=1
+        harr = codeh( harr,M,D )
+
+        # Create gwf object
+        h = gwf( harr, kind=r'$h^{\mathrm{lal}}_{22}$' )
+
+    elif domain.lower() in ['f','frequency','freq']:
+
+        # Convert frequency domain strain from physical iunits to code units 
 
     #
     return h

@@ -14,17 +14,17 @@ from nrutils.core.nrsc import *
 # scbuild()
 
 # Search for simulations
-# A = scsearch(keyword='base',verbose=True,unique=True)
 A = scsearch(institute='sxs',nonspinning=True,q=1,verbose=True,unique=True)
 # A = scsearch(precessing=True,q=[1,1.5],verbose=True,unique=True)
 
-print dir(A[0])
-
 # Convert a single simulation into a waveform object with desired multipoles
-y = gwylm( scentry_obj = A[0], lm=[2,2], clean=True, dt=0.4, verbose=True )
+y = gwylm( scentry_obj = A[0], lm=[2,2], dt=0.4, verbose=True )
 
-# # Plot the waveform in time and frequency domains
-# ax1 = y.plot(domain='freq',kind='psi4')
-# ax2 = y.plot(domain='time',kind='psi4')
-#
-# pyplot.show()
+# Plot time domain strain
+y.plot(kind='strain')
+
+# plot time domain psi4
+y.plot(kind='psi4')
+
+# plot frequency domain strain and show all current plots
+y.plot(kind='strain',show=True,domain='freq')

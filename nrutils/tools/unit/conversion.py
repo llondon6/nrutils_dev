@@ -52,6 +52,7 @@ def mass_mpc( M ): return M*__physical_constants__['mass_sun_mpc']
 
 
 # Convert component masses to mass ratio
-def m1m2q(m1,m2): return max([m1,m2])/min([m1,m2])
+def m1m2q(m1,m2): return float(max([m1,m2]))/min([m1,m2])
+
 # Convert q to eta
 def q2eta(q): return q/((1.0+q)*(1.0+q))
