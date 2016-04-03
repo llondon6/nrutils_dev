@@ -1179,11 +1179,19 @@ def sYlm(s,l,m,theta,phi):
     return Y
 
 # Interpolate waveform array to a given spacing in its first column
-def intrp_wfarr(wfarr,delta=None):
+def intrp_wfarr(wfarr,delta=None,domain=None):
 
     #
     from numpy import linspace,array,diff,zeros
     from scipy.interpolate import InterpolatedUnivariateSpline as spline
+
+    # Validate inputs
+    if (delta is None) and (domain is None):
+        msg = red('First "delta" or "domain" must be given. See traceback above.')
+        error(msg,'intrp_wfarr')
+    if (delta is not None) and (domain is not None):
+        msg = red('Either "delta" or "domain" must be given, not both. See traceback above.')
+        error(msg,'intrp_wfarr')
 
     # Only interpolate if current delta is not input delta
     if abs(delta-d)<1e6:
@@ -1200,8 +1208,13 @@ def intrp_wfarr(wfarr,delta=None):
         # Pre-allocate the new wfarr
         _wfarr = zeros( wfarr.shape )
 
-        # Generate and store the new domain
-        intrp_domain = delta * arange( 0, diff(lim(input_domain))[0] ) + wfarr[0,0]
+        # Generate or parse the new domain
+        if domain is None:
+            intrp_domain = delta * arange( 0, diff(lim(input_domain))[0] ) + wfarr[0,0]
+        else:
+            intrp_domain = domain
+
+        # Store the new domain
         _wfarr[:,0] = intrp_domain
 
         # Interpolate the remaining columns

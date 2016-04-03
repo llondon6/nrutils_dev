@@ -1222,15 +1222,21 @@ class gwf:
     def clone(this): return gwf(this.wfarr).meet(this)
 
     # Interpolate the current object
-    def interpolate(this,dt=None):
+    def interpolate(this,dt=None,domain=None):
 
-        # Validate input
-        if dt is None:
-            msg = red('First input "dt" must be given. See traceback above.')
+        # Validate inputs
+        if (dt is None) and (domain is None):
+            msg = red('First "dt" or "domain" must be given. See traceback above.')
+            error(msg,'gwf.interpolate')
+        if (dt is not None) and (domain is not None):
+            msg = red('Either "dt" or "domain" must be given, not both. See traceback above.')
             error(msg,'gwf.interpolate')
 
         # Create the new wfarr by interpolating
-        wfarr = intrp_wfarr(this.wfarr,delta=dt)
+        if domain is None:
+            wfarr = intrp_wfarr(this.wfarr,delta=dt)
+        else:
+            wfarr = intrp_wfarr(this.wfarr,domain=domain)
 
         # Set the current object to its new state
         this.setfields(wfarr)
@@ -1651,7 +1657,7 @@ def lswfa( apx      ='IMRPhenomD',    # Approximant name; must be compatible wit
     M_total_phys = (m1+m2) * lal.MSUN_SI
 
     #
-    TD_arguments = {'phiRef': 0.,
+    TD_arguments = {'phiRef': 0.0,
              'deltaT': 0.5 * M_total_phys * lal.MTSUN_SI / lal.MSUN_SI,
              'f_min': fmin_phys,
              'm1': m1 * lal.MSUN_SI,
@@ -1662,7 +1668,7 @@ def lswfa( apx      ='IMRPhenomD',    # Approximant name; must be compatible wit
              'S2x' : S2[0],
              'S2y' : S2[1],
              'S2z' : S2[2],
-             'f_ref': 100.,
+             'f_ref': 100.0,
              'r': lal.PC_SI,
              'z': 0,
              'i': 0,
