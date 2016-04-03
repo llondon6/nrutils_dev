@@ -721,6 +721,7 @@ class gwf:
                   extraction_parameter  = None,
                   kind                  = None, # strain or psi4
                   friend                = None, # gwf object from which to clone fields
+                  domain                = 'time', # optional domain specification relating to input wfarr
                   verbose = False ):    # Verbosity toggle
 
         #
@@ -738,7 +739,7 @@ class gwf:
 
         # use the raw waveform data to define all fields
         this.wfarr = wfarr
-        this.setfields(wfarr=wfarr)
+        this.setfields(wfarr=wfarr,domain=domain)
 
         # If desired, Copy fields from related gwf object.
         if type(friend).__name__ == 'gwf' :
@@ -779,7 +780,7 @@ class gwf:
         from numpy import abs,sign,linspace,exp,arange,angle,diff,ones
         from numpy import vstack,sqrt,unwrap,arctan,argmax,mod,floor
         from scipy.interpolate import InterpolatedUnivariateSpline
-        from scipy.fftpack import fft, fftfreq, fftshift
+        from scipy.fftpack import fft, fftfreq, fftshift, ifft
 
         # Time domain attributes
         this.t          = None      # Time vals
@@ -810,6 +811,27 @@ class gwf:
         this.fs             = None      # samples per unit time
         this.df             = None      # frequnecy domain spacing
 
+        # if domain is frequency, then convert wfarr to time domain for use in standard processing
+        if domain.lower() in ['freq','f','frequency']:
+            #
+            fd_wfarr = wfarr
+            f = fd_wfarr[:,0]
+            N = len(f)
+            df = f[1]-f[0]
+            if diff( lim(diff( f )) ) > 1e-6:
+                raise ValueError('Non-Uniform fequency spacing detected.')
+            dt = 1.0 / (N*df)
+            t = linspace(0,N*dt,N)
+            plus = ifft(fd_wfarr[:,1])*df
+            cross= ifft(fd_wfarr[:,2])*df
+            wfarr = vstack([t,plus,cross]).T
+            wfarr = wfarr.real
+            this.wfarr = wfarr
+            # from matplotlib.pyplot import *
+            # plot(t,plus)
+            # show()
+            # raise
+
         # Validate time step. Interpolate for constant time steo if needed.
         this.valdt()
         # Determine formatting of wfarr
@@ -818,7 +840,7 @@ class gwf:
         # if all elements of A are greater than zero
         if (A>0).all() :
             typ = 'amp-phase'
-        elif ((abs(A.imag)>0).any() or (abs(B.imag)>0).any()) and (this.domain=='time'): # else if A or B are complex
+        elif ((abs(A.imag)>0).any() or (abs(B.imag)>0).any()): # else if A or B are complex
             #
             msg = 'The current code version only works with plus valued time domain inputs to gwf().'
             raise ValueError(msg)
@@ -1018,7 +1040,7 @@ class gwf:
         grid(color='0.95', linestyle='-')
         setp(ax[-1].get_xticklabels(), visible=False)
         ax[-1].set_xscale('log', nonposx='clip')
-        ax[-1].set_yscale('log', nonposx='clip')
+        ax[-1].set_yscale('log', nonposy='clip')
         #
         plot( this.f[pos_mask], this.fd_amp[pos_mask], color=clr[0] )
         pylim( this.f[pos_mask], this.fd_amp[pos_mask], pad_y=10 )
@@ -1594,34 +1616,8 @@ class gwylm:
         return copy(this)
 
 
-
-# General Domain LALSimulation Waveform Approximant h_pluss and cross, but using nrutils data conventions
-def lswfa( apx      ='IMRPhenomD',  # Approximant name; must be compatible with lal convenions
-           q        = None,         # mass ratio > 1
-           S1       = None,         # spin1 iterable
-           S2       = None,         # spin2 iterable
-           domain   = 'time',       # Choose the domain in which to generate the approximant (i.e. which lalsim function is used). NOTE that the nrutils datatypes hold both time and frequency domain information.
-           verbose  = False ):      # boolean toggle for verbosity
-
-    # parse the domain option and call the related function
-    domain = domain.lower()
-    if domain in ['time','t']:
-        # Call the time domain function
-        y = lswfatd( apx=apx,q=q,S1=S1,S2=S2,verbose=verbose )
-    elif domain in ['freq','frequnecy','f']:
-        # Call the frequency domain function
-        y = lswfafd( apx=apx,q=q,S1=S1,S2=S2,verbose=verbose )
-    else:
-        msg = 'Unknown domain type given. Must be '+cyan('time')
-
-    # Return the desired waveform object
-    return y
-
-
-
-
 # Time Domain LALSimulation Waveform Approximant h_pluss and cross, but using nrutils data conventions
-def lswfatd( apx      ='IMRPhenomD',    # Approximant name; must be compatible with lal convenions
+def lswfa( apx      ='IMRPhenomD',    # Approximant name; must be compatible with lal convenions
              q        = None,           # mass ratio > 1
              S1       = None,           # spin1 iterable
              S2       = None,           # spin2 iterable
@@ -1679,71 +1675,6 @@ def lswfatd( apx      ='IMRPhenomD',    # Approximant name; must be compatible w
     #
     return y
 
-
-
-# Frequency Domain LALSimulation Waveform Approximant h_pluss and cross, but using nrutils data conventions
-def lswfafd( apx      ='IMRPhenomD',    # Approximant name; must be compatible with lal convenions
-             q        = None,           # mass ratio > 1
-             S1       = None,           # spin1 iterable
-             S2       = None,           # spin2 iterable
-             verbose  = False ):        # boolean toggle for verbosity
-
-    #
-    from numpy import array,linspace,double
-    import lalsimulation as lalsim
-    import lal
-
-    # Standardize input mass ratio and convert to component masses
-    M = 70.0
-    q = double(q)
-    q = max( [q,1.0/q] )
-    m2 = M * 1.0 / (1.0+q)
-    m1 = float(q) * m2
-
-    #
-    fmin_phys = 30.0
-    fmax_phys = 8*fmin_phys
-
-    #
-    M_total = (m1+m2) * lal.MSUN_SI
-
-    #
-    df =  1.0 / (5500 * 0.5 * M_total * lal.MTSUN_SI / lal.MSUN_SI)
-
-    #
-    FD_arguments = {'phiRef': 0.,
-             'deltaF': df,
-             'f_min': fmin_phys,
-             'f_max': fmax_phys,
-             'm1': m1 * lal.MSUN_SI,
-             'm2' : m2 * lal.MSUN_SI,
-             'S1x' : S1[0],
-             'S1y' : S1[1],
-             'S1z' : S1[2],
-             'S2x' : S2[0],
-             'S2y' : S2[1],
-             'S2z' : S2[2],
-             'f_ref': 100.,
-             'r': lal.PC_SI,
-             'z': 0,
-             'i': 0,
-             'lambda1': 0,
-             'lambda2': 0,
-             'waveFlags': None,
-             'nonGRparams': None,
-             'amplitudeO': -1,
-             'phaseO': -1,
-             'approximant': lalsim.SimInspiralGetApproximantFromString(apx)}
-
-    # Use lalsimulation to calculate plus and cross in lslsim dataformat
-    fd_hp, fd_hc  = lalsim.SimInspiralFD(**FD_arguments)
-
-    #
-    D = 1e-6 * FD_arguments['r']/lal.PC_SI
-    y = lalsim2gwf( fd_hp, fd_hc, m1+m2, D, domain='frequency' )
-
-    #
-    return y
 
 
 
@@ -1809,8 +1740,8 @@ def gwfend():
 def lalsim2gwf( hp,hc,M,D,domain='time' ):
 
     #
-    from numpy import linspace,array,double,sqrt,hstack
-    from nrutils.tools.unit.conversion import codeh
+    from numpy import linspace,array,double,sqrt,hstack,zeros
+    from nrutils.tools.unit.conversion import codeh,codehfd
 
     # Check that input is of the correct type
     # print type(hp).__name__
@@ -1851,23 +1782,25 @@ def lalsim2gwf( hp,hc,M,D,domain='time' ):
 
         # Create frequency series data
         F = (h_plus.size-1.0)*hp.deltaF
-        f = linspace( -F, F, 2*len(h_plus)-1 )
+        f = linspace( -F, F, len(h_plus) )
 
-        #
-        from matplotlib.pyplot import *
-        figure()
-        ax = subplot(1,1,1)
-        plot(f,abs(h_plus),'-o')
-        ax.set_xscale('log', nonposx='clip')
-        ax.set_yscale('log', nonposx='clip')
-        show()
-        print dir(hp.data.data)
-        print hp.data
-        print len(f)
-        print len(h_plus)
+        # #
+        # print len(f)
+        # print len(h_plus)
         # from matplotlib.pyplot import *
-        # plot(  )
-        raise
+        # figure()
+        # ax = subplot(1,1,1)
+        # plot(f,abs(h_plus),'-o')
+        # ax.set_xscale('log', nonposx='clip')
+        # ax.set_yscale('log', nonposx='clip')
+        # show()
+        # print dir(hp.data.data)
+        # print hp.data
+        # print len(f)
+        # print len(h_plus)
+        # # from matplotlib.pyplot import *
+        # # plot(  )
+        # raise
 
         # Create waveform
         fd_harr = array( [f,h_plus,h_cross] ).T
