@@ -721,7 +721,6 @@ class gwf:
                   extraction_parameter  = None,
                   kind                  = None, # strain or psi4
                   friend                = None, # gwf object from which to clone fields
-                  domain                = 'time', # optional domain specification relating to input wfarr
                   verbose = False ):    # Verbosity toggle
 
         #
@@ -739,7 +738,7 @@ class gwf:
 
         # use the raw waveform data to define all fields
         this.wfarr = wfarr
-        this.setfields(wfarr=wfarr,domain=domain,dt=dt)
+        this.setfields(wfarr=wfarr,dt=dt)
 
         # If desired, Copy fields from related gwf object.
         if type(friend).__name__ == 'gwf' :
@@ -755,7 +754,7 @@ class gwf:
         this.__rawgwfarr__ = wfarr
 
     # set fields of standard wf object
-    def setfields(this,wfarr=None,domain=None,dt=None):
+    def setfields(this,wfarr=None,dt=None):
 
         # If given dt, then interpolote waveform array accordingly
         if dt is not None:
@@ -767,11 +766,6 @@ class gwf:
             raise ValueError(msg)
         elif wfarr is not None:
             this.wfarr = wfarr
-
-        # Time domain fields are currently set by default
-        if domain is None: domain = 'time'
-        # Always use lower case for sting comparisons
-        domain = domain.lower()
 
         ##########################################################
         # Make sure that waveform array is in t-plus-cross format #
@@ -811,27 +805,6 @@ class gwf:
         this.n              = None      # length of arrays
         this.fs             = None      # samples per unit time
         this.df             = None      # frequnecy domain spacing
-
-        # if domain is frequency, then convert wfarr to time domain for use in standard processing
-        if domain.lower() in ['freq','f','frequency']:
-            #
-            fd_wfarr = wfarr
-            f = fd_wfarr[:,0]
-            N = len(f)
-            df = f[1]-f[0]
-            if diff( lim(diff( f )) ) > 1e-6:
-                raise ValueError('Non-Uniform fequency spacing detected.')
-            dt = 1.0 / (N*df)
-            t = linspace(0,N*dt,N)
-            plus = ifft(fd_wfarr[:,1])*df
-            cross= ifft(fd_wfarr[:,2])*df
-            wfarr = vstack([t,plus,cross]).T
-            wfarr = wfarr.real
-            this.wfarr = wfarr
-            # from matplotlib.pyplot import *
-            # plot(t,plus)
-            # show()
-            # raise
 
         # Validate time step. Interpolate for constant time steo if needed.
         this.valdt()
@@ -890,11 +863,11 @@ class gwf:
         # --------------------------------------------------- #
 
         # compute the frequency domain
-        this.f = fftfreq( this.n, this.dt )
+        this.f = fftshift(fftfreq( this.n, this.dt ))
 
         # compute fourier transform values
-        this.fd_plus   = fft( this.plus  ) * this.dt                    # fft of plus
-        this.fd_cross  = fft( this.cross ) * this.dt                    # fft of cross
+        this.fd_plus   = fftshift(fft( this.plus  )) * this.dt                    # fft of plus
+        this.fd_cross  = fftshift(fft( this.cross )) * this.dt                    # fft of cross
         this.fd_y       = this.fd_plus + 1j*this.fd_cross               # full fft
         this.fd_amp     = abs( this.fd_y )                              # amp of full fft
         this.fd_phi     = unwrap( angle( this.fd_y ) )                  # phase of full fft
@@ -1670,7 +1643,7 @@ def lswfa( apx      ='IMRPhenomPv2',    # Approximant name; must be compatible w
 
     #
     TD_arguments = {'phiRef': 0.0,
-             'deltaT': 0.5 * M_total_phys * lal.MTSUN_SI / lal.MSUN_SI,
+             'deltaT': 1.0 * M_total_phys * lal.MTSUN_SI / lal.MSUN_SI,
              'f_min': fmin_phys,
              'm1': m1 * lal.MSUN_SI,
              'm2' : m2 * lal.MSUN_SI,
@@ -1697,16 +1670,9 @@ def lswfa( apx      ='IMRPhenomPv2',    # Approximant name; must be compatible w
     # Use lalsimulation to calculate plus and cross in lslsim dataformat
     hp, hc  = lalsim.SimInspiralTD(**TD_arguments)
 
-    #
+    # Convert the lal datatype to a gwf object
     D = 1e-6 * TD_arguments['r']/lal.PC_SI
     y = lalsim2gwf( hp,hc,m1+m2, D )
-
-    # #
-    # df = 0.001
-    # dt = 1.0 / ( y.n * df )
-    # alert('dt is %f, but trying to interpolate to dt=%f' % (y.dt,dt) )
-    # y.interpolate(dt=dt)
-    # alert('... now dt = %f'%y.dt)
 
     #
     return y
@@ -1770,79 +1736,28 @@ def gwfend():
     return None
 
 # Function which converts lalsim waveform to gwf object
-def lalsim2gwf( hp,hc,M,D,domain='time' ):
+def lalsim2gwf( hp,hc,M,D ):
 
     #
     from numpy import linspace,array,double,sqrt,hstack,zeros
-    from nrutils.tools.unit.conversion import codeh,codehfd
+    from nrutils.tools.unit.conversion import codeh
 
-    # Check that input is of the correct type
-    # print type(hp).__name__
+    # Extract plus and cross data. Divide out contribution from spherical harmonic towards NR scaling
+    x = sYlm(-2,2,2,0,0)
+    h_plus  = hp.data.data/x
+    h_cross = hc.data.data/x
 
-    # IF TIME DOMAIN
-    if domain.lower() in ['t','time']:
+    # Create time series data
+    t = linspace( 0.0, (h_plus.size-1.0)*hp.deltaT, int(h_plus.size) )
 
-        # Extract plus and cross data. Divide out contribution from spherical harmonic towards NR scaling
-        x = sYlm(-2,2,2,0,0)
-        h_plus  = hp.data.data/x
-        h_cross = hc.data.data/x
+    # Create waveform
+    harr = array( [t,h_plus,h_cross] ).T
 
-        # Create time series data
-        t = linspace( 0.0, (h_plus.size-1.0)*hp.deltaT, int(h_plus.size) )
+    # Convert to code units, where Mtotal=1
+    harr = codeh( harr,M,D )
 
-        # Create waveform
-        harr = array( [t,h_plus,h_cross] ).T
-
-        # Convert to code units, where Mtotal=1
-        harr = codeh( harr,M,D )
-
-        # Create gwf object
-        h = gwf( harr, kind=r'$h^{\mathrm{lal}}_{22}$' )
-
-    elif domain.lower() in ['f','frequency','freq']: # IF FREQUENCY DOMAIN
-
-        # Convert frequency domain strain from physical iunits to code units
-
-        # Extract plus and cross data. Divide out contribution from spherical harmonic towards NR scaling
-        x = sYlm(-2,2,2,0,0)
-        h_plus  = hp.data.data/x
-        h_cross = hc.data.data/x
-
-        #
-        pad = zeros( len(h_plus)-1 )
-        h_plus = hstack([pad,h_plus])
-        h_cross = hstack([pad,h_cross])
-
-        # Create frequency series data
-        F = (h_plus.size-1.0)*hp.deltaF
-        f = linspace( -F, F, len(h_plus) )
-
-        # #
-        # print len(f)
-        # print len(h_plus)
-        # from matplotlib.pyplot import *
-        # figure()
-        # ax = subplot(1,1,1)
-        # plot(f,abs(h_plus),'-o')
-        # ax.set_xscale('log', nonposx='clip')
-        # ax.set_yscale('log', nonposx='clip')
-        # show()
-        # print dir(hp.data.data)
-        # print hp.data
-        # print len(f)
-        # print len(h_plus)
-        # # from matplotlib.pyplot import *
-        # # plot(  )
-        # raise
-
-        # Create waveform
-        fd_harr = array( [f,h_plus,h_cross] ).T
-
-        # Convert to code units, where Mtotal=1
-        harr = codehfd( fd_harr,M,D )
-
-        # Create gwf object
-        h = gwf( fd_harr, kind=r'$h^{\mathrm{lal}}_{22}$', domain='frequency' )
+    # Create gwf object
+    h = gwf( harr, kind=r'$h^{\mathrm{lal}}_{22}$' )
 
     #
     return h

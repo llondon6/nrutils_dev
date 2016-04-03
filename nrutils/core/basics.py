@@ -771,7 +771,7 @@ def ffintegrate(t,y,w0,n=1):
 
     #
     from numpy import array,allclose,ones,pi
-    from numpy.fft import fft,ifft,fftfreq
+    from numpy.fft import fft,ifft,fftfreq,fftshift
     from numpy import where
 
     # If x is not a numpy array, then let the people know.

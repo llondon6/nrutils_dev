@@ -20,9 +20,9 @@ from nrutils.core.nrsc import *
 system('source ~/.virtual_enviroments/pycbc-nr/bin/activate')
 
 #
-q_range = linspace(1,10,10)
-S1 = array( [0.0,0.5,0.0] )
-S2 = array( [0.0,0.0,0.5] )
+q_range = linspace(1,10,5)
+S1 = array( [0.0,0.0,0.0] )
+S2 = array( [0.0,0.0,0.0] )
 
 # Compute strain using lalsimulation. The default approximant is PhenomD.
 # SimInspiralTD is called internally.
@@ -33,11 +33,12 @@ ax.set_xscale('log', nonposx='clip')
 ax.set_yscale('log', nonposx='clip', nonposy='clip')
 for k,q in enumerate(q_range):
     wf = lswfa(q=q,S1=S1,S2=S2,fmin_hz=25)
-    wf.pad(new_length=30654)
+    wf.pad(new_length=11163)
     y.append( wf.fd_amp )
-    pyplot.plot( 2*pi*wf.f, wf.fd_amp, color=rgb(1,shift=float(k)/len(q_range)) )
+    pyplot.plot( 2*pi*wf.f, wf.fd_amp, color=rgb(1,shift=-pi/4+float(k)/len(q_range)))
     msg = 'wf.dt = %f, wf.df = %f, N = %i' % (wf.dt,wf.df,wf.n)
     alert(msg)
 
 #
+ax.set_xlim( 2*pi*lim(wf.f) )
 pyplot.show()
