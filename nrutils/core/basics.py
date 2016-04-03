@@ -717,11 +717,14 @@ def pylim( x, y, axis='both', domain=None, symmetric=False, pad_y=0.1 ):
 # Return the min and max limits of an 1D array
 def lim(x):
 
-    #
+    # Import useful bit
     from numpy import array
 
-    #
-    return array([min(x),max(x)])
+    # Columate input.
+    z = x.reshape((x.size,))
+
+    # Return min and max as list
+    return array([min(z),max(z)])
 
 # Determine whether numpy array is uniformly spaced
 def isunispaced(x,tol=1e-6):
@@ -1174,3 +1177,41 @@ def sYlm(s,l,m,theta,phi):
 
     #
     return Y
+
+# Interpolate waveform array to a given spacing in its first column
+def intrp_wfarr(wfarr,delta=None):
+
+    #
+    from numpy import linspace,array,diff,zeros
+    from scipy.interpolate import InterpolatedUnivariateSpline as spline
+
+    # Only interpolate if current delta is not input delta
+    if abs(delta-d)<1e6:
+        proceed = False
+    else:
+        proceed = True
+
+    # If there is need to interpolate, then interpolate.
+    if proceed:
+
+        # Encapsulate the input domain for ease of reference
+        input_domain = wfarr[:,0]
+
+        # Pre-allocate the new wfarr
+        _wfarr = zeros( wfarr.shape )
+
+        # Generate and store the new domain
+        intrp_domain = delta * arange( 0, diff(lim(input_domain))[0] ) + wfarr[0,0]
+        _wfarr[:,0] = intrp_domain
+
+        # Interpolate the remaining columns
+        for k in range(1,wfarr.shape[1]):
+            _wfarr[:,k] = spline( input_domain, this.wfarr[:,k] )( intrp_domain )
+
+    else:
+
+        # Otherwise, return the input array
+        _wfarr = wfarr
+
+    #
+    return _wfarr

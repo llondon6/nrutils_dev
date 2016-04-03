@@ -20,7 +20,7 @@ from nrutils.core.nrsc import *
 system('source ~/.virtual_enviroments/pycbc-nr/bin/activate')
 
 #
-q_range = linspace(1,20,10)
+q_range = linspace(15,20,10)
 S1 = array( [0.0,0.0,0.0] )
 S2 = array( [0.0,0.0,0.0] )
 
@@ -35,7 +35,7 @@ for k,q in enumerate(q_range):
     wf = lswfa(q=q,S1=S1,S2=S2)
     y.append( wf.fd_amp )
     pyplot.plot( wf.f, wf.fd_dphi )
-    msg = 'wf.dt = %f, wf.df = %f, N = %i' % (wf.dt,wf.df,wf.n)
+    msg = 'wf.dt = %f, wf.f[0] = %f, N = %i' % (wf.dt,wf.f[0],wf.n)
     alert(msg)
 
 #

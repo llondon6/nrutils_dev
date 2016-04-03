@@ -739,7 +739,7 @@ class gwf:
 
         # use the raw waveform data to define all fields
         this.wfarr = wfarr
-        this.setfields(wfarr=wfarr,domain=domain)
+        this.setfields(wfarr=wfarr,domain=domain,dt=dt)
 
         # If desired, Copy fields from related gwf object.
         if type(friend).__name__ == 'gwf' :
@@ -754,11 +754,12 @@ class gwf:
         # though the "reset" method (i.e. this.reset)
         this.__rawgwfarr__ = wfarr
 
-        # This property is used to undo compatible actions. NOTE that each new method must reset __prevarr__ at its onset for the method action to be compaitble with this.undo()
-        this.__prevarr__ = wfarr
-
     # set fields of standard wf object
-    def setfields(this,wfarr=None,domain=None):
+    def setfields(this,wfarr=None,domain=None,dt=None):
+
+        # If given dt, then interpolote waveform array accordingly
+        if dt is not None:
+            wfarr = intrp_wfarr(wfarr,delta=dt)
 
         # Alert the use if improper input is given
         if (wfarr is None) and (this.wfarr is None):
@@ -1217,12 +1218,22 @@ class gwf:
     # Note that after this methed is called, the current object will occupy a different address in memory.
     def reset(this): this.setfields( this.__rawgwfarr__ )
 
-    #
-    def undo(this): this.setfields( this.__prevarr__ )
-
     # RETURN a clone the current waveform object. NOTE that the copy package may also be used here
     def clone(this): return gwf(this.wfarr).meet(this)
 
+    # Interpolate the current object
+    def interpolate(this,dt=None):
+
+        # Validate input
+        if dt is None:
+            msg = red('First input "dt" must be given. See traceback above.')
+            error(msg,'gwf.interpolate')
+
+        # Create the new wfarr by interpolating
+        wfarr = intrp_wfarr(this.wfarr,delta=dt)
+
+        # Set the current object to its new state
+        this.setfields(wfarr)
 
 # Class for waveforms: Psi4 multipoles, strain multipoles (both spin weight -2), recomposed waveforms containing h+ and hx. NOTE that detector response waveforms will be left to pycbc to handle
 class gwylm:
@@ -1618,10 +1629,10 @@ class gwylm:
 
 # Time Domain LALSimulation Waveform Approximant h_pluss and cross, but using nrutils data conventions
 def lswfa( apx      ='IMRPhenomD',    # Approximant name; must be compatible with lal convenions
-             q        = None,           # mass ratio > 1
-             S1       = None,           # spin1 iterable
-             S2       = None,           # spin2 iterable
-             verbose  = False ):        # boolean toggle for verbosity
+           q        = None,           # mass ratio > 1
+           S1       = None,           # spin1 iterable
+           S2       = None,           # spin2 iterable
+           verbose  = False ):        # boolean toggle for verbosity
 
     #
     from numpy import array,linspace,double
@@ -1674,9 +1685,6 @@ def lswfa( apx      ='IMRPhenomD',    # Approximant name; must be compatible wit
 
     #
     return y
-
-
-
 
 
 # Characterize the START of a time domain waveform
