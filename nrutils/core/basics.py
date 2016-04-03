@@ -1182,7 +1182,7 @@ def sYlm(s,l,m,theta,phi):
 def intrp_wfarr(wfarr,delta=None,domain=None):
 
     #
-    from numpy import linspace,array,diff,zeros
+    from numpy import linspace,array,diff,zeros,arange
     from scipy.interpolate import InterpolatedUnivariateSpline as spline
 
     # Validate inputs
@@ -1194,7 +1194,8 @@ def intrp_wfarr(wfarr,delta=None,domain=None):
         error(msg,'intrp_wfarr')
 
     # Only interpolate if current delta is not input delta
-    if abs(delta-d)<1e6:
+    d = wfarr[0,0]-wfarr[1,0]
+    if abs(delta-d)/delta < 1e-6:
         proceed = False
     else:
         proceed = True
@@ -1205,21 +1206,22 @@ def intrp_wfarr(wfarr,delta=None,domain=None):
         # Encapsulate the input domain for ease of reference
         input_domain = wfarr[:,0]
 
-        # Pre-allocate the new wfarr
-        _wfarr = zeros( wfarr.shape )
-
         # Generate or parse the new domain
         if domain is None:
-            intrp_domain = delta * arange( 0, diff(lim(input_domain))[0] ) + wfarr[0,0]
+            N = diff(lim(input_domain))[0] / delta
+            intrp_domain = delta * arange( 0, N  ) + wfarr[0,0]
         else:
             intrp_domain = domain
+
+        # Pre-allocate the new wfarr
+        _wfarr = zeros( (len(intrp_domain),wfarr.shape[1]) )
 
         # Store the new domain
         _wfarr[:,0] = intrp_domain
 
         # Interpolate the remaining columns
         for k in range(1,wfarr.shape[1]):
-            _wfarr[:,k] = spline( input_domain, this.wfarr[:,k] )( intrp_domain )
+            _wfarr[:,k] = spline( input_domain, wfarr[:,k] )( intrp_domain )
 
     else:
 

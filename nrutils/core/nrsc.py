@@ -1689,6 +1689,13 @@ def lswfa( apx      ='IMRPhenomD',    # Approximant name; must be compatible wit
     D = 1e-6 * TD_arguments['r']/lal.PC_SI
     y = lalsim2gwf( hp,hc,m1+m2, D )
 
+    # #
+    # df = 0.001
+    # dt = 1.0 / ( y.n * df )
+    # alert('dt is %f, but trying to interpolate to dt=%f' % (y.dt,dt) )
+    # y.interpolate(dt=dt)
+    # alert('... now dt = %f'%y.dt)
+
     #
     return y
 

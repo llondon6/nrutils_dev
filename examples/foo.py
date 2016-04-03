@@ -20,7 +20,7 @@ from nrutils.core.nrsc import *
 system('source ~/.virtual_enviroments/pycbc-nr/bin/activate')
 
 #
-q_range = linspace(15,20,10)
+q_range = linspace(1,15,12)
 S1 = array( [0.0,0.0,0.0] )
 S2 = array( [0.0,0.0,0.0] )
 
@@ -29,13 +29,13 @@ S2 = array( [0.0,0.0,0.0] )
 y = []
 pyplot.figure()
 ax = pyplot.subplot(1,1,1)
-ax.set_xscale('log', nonposx='clip')
-ax.set_yscale('log')
+# ax.set_xscale('log', nonposx='clip')
+# ax.set_yscale('log')
 for k,q in enumerate(q_range):
     wf = lswfa(q=q,S1=S1,S2=S2)
     y.append( wf.fd_amp )
-    pyplot.plot( wf.f, wf.fd_dphi )
-    msg = 'wf.dt = %f, wf.f[0] = %f, N = %i' % (wf.dt,wf.f[0],wf.n)
+    pyplot.plot( wf.t, wf.amp )
+    msg = 'wf.dt = %f, wf.df = %f, N = %i' % (wf.dt,wf.df,wf.n)
     alert(msg)
 
 #
