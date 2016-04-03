@@ -1241,6 +1241,17 @@ class gwf:
         # Set the current object to its new state
         this.setfields(wfarr)
 
+    # Pad this waveform object
+    def pad(this,new_length=None):
+
+        # Pad this waveform object to the left and right with zeros
+        if new_length is not None:
+            # Create the new wfarr
+            wfarr = pad_wfarr( this.wfarr, new_length )
+            # Confer to the current object 
+            this.setfields(wfarr)
+
+
 # Class for waveforms: Psi4 multipoles, strain multipoles (both spin weight -2), recomposed waveforms containing h+ and hx. NOTE that detector response waveforms will be left to pycbc to handle
 class gwylm:
 
@@ -1638,6 +1649,7 @@ def lswfa( apx      ='IMRPhenomD',    # Approximant name; must be compatible wit
            q        = None,           # mass ratio > 1
            S1       = None,           # spin1 iterable
            S2       = None,           # spin2 iterable
+           fmin_hz  = 30.0,           # phys starting freq in Hz
            verbose  = False ):        # boolean toggle for verbosity
 
     #
@@ -1653,7 +1665,7 @@ def lswfa( apx      ='IMRPhenomD',    # Approximant name; must be compatible wit
     m1 = float(q) * m2
 
     #
-    fmin_phys = 30.0
+    fmin_phys = fmin_hz
     M_total_phys = (m1+m2) * lal.MSUN_SI
 
     #

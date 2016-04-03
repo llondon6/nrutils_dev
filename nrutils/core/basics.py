@@ -849,6 +849,14 @@ def alert(msg,fname=None):
     print '('+cyan(fname)+')>> '+msg
 
 #
+def warning(msg,fname=None):
+
+    if fname is None:
+        fname = 'warning'
+
+    print '('+yellow(fname)+')>> '+msg
+
+#
 def error(msg,fname=None):
 
     if fname is None:
@@ -1229,4 +1237,45 @@ def intrp_wfarr(wfarr,delta=None,domain=None):
         _wfarr = wfarr
 
     #
+    return _wfarr
+
+
+# Fucntion to pad wfarr with zeros. NOTE that this should only be applied to a time domain waveform that already begins and ends with zeros.
+def pad_wfarr(wfarr,new_length):
+
+    #
+    from numpy import hstack,zeros,arange
+
+    # Only pad if size of the array is to increase
+    length = len(wfarr[:,0])
+    proceed = length < new_length
+
+    #
+    if proceed:
+
+        # Pre-allocate the new array
+        _wfarr = zeros(( new_length, wfarr.shape[1] ))
+
+        # Create the new time series
+        dt = wfarr[1,0] - wfarr[0,0]
+        _wfarr[:,0] = dt * arange( 0, new_length )
+
+        # Create the pads for the other columns
+        left_pad = zeros( int(new_length-length)/2 )
+        right_pad = zeros( new_length-length-len(left_pad) )
+
+        # Pad the remaining columns
+        for k in arange(1,wfarr.shape[1]):
+            _wfarr[:,k] = hstack( [left_pad,wfarr[:,k],right_pad] )
+
+    else:
+
+        # Otherwise, do nothing.
+        _wfarr = wfarr
+
+        # Warn the user that nothing has happened.
+        msg = 'The desired new length is smaller than the current array length (i.e. number of time domain points). Therefore nothing will be padded.'
+        warning(msg)
+
+    # Return padded array
     return _wfarr
