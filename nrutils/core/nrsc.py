@@ -1241,14 +1241,14 @@ class gwf:
         # Set the current object to its new state
         this.setfields(wfarr)
 
-    # Pad this waveform object
+    # Pad this waveform object in the time domain with zeros
     def pad(this,new_length=None):
 
         # Pad this waveform object to the left and right with zeros
         if new_length is not None:
             # Create the new wfarr
             wfarr = pad_wfarr( this.wfarr, new_length )
-            # Confer to the current object 
+            # Confer to the current object
             this.setfields(wfarr)
 
 
@@ -1645,7 +1645,7 @@ class gwylm:
 
 
 # Time Domain LALSimulation Waveform Approximant h_pluss and cross, but using nrutils data conventions
-def lswfa( apx      ='IMRPhenomD',    # Approximant name; must be compatible with lal convenions
+def lswfa( apx      ='IMRPhenomPv2',    # Approximant name; must be compatible with lal convenions
            q        = None,           # mass ratio > 1
            S1       = None,           # spin1 iterable
            S2       = None,           # spin2 iterable
