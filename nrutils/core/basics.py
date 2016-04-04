@@ -15,6 +15,10 @@ import random
 import h5py
 import copy
 
+def linenum():
+    """Returns the current line number in our program."""
+    return inspect.currentframe().f_back.f_lineno
+
 # Class for basic print manipulation
 class print_format:
    magenta = '\033[95m'
@@ -1274,8 +1278,8 @@ def pad_wfarr(wfarr,new_length):
         _wfarr = wfarr
 
         # Warn the user that nothing has happened.
-        msg = 'The desired new length is smaller than the current array length (i.e. number of time domain points). Therefore nothing will be padded.'
-        warning(msg)
+        msg = 'The desired new length is <= the current array length (i.e. number of time domain points). Nothing will be padded.'
+        warning( msg,fname='pad_wfarr'+cyan('@%i'%linenum()) )
 
     # Return padded array
     return _wfarr
