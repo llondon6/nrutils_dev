@@ -8,7 +8,7 @@
 
 #
 from os.path import dirname, basename, isdir, realpath
-from numpy import array,ones,pi,linspace,allclose,vstack
+from numpy import array,ones,pi,linspace,allclose,vstack,dot
 from matplotlib.pyplot import *
 
 #
@@ -55,7 +55,12 @@ for k in y: k.pad(new_length=maxlen)
 # show()
 
 #
-X = vstack( [ wf.fd_amp for wf in y ] )
+W = vstack( [ wf.fd_amp for wf in y ] )
+X = (W.T - np.mean(W.T, 0)) / np.std(W.T, 0)
+X = X.T
+figure()
+plot(np.mean(W.T,0),'-o')
+
 pca = PCA( n_components = X.shape[-1] )
 pca.fit(X)
 pca_score = pca.explained_variance_ratio_
@@ -63,7 +68,7 @@ V = pca.components_
 print V.shape
 
 #
-print dir(pca)
+# print pca.a
 
 #
 figure()
@@ -73,11 +78,11 @@ plot( range(len(pca_score)), pca_score, '-o' )
 ax.append( subplot(1,2,2) )
 ax[-1].set_yscale('log', nonposx='clip', nonposy='clip')
 ax[-1].set_xscale('log', nonposx='clip')
-plot( 2*pi*y[0].f, -V[1,:], '-' )
+plot( 2*pi*y[0].f, abs(V[0,:]), '-' )
 show()
 
 #
-coeffs = V*
+# coeffs = dot(V,)
 
 #############################################################
 
