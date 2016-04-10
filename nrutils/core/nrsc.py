@@ -291,7 +291,7 @@ def scbuild(save=True):
 
     # Load useful packages
     from commands import getstatusoutput as bash
-    from os.path import realpath, abspath, join, splitext
+    from os.path import realpath, abspath, join, splitext, basename
     from os import pardir,system,popen
     import pickle
     # Create a string with the current process name
@@ -331,7 +331,7 @@ def scbuild(save=True):
 
         # Store the catalog to the database_path
         if save:
-            db = gconfig.database_path + '/' + splitex(config.config_file_location) + '.' + gconfig.database_ext
+            db = gconfig.database_path + '/' + splitext(basename(config.config_file_location))[0] + '.' + gconfig.database_ext
             with open(db, 'wb') as dbf:
                 pickle.dump( config.catalog , dbf, pickle.HIGHEST_PROTOCOL )
 
