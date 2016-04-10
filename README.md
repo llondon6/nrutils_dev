@@ -6,8 +6,6 @@
 python setup.py install
 ```
 
-add the path to ```nrutils_dev``` to ```$PYTHONPATH```
-
 setup .ini files
 
 1. nrutils/settings/paths.template -> nrutils/settings/paths.template
