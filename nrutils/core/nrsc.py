@@ -230,7 +230,7 @@ class scentry:
         if not isinstance( this.m2 , float ) :
             msg = ''
             raise ValueError(msg)
-        # Check that inital mass2 is float
+        # Enfore m1>m2 convention.
         satisfies_massratio_convetion = lambda e: (not e.m1 > e.m2) and (not allclose(e.m1,e.m2,atol=1e-4))
         if satisfies_massratio_convetion(this):
             this.flip()
