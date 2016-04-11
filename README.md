@@ -15,4 +15,5 @@ setup .ini files
 
 ## building a catalogue
 
-```to come soon```
+This is done using the command ```scbuild()``` to create a database of the NR simulations.
+```to be expanded on soon```
