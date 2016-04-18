@@ -1362,6 +1362,7 @@ class gwylm:
         from os.path import isfile,basename
         from numpy import sign,diff,unwrap,angle,max
         from scipy.stats.mstats import mode
+        from scipy.version import version as scipy_version
         thisfun=inspect.stack()[0][3]
 
         # Default multipolar values
@@ -1417,9 +1418,18 @@ class gwylm:
                       dt=dt,
                       kind='psi4')
 
+            # ---------------------------------------------------- #
             # Enforce internal sign convention for Psi4 multipoles
+            # ---------------------------------------------------- #
+
             msk_ = y_.amp > 0.01*max(y_.amp)
-            external_sign_convention = mode( sign( y_.dphi[msk_] ) ).mode[0]
+            if int(scipy_version.split('.')[1])<16:
+                # Account for old scipy functionality
+                external_sign_convention = mode( sign( y_.dphi[msk_] ) )[0][0]
+            else:
+                # Account for modern scipy functionality
+                external_sign_convention = mode( sign( y_.dphi[msk_] ) ).mode[0]
+
             if M_RELATIVE_SIGN_CONVENTION != external_sign_convention:
                 wfarr[:,2] = -wfarr[:,2]
                 y_ = gwf(wfarr,l=l,m=m,extraction_parameter=extraction_parameter)
