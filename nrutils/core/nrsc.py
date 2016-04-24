@@ -1234,11 +1234,11 @@ class gwylm:
                   lm                    = None,     # iterable of length 2 containing multipolr l and m
                   lmax                  = None,     # if set, multipoles with all |m| up to lmax will be loaded.
                                                     # This input is not compatible with the lm tag
-                  extraction_parameter  = None,     # extraction radius (e.g. gatech, rit), extrapolation order (sxs)
                   dt                    = None,     # if given, the waveform array will beinterpolated to
                                                     # this timestep
                   load                  = True,     # IF true, we will try to load data from the scentry_object
                   clean                 = False,    # Toggle automatic tapering
+                  extraction_parameter  = None,     # Extraction parameter labeling extraction zone/radius for run
                   verbose               = None ):   # be verbose
 
         # Print non None inputs to screen
@@ -1267,14 +1267,14 @@ class gwylm:
         if extraction_parameter is None:
             extraction_parameter = this.config.default_extraction_par
 
+        # Store the extraction parameter
+        this.extraction_parameter = extraction_parameter
+
         # These fields are initiated here for visiility, but they are filled as lists of gwf object in load()
         this.ylm = []; this.hlm = []
 
         # time step
         this.dt = dt
-
-        # Store the extraction parameter
-        this.extraction_parameter = extraction_parameter
 
         # Load the waveform data
         if load==True: this.__load__(lmax=lmax,lm=lm)
@@ -1323,9 +1323,15 @@ class gwylm:
             msg = 'First input must be member of scentry class (e.g. as returned from scsearch() ).'
             error(msg,thisfun)
 
-    # Wrapper for core load function
-    def __load__( this, lmax=None, lm=None ):
+    # Wrapper for core load function. NOTE that the extraction parameter input is independent of the usage in the class constructor.
+    def __load__( this,                      # The current object
+                  lmax=None,                 # max l to use
+                  lm=None,                   # (l,m) pair or list of pairs to use
+                  extraction_parameter=None, # the label for different extraction zones/radii
+                  dt=None,
+                  verbose=None ):
 
+        #
         from numpy import shape
 
         # If if an lmax value is given.
@@ -1335,20 +1341,20 @@ class gwylm:
                 #
                 for m in range(-l,l+1):
                     #
-                    this.load(lm=[l,m],dt=dt,verbose=verbose)
+                    this.load(lm=[l,m],dt=dt,extraction_parameter=extraction_parameter,verbose=verbose)
         else: # Else, load the given lis of lm values
             # If lm is a list of specific multipole indeces
             if len(shape(lm))==2:
                 #
                 for k in lm:
                     if len(k)==2:
-                        this.load(lm=k)
+                        this.load(lm=k,extraction_parameter=extraction_parameter,dt=dt)
                     else:
                         msg = 'Found list of multipole indeces (e.g. [[2,2],[3,3]]), but length of one of the index values is not two. Please check your lm input.'
                         error(msg,'__load__')
             else: # Else, if lm is a single mode index
                 #
-                this.load(lm=lm)
+                this.load(lm=lm,extraction_parameter=extraction_parameter,dt=dt)
 
     # load the waveform data
     def load(this,                  # The current object
@@ -1356,7 +1362,9 @@ class gwylm:
              file_location=None,    # (Optional) is give, this file string will be used to load the file,
                                     # otherwise the function determines teh file string automatically.
              dt = None,             # Time step to enforce for data
-             output=False):         # Toggle whether to store data to the current object, or output it
+             extraction_parameter=None,
+             output=False,          # Toggle whether to store data to the current object, or output it
+             verbose=None):
 
         # Import useful things
         from os.path import isfile,basename
@@ -1384,7 +1392,16 @@ class gwylm:
 
         # NOTE that l,m and extraction_parameter MUST be defined for the correct file location string to be created. Also NOTE that this.config.data_file_param_order must contain strings 'l', 'm' and 'extraction_parameter'.
         l = lm[0]; m = lm[1]
-        extraction_parameter = this.extraction_parameter
+
+        # If the extraction parameter is input, then label the current object with the input value, and use the input value to load the file. Else,
+        if extraction_parameter is None:
+            # Use the default value
+            extraction_parameter = this.extraction_parameter
+            if verbose: alert('Using the '+cyan('default')+' extraction_parameter of %g' % extraction_parameter)
+        else:
+            # Use the input value
+            this.extraction_parameter = extraction_parameter
+            if verbose: alert('Using the '+cyan('input')+' extraction_parameter of '+cyan('%g' % extraction_parameter))
 
         # This boolean will be set to true if the file location to load is found to exist
         proceed = False
@@ -1740,10 +1757,12 @@ class gwfcharstart:
                                                                                 # waveform
         this.peak_mask      = pk_mask
 
+
 # Characterize the END of a time domain waveform
 def gwfend():
     #
     return None
+
 
 # Function which converts lalsim waveform to gwf object
 def lalsim2gwf( hp,hc,M,D ):
@@ -1771,6 +1790,7 @@ def lalsim2gwf( hp,hc,M,D ):
 
     #
     return h
+
 
 # Taper a waveform object
 def gwftaper( y,                        # gwf object to be windowed
@@ -1812,3 +1832,24 @@ def gwftaper( y,                        # gwf object to be windowed
 
     #
     return window
+
+
+# Shift a gwf object in time by some abount t0
+def gwftshift( y,               # the gwf object to be shifted
+               t0,              # Amount to shift the object
+               verbose=None):   # Whether or not to let the people know
+
+    #
+    from numpy import rem
+
+    #
+    if type(y).__name__!='gwf':
+        msg = 'input must be gwf object'
+        error(msg,'gwftshift')
+
+    #
+    T = y.t(-1) - y.t(0)
+    t0 = rem( t0, T )
+
+    #
+    a = y.arr 
