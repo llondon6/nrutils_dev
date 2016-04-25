@@ -1284,7 +1284,7 @@ def pad_wfarr(wfarr,new_length):
     # Return padded array
     return _wfarr
 
-#
+# Time shift array data, h, using a frequency diomain method
 def tshift( t,      # time sries of data
             h,      # data that will be shifted
             t0 ):   # amount to shift data
@@ -1292,10 +1292,10 @@ def tshift( t,      # time sries of data
 
     #
     from scipy.fftpack import fft, fftfreq, fftshift, ifft
-    from numpy import diff,mean
+    from numpy import diff,mean,exp,pi
 
     #
-    is_real = sum( imag(h) ) == 0
+    is_real = sum( h.imag ) == 0
 
     # take fft of input
     H = fft(h)
@@ -1303,7 +1303,7 @@ def tshift( t,      # time sries of data
     # get frequency domain of H in hertz (non-monotonic,
     # i.e. not the same as the "getfrequencyhz" function)
     dt = mean(diff(t))
-    f = fftfreq( len(f), dt )
+    f = fftfreq( len(t), dt )
 
     # shift, and calculate ifft
     H_ = H * exp( -2*pi*1j*t0*f )
