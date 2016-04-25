@@ -58,7 +58,7 @@ __all__ = internal_packages
 if verbose: print '\n>> Initiating nrutils.'
 if verbose: print '>> Please note style conventions:\
                   \n   * lower case function/method/variable names\
-                  \n   * no underscore in names unless there are repeated letters\
+                  \n   * no underscore in names unless there are repeated letters, or counfounded syllables\
                   \n   * information is implicitely in time domain unless explicitely stated.\
                   \n   * frequency domain information will start with "fd".\n'
 
