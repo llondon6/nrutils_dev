@@ -1626,23 +1626,21 @@ class gwylm:
         for h in this.hlm:
             h.reset()
 
-    # Undo last action
-    def undo(this):
-        #
-        for y in this.ylm:
-            y.undo()
-        for h in this.hlm:
-            h.undo()
-
     # return a copy of the current object
     def copy(this):
 
         #
         from copy import deepcopy as copy
-
-        #
         return copy(this)
 
+    # pad each mode to a new_length
+    def pad(this,new_length=None):
+
+        # Pad each mode
+        for y in this.ylm:
+            y.pad( new_length=new_length )
+        for h in this.hlm:
+            h.pad( new_length=new_length )
 
 # Time Domain LALSimulation Waveform Approximant h_pluss and cross, but using nrutils data conventions
 def lswfa( apx      ='IMRPhenomPv2',    # Approximant name; must be compatible with lal convenions
@@ -1852,4 +1850,4 @@ def gwftshift( y,               # the gwf object to be shifted
     t0 = rem( t0, T )
 
     #
-    a = y.arr 
+    a = y.arr
