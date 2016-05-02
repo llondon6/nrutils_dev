@@ -1,4 +1,4 @@
-{{Center|![nrutils](https://github.com/llondon6/nrutils_dev/blob/master/media/nrutils_banner.png?raw=true)}}
+![nrutils](https://github.com/llondon6/nrutils_dev/blob/master/media/nrutils_banner.png?raw=true)
 
 ## notes on installation
 
