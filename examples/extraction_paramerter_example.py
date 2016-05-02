@@ -24,6 +24,7 @@ for v in lev:
 figure(); clr=rgb( len(y) )
 a = [];
 for k in range(len(y)):
+    # NOTE that the time series of each
     plot( y[k].ylm[0].t, y[k].ylm[0].amp, color=clr[k], label='lev%i'%lev[k] )
 
 #

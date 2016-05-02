@@ -1,25 +1,6 @@
 
 # TODO:
 #
-# * interpolate fd wavforms to have the same DeltaF
-# * Apply PCA to FD parts
-# * Plot PC-coeffs against initial parameters
-#
-#* Ensure that all gwylm objects are in the same frame:
-#  ---> Add a stand alone function that rotates a gwylm object from one frame into another in the time domain
-#  ---> Add formatting method to gwylm to put it in the J or L frame when w = w0
-#  ---> Add formatting method to convert static frame gwylm to dynamic frame gwylm (i.e. corotating frame transformation)
-#
-# * Create feature-alignment modules for GW-ML tools:
-#   ---> generalized inner-product definition (e.g. frequency whitening or generalized kernel)
-#   ---> time and phase alignment via optimal inner-product
-#   ---> time and phase alignment via reference time or reference frequency
-#
-# * Interface feature-alignment modules with standard PCA tools:
-#  ---> Simulation Catalog PCA: scpca() -- maybe a class
-#  ---> Simulation Catalog Model: scmodel() -- a class
-#  ---> Iterative and Adaptive methods: sclearn() -- definitely a class
-#
 
 #
 from os.path import dirname, basename, isdir, realpath

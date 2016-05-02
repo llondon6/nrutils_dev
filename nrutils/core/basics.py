@@ -1254,6 +1254,12 @@ def pad_wfarr(wfarr,new_length):
     length = len(wfarr[:,0])
     proceed = length < new_length
 
+    # Enforce integer new length
+    if new_length != int(new_length):
+        msg = 'Input pad length is not integer; I will apply int() before proceeding.'
+        alert(msg,'pad_wfarr')
+        new_length = int( new_length )
+
     #
     if proceed:
 

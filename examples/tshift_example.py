@@ -18,7 +18,7 @@ rc('text', usetex=True)
 A = scsearch(keyword="base",unique=True,verbose=True)
 y = gwylm( scentry_obj = A[0], lm=[2,2], dt=0.4, verbose=True )
 
-#
+# This step isn't really needed, but it's instructive to see how easy it is to pad a collection of multipole waveforms.
 y.pad( new_length = y.ylm[0].n + mod(y.ylm[0].n,2) )
 
 # Extract what will be plotted
@@ -36,7 +36,7 @@ plt.grid(color='0.95', linestyle='-')
 orig, = ax1.plot( t, x, lw=2, color=grey )
 line, = ax1.plot( [], [], lw=1, color=clr, alpha=0.9 )
 ax1.set_xlabel('$t$')
-ax1.set_ylabel('$\psi_+(t), \;\; \psi_+(t+t_0)$')
+ax1.set_ylabel('$h_+(t), \;\; h_+(t+t_0)$')
 ax1.set_axisbelow(True)
 plt.setp(ax1.get_xticklabels(), visible=False)
 
@@ -47,7 +47,7 @@ plt.grid(color='0.95', linestyle='-')
 orig2, = ax2.plot( t, 0*t, lw=2, color=grey )
 line2, = ax2.plot( [], [], lw=1, color=1-clr, alpha=0.5 )
 ax2.set_xlabel('$t$')
-ax2.set_ylabel('$\psi_+(t) - \psi_+(t+t_0)$')
+ax2.set_ylabel('$h_+(t) - h_+(t+t_0)$')
 ax2.set_axisbelow(True)
 
 # initialization function: plot the background of each frame
