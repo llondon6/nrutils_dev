@@ -2,6 +2,7 @@
 
 #
 from distutils.core import setup
+from setuptools import find_packages
 
 #
 setup(name='nrutils',
@@ -9,7 +10,7 @@ setup(name='nrutils',
       description='Python Utilities for Numerical Reltivity Data Analysis',
       author='Lionel London',
       author_email='lionel.london@ligo.org',
-      packages=['nrutils'],
+      packages=find_packages(),
       include_package_data=True,
       package_dir={'nrutils': 'nrutils'},
       url='https://github.com/llondon6/nrutils',
