@@ -41,6 +41,7 @@ verbose = True
 
 # Search recurssively within the config's sim_dir for files matching the config's metadata_id
 this_file = realpath(__file__)
+print "The highest level init for nrutils is located at: %s" % this_file
 if this_file[-1] == 'c': this_file = this_file[:-1]
 cmd = 'find %s -name "__init__.py" -depth 2' % dirname(this_file)
 status, output = bash(cmd)
@@ -49,13 +50,27 @@ status, output = bash(cmd)
 dir_list = output.split(chr(10))
 internal_packages = [ basename(dirname(p)) for p in dir_list if not (p == this_file) ]
 
+# Throw error is internal_packages is empty
+if len(internal_packages) == 0:
+    msg = '(!!) Unable to automatically find internal packages. Please report this bug to the developers. (https://github.com/llondon6/nrutils_dev/tree/master/nrutils)'
+    raise ValueError(msg)
+
 # Store package settings (useful directories etc) to a settings field
 __pathsfile__ = [dirname(realpath(__file__))+'/settings/paths.ini']
 
 #
 __all__ = internal_packages
+
+
 # Import all modules from each package
-if verbose: print '\n>> Initiating nrutils.'
+if verbose: print '\n>> Initiating nrutils ...'
+
+# Let the people know
+print "\n>> Sub-Packages to be imported:"
+for k in internal_packages:
+    print '   -> %s' % k
+
+# Some other notes
 if verbose: print '>> Please note style conventions:\
                   \n   * lower case function/method/variable names\
                   \n   * no underscore in names unless there are repeated letters, or counfounded syllables\
