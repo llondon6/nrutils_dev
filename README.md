@@ -5,7 +5,7 @@
 ```bash
 pip install git+https://github.com/llondon6/nrutils_dev.git
 ```
-###Clone, then install:
+###Or clone, then install:
 ```bash
 git clone https://github.com/llondon6/nrutils_dev.git
 python setup.py install
