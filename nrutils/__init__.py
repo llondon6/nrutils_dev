@@ -65,7 +65,7 @@ if verbose: print '>> Please note style conventions:\
 if verbose: print '%s:\n' % __name__
 for p in internal_packages:
     if verbose: print '  .%s: ' % p
-    exec 'import %s' % p
+    exec r'import %s' % p
     # exec 'from %s import *' % p
 
 #
