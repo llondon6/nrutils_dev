@@ -13,7 +13,7 @@ python setup.py install
 
 ## 2. Setup .ini files
 
-1. nrutils/settings/paths.template -> nrutils/settings/paths.template
+1. nrutils/settings/paths.template -> nrutils/settings/paths.ini
 2. nrutils/config/bam.template -> nrutils/config/bam.ini
 3. nrutils/config/sxs.template -> nrutils/config/sxs.ini
 4. nrutils/config/bam_gw150914_followup.template -> nrutils/config/bam_gw150914_followup.ini
