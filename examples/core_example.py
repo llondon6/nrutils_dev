@@ -6,11 +6,11 @@ from numpy import array,ones,pi
 from os import system
 system('clear')
 
-# from nrutils import *
-from nrutils.core.nrsc import *
+# one could also use: from nrutils import *
+from nrutils.core import scbuild,scsearch,gwylm
 
-# # Build the simulation catalog using the cofig files
-# scbuild()
+# Build the simulation catalog using the cofig files
+scbuild()
 
 # Search for simulations
 A = scsearch(institute='sxs',nonspinning=True,q=[1,10],verbose=True,unique=True)

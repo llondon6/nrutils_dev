@@ -83,6 +83,11 @@ for p in internal_packages:
     exec r'import %s' % p
     # exec 'from %s import *' % p
 
+# Import select modules for high level access
+from manipulate import nr2h5
+from tools.unit.conversion import *
+from core.nrsc import gwf,scsearch,gwylm,scbuild
+
 #
 if verbose: print ''
 # Cleanup

@@ -68,12 +68,35 @@ def learn_metadata( metadata_file_location ):
     P2 = array( [ y.initial_bh_momentum2x, y.initial_bh_momentum2y, y.initial_bh_momentum2z ] )
 
     #
-    S1 = array( [ y.initial_bh_spin1x, y.initial_bh_spin1y, y.initial_bh_spin1z ] )
-    S2 = array( [ y.initial_bh_spin2x, y.initial_bh_spin2y, y.initial_bh_spin2z ] )
+    S1 = array( [ y.after_junkradiation_spin1x, y.after_junkradiation_spin1y, y.after_junkradiation_spin1z ] )
+    S2 = array( [ y.after_junkradiation_spin2x, y.after_junkradiation_spin2y, y.after_junkradiation_spin2z ] )
 
+    # find puncture data locations
+    puncture_data_1_location = ls( parent( metadata_file_location )+ 'moving_puncture_integrate1*' )[0]
+    puncture_data_2_location = ls( parent( metadata_file_location )+ 'moving_puncture_integrate2*' )[0]
+
+    # load puncture data
+    puncture_data_1,_ = smart_load( puncture_data_1_location )
+    puncture_data_2,_ = smart_load( puncture_data_2_location )
+
+    after_junkradiation_time = 0 # y.after_junkradiation_time
+    after_junkradiation_mask = puncture_data_1[:,-1] > after_junkradiation_time
+
+    puncture_data_1 = puncture_data_1[ after_junkradiation_mask, : ]
+    puncture_data_2 = puncture_data_2[ after_junkradiation_mask, : ]
+
+    R1 = array( [  puncture_data_1[0,0],puncture_data_1[0,1],puncture_data_1[0,2],  ] )
+    R2 = array( [  puncture_data_2[0,0],puncture_data_2[0,1],puncture_data_2[0,2],  ] )
+
+    P1 = x.m1 * array( [  puncture_data_1[0,3],puncture_data_1[0,4],puncture_data_1[0,5],  ] )
+    P2 = x.m2 * array( [  puncture_data_2[0,3],puncture_data_2[0,4],puncture_data_2[0,5],  ] )
+
+    # #
+    # R1_old = array( [ y.initial_bh_position1x, y.initial_bh_position1y, y.initial_bh_position1z ] )
+    # R2_old = array( [ y.initial_bh_position2x, y.initial_bh_position2y, y.initial_bh_position2z ] )
     #
-    R1 = array( [ y.initial_bh_position1x, y.initial_bh_position1y, y.initial_bh_position1z ] )
-    R2 = array( [ y.initial_bh_position2x, y.initial_bh_position2y, y.initial_bh_position2z ] )
+    # print '>> old: %s' % R1_old
+    # print '>> new: %s' % R1
 
     #
     x.note = ''

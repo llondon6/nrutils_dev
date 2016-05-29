@@ -1187,6 +1187,13 @@ class gwf:
         # NOTE that objects cannot be redefined within their methods, but their properties can be changed. For this reason, the line below uses setfields() rather than gwf() to apply the taper.
         this = this.setfields( wfarr=wfarr )
 
+    # Apply mask
+    def apply_mask( this, mask=None ):
+        #
+        if mask is None: error('the mask input must be given, and it must be index or boolean ')
+        #
+        this.setfields( this.wfarr[mask,:] )
+
     # If desired, reset the waveform object to its original state (e.g. it's state just afer loading).
     # Note that after this methed is called, the current object will occupy a different address in memory.
     def reset(this): this.setfields( this.__rawgwfarr__ )
@@ -1442,16 +1449,16 @@ class gwylm:
             msk_ = y_.amp > 0.01*max(y_.amp)
             if int(scipy_version.split('.')[1])<16:
                 # Account for old scipy functionality
-                external_sign_convention = mode( sign( y_.dphi[msk_] ) )[0][0]
+                external_sign_convention = sign(m) * mode( sign( y_.dphi[msk_] ) )[0][0]
             else:
                 # Account for modern scipy functionality
-                external_sign_convention = mode( sign( y_.dphi[msk_] ) ).mode[0]
+                external_sign_convention = sign(m) * mode( sign( y_.dphi[msk_] ) ).mode[0]
 
             if M_RELATIVE_SIGN_CONVENTION != external_sign_convention:
                 wfarr[:,2] = -wfarr[:,2]
                 y_ = gwf(wfarr,l=l,m=m,extraction_parameter=extraction_parameter)
                 # Let the people know what is happening.
-                msg = yellow('Re-orienting waveform phase')+' to be consistent with internal sign convention for Psi4, where sign(dPhi/dt)=%i*sign(m).' % M_RELATIVE_SIGN_CONVENTION + ' Note that the internal sign convention is defined in ... nrutils/core/__init__.py as "M_RELATIVE_SIGN_CONVENTION".'
+                msg = yellow('Re-orienting waveform phase')+' to be consistent with internal sign convention for Psi4, where sign(dPhi/dt)=%i*sign(m).' % M_RELATIVE_SIGN_CONVENTION + ' Note that the internal sign convention is defined in ... nrutils/core/__init__.py as "M_RELATIVE_SIGN_CONVENTION". This message has appeared becuase the waveform is determioned to obey and sign convention: sign(dPhi/dt)=%i*sign(m).'%(external_sign_convention)
                 thisfun=inspect.stack()[0][3]
                 alert( msg, thisfun )
 
@@ -1560,8 +1567,8 @@ class gwylm:
             w0 = this.wstart * double(y.m)/2.0 # NOTE that wstart is defined in characterize_start() using the l=m=2 Psi4 multipole.
             print yellow('>> w0 = %f' % w0)
             t       =  y.t
-            h_plus  =  1.0 * ffintegrate( y.t, y.plus,  w0, 2 )
-            h_cross =  1.0 * ffintegrate( y.t, y.cross, w0, 2 )
+            h_plus  =  ffintegrate( y.t, y.plus,  w0, 2 )
+            h_cross =  ffintegrate( y.t, y.cross, w0, 2 )
 
             # Constrcut the waveform array for the new strain object
             wfarr = array( [ t, h_plus, h_cross ] ).T
@@ -1583,11 +1590,15 @@ class gwylm:
         # store information about the start of the waveform to the current object
         this.starting = gwfcharstart( y22 )
         # store the expected min frequency in the waveform to this object as:
-        this.wstart = this.starting.right_dphi
-        this.startindex = this.starting.right_index
+        this.wstart = this.starting.left_dphi
+        this.startindex = this.starting.left_index
 
     # Clean the time domain waveform by removing junk radiation.
-    def clean(this):
+    def clean( this, method=None, crop_time=None ):
+
+        # Default cleaning method will be smooth windowing
+        if method is None:
+            method = 'window'
 
         # ---------------------------------------------------------------------- #
         # A. Clean the start of the waveform using information from the characterize_start method
@@ -1595,14 +1606,33 @@ class gwylm:
 
         if not this.__isclean__ :
 
-            # Calculate the window to be applied using the starting information. The window nwill be aplied equally to all multipole moments. NOTE: language disambiguation -- a taper is the part of a window that varies from zero to 1 (or 1 to zero); a window may contain many tapers. Also NOTE that the usage of this4[0].ylm[0].t below is an arbitration -- any array of the dame dimentions could be used.
-            window = maketaper( this.ylm[0].t, [this.starting.left_index,this.starting.right_index] )
+            if method.lower() == 'window':
 
-            # Apply this window to both the psi4 and strain multipole moments. The function, taper(), is a method of the gwf class.
-            for y in this.ylm:
-                y.apply_window( window=window )
-            for h in this.hlm:
-                h.apply_window( window=window )
+                # Calculate the window to be applied using the starting information. The window nwill be aplied equally to all multipole moments. NOTE: language disambiguation -- a taper is the part of a window that varies from zero to 1 (or 1 to zero); a window may contain many tapers. Also NOTE that the usage of this4[0].ylm[0].t below is an arbitration -- any array of the dame dimentions could be used.
+                window = maketaper( this.ylm[0].t, [this.starting.left_index,this.starting.right_index] )
+
+                # Apply this window to both the psi4 and strain multipole moments. The function, taper(), is a method of the gwf class.
+                for y in this.ylm:
+                    y.apply_window( window=window )
+                for h in this.hlm:
+                    h.apply_window( window=window )
+
+            elif method.lower() == 'crop':
+
+                # Crop such that the waveform daya starts abruptly
+                from numpy import arange,double
+
+                if not (crop_time is None):
+                    # If there is no crop time given, then use the low frequency value given by the nrutils start characterization time
+                    mask = arange( this.startindex, this.ylm[0].n )
+                elif isinstance(crop_time,(double,int,float)):
+                    # Otherwise, use an input starting time
+                    mask = this.ylm[0].raw[:,0] > crop_time
+
+                for y in this.ylm:
+                    y.apply_mask( mask )
+                for h in this.hlm:
+                    h.apply_mask( mask )
 
             # ---------------------------------------------------------------------- #
             # B. Clean the end of the waveform using information from the characterize_end method.

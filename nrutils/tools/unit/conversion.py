@@ -59,6 +59,11 @@ def codet( t, M ): return t/mass_sec(M)
 def codef( f, M ): return f*mass_sec(M)
 
 # --------------------------------------------------------------- #
+# Convert code frequency to physical frequency
+# --------------------------------------------------------------- #
+def physf( f, M ): return f/mass_sec(M)
+
+# --------------------------------------------------------------- #
 # Convert mass in code units to seconds
 # --------------------------------------------------------------- #
 def mass_sec( M ): return M*__physical_constants__['mass_sun_secs']
@@ -67,9 +72,6 @@ def mass_sec( M ): return M*__physical_constants__['mass_sun_secs']
 # Convert
 # --------------------------------------------------------------- #
 def mass_mpc( M ): return M*__physical_constants__['mass_sun_mpc']
-
-
-
 
 
 # Convert component masses to mass ratio

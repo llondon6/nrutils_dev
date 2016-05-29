@@ -15,6 +15,10 @@ import random
 import h5py
 import copy
 
+from matplotlib import rc
+rc('font',**{'family':'sans-serif','sans-serif':['Helvetica']})
+rc('text', usetex=True)
+
 def linenum():
     """Returns the current line number in our program."""
     return inspect.currentframe().f_back.f_lineno
