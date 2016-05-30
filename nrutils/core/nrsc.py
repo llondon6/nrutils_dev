@@ -645,7 +645,7 @@ def sclabel( entry,             # scentry object
         tag = []
 
         #
-        tol = 1e-3
+        tol = 1e-4
 
         # shorthand for entry
         e = entry
@@ -1524,7 +1524,7 @@ class gwylm:
 
             # Plot waveform data
             for y in wflm:
-                ax = y.plot(fig=fig,title='%s: %s' % (this.setname,this.label),kind=kind,domain=domain)
+                ax = y.plot(fig=fig,title='%s: %s' % (this.setname.replace('_','\_'),this.label.replace('_','\_')),kind=kind,domain=domain)
 
             # If there is start characterization, plot some of it
             if 'starting' in this.__dict__:
@@ -1565,7 +1565,12 @@ class gwylm:
 
             # Calculate the strain for each part of psi4. NOTE that there is currently NO special sign convention imposed beyond that used for psi4.
             w0 = this.wstart * double(y.m)/2.0 # NOTE that wstart is defined in characterize_start() using the l=m=2 Psi4 multipole.
+            # Here, m=0 is a special case
+            if 0==y.m: w0 = this.wstart
+            # Let the people know
             print yellow('>> w0 = %f' % w0)
+
+            # Create the core waveform information
             t       =  y.t
             h_plus  =  ffintegrate( y.t, y.plus,  w0, 2 )
             h_cross =  ffintegrate( y.t, y.cross, w0, 2 )

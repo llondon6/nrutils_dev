@@ -7,18 +7,18 @@ from os import system
 system('clear')
 
 # one could also use: from nrutils import *
-from nrutils.core import scbuild,scsearch,gwylm
+from nrutils import scbuild,scsearch,gwylm
 
 # Build the simulation catalog using the cofig files
-scbuild()
+# scbuild()
 
 # Search for simulations
-A = scsearch(institute='sxs',nonspinning=True,q=[1,10],verbose=True,unique=True)
+# A = scsearch(institute='sxs',nonspinning=True,q=[1,10],verbose=True,unique=True)
 # A = scsearch(precessing=True,q=[1,1.5],verbose=True,unique=True)
-# A = scsearch(keyword="base",unique=True,verbose=True)
+A = scsearch(keyword="base_96",unique=True,verbose=True)
 
 # Convert a single simulation into a waveform object with desired multipoles
-y = gwylm( scentry_obj = A[0], lm=[2,2], dt=0.4, verbose=True )
+y = gwylm( scentry_obj = A[0], lm=[2,1], dt=0.4, verbose=True )
 
 # # Plot time domain strain
 # y.plot(kind='strain')
