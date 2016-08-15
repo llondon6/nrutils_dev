@@ -1,6 +1,6 @@
 
 #
-from nrutils.core.basics import smart_object,parent,blue,smart_load
+from nrutils.core.basics import smart_object,parent,blue,smart_load,green,alert
 from glob import glob as ls
 from os.path import getctime
 from numpy import array,cross,zeros,dot,abs,sqrt
@@ -42,7 +42,7 @@ def learn_metadata( metadata_file_location ):
     # shortand
     y = raw_metadata
 
-    # # Useful for debuggin -- show what's in y
+    # # Useful for debugging -- show what's in y
     # y.show()
 
     #
@@ -79,7 +79,9 @@ def learn_metadata( metadata_file_location ):
     puncture_data_1,_ = smart_load( puncture_data_1_location )
     puncture_data_2,_ = smart_load( puncture_data_2_location )
 
-    after_junkradiation_time = 0 # y.after_junkradiation_time
+    # Mask away the initial junk region using the after-junk time given in the bbh metadata
+    after_junkradiation_time = y.after_junkradiation_time
+    print '>> after_junkradiation_time = %i' % after_junkradiation_time
     after_junkradiation_mask = puncture_data_1[:,-1] > after_junkradiation_time
 
     puncture_data_1 = puncture_data_1[ after_junkradiation_mask, : ]
@@ -88,10 +90,11 @@ def learn_metadata( metadata_file_location ):
     R1 = array( [  puncture_data_1[0,0],puncture_data_1[0,1],puncture_data_1[0,2],  ] )
     R2 = array( [  puncture_data_2[0,0],puncture_data_2[0,1],puncture_data_2[0,2],  ] )
 
-    P1 = x.m1 * array( [  puncture_data_1[0,3],puncture_data_1[0,4],puncture_data_1[0,5],  ] )
-    P2 = x.m2 * array( [  puncture_data_2[0,3],puncture_data_2[0,4],puncture_data_2[0,5],  ] )
+    # Note that here the shift is actually contained within puncture_data, and the shift is -1 times the velocity
+    P1 = x.m1 * array( [  -puncture_data_1[0,3],-puncture_data_1[0,4],-puncture_data_1[0,5],  ] )
+    P2 = x.m2 * array( [  -puncture_data_2[0,3],-puncture_data_2[0,4],-puncture_data_2[0,5],  ] )
 
-    # #
+    # # Old code for referencing the initial positions
     # R1_old = array( [ y.initial_bh_position1x, y.initial_bh_position1y, y.initial_bh_position1z ] )
     # R2_old = array( [ y.initial_bh_position2x, y.initial_bh_position2y, y.initial_bh_position2z ] )
     #
@@ -101,22 +104,22 @@ def learn_metadata( metadata_file_location ):
     #
     x.note = ''
 
-    #
+    # Estimate the component angular momenta
     L1 = cross(R1,P1)
     L2 = cross(R2,P2)
 
-    #
+    # Extract and store the initial adm energy
     x.madm = y.initial_ADM_energy
 
-    #
+    # Store the initial linear momenta
     x.P1 = P1; x.P2 = P2
     x.S1 = S1; x.S2 = S2
 
-    #
-    x.b = float( y.initial_separation )
-    if abs( x.b - norm(R1-R2) ) > 1e-4:
-        msg = '(!!) Inconsistent assignment of initial separation: \n\t\tx = %f\n\t\tdR=%f' % (x.b,norm(R1-R2))
-        raise ValueError(msg)
+    # Estimate the initial biary separation (afterjunk), and warn the user if this value is significantly different than the bbh file
+    x.b = norm(R1-R2) # float( y.initial_separation )
+    if abs( y.initial_separation - norm(R1-R2) ) > 1e-1:
+        msg = 'warning: The estimated after junk binary separation is significantly different than the value stored in the bbh file: \n\t\tx from calculation = %f\n\t\ta from bbh file=%f' % (norm(R1-R2),y.initial_separation)
+        alert(msg,'bam.py')
 
     #
     x.R1 = R1; x.R2 = R2

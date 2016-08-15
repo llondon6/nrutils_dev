@@ -247,14 +247,14 @@ class scentry:
         #
         from numpy import array,double
 
-        #
+        # Store the flippoed variables to placeholders
         R1 = array(this.R2); R2 = array(this.R1);
         m1 = double(this.m2); m2 = double(this.m1);
         P1 = array(this.P2); P2 = array(this.P1);
         L1 = array(this.L2); L2 = array(this.L1);
         S1 = array(this.S2); S2 = array(this.S1);
 
-        #
+        # Apply the flip to the current object 
         this.R1 = R1; this.R2 = R2
         this.m1 = m1; this.m2 = m2
         this.P1 = P1; this.P2 = P2
@@ -850,6 +850,8 @@ class gwf:
         this.phi = phi_
 
         this.dphi   = intrp_diff( this.t, this.phi )                # Derivative of phase, last point interpolated to preserve length
+        # this.dphi   = diff( this.phi )/this.dt                # Derivative of phase, last point interpolated to preserve length
+
         this.k_amp_max = argmax(this.amp)                           # index location of max ampitude
 
         #
@@ -871,7 +873,10 @@ class gwf:
         this.fd_y       = this.fd_plus + 1j*this.fd_cross               # full fft
         this.fd_amp     = abs( this.fd_y )                              # amp of full fft
         this.fd_phi     = unwrap( angle( this.fd_y ) )                  # phase of full fft
+
+        # this.fd_dphi    = diff( this.fd_phi )/this.df             # phase rate: dphi/df
         this.fd_dphi    = intrp_diff( this.f, this.fd_phi )             # phase rate: dphi/df
+
         this.fd_k_amp_max = argmax( this.fd_amp )
 
         # Starting frequency in rad/sec
@@ -1246,6 +1251,7 @@ class gwylm:
                   load                  = True,     # IF true, we will try to load data from the scentry_object
                   clean                 = False,    # Toggle automatic tapering
                   extraction_parameter  = None,     # Extraction parameter labeling extraction zone/radius for run
+                  w22 = None,                       # Optional input for lowest physical frequency in waveform; by default an wstart value is calculated from the waveform itself and used in place of w22
                   verbose               = None ):   # be verbose
 
         # Print non None inputs to screen
@@ -1290,8 +1296,19 @@ class gwylm:
         this.starting = None # In charasterize_start(), the information about the start of the waveform is actually stored to "starting". Here this field is inintialized for visibility.
         this.characterize_start()
 
+        # If w22 is input, then use the input value for strain calculation. Otherwise, use the algorithmic estimate.
+        if w22 is None:
+            w22 = this.wstart
+            if verbose:
+                msg = 'Using w22 from '+bold(magenta('algorithmic estimate'))+' to calculate strain multipoles.'
+                alert(msg,thisfun)
+        else:
+            if verbose:
+                msg = 'Using w22 from '+bold(magenta('user input'))+' to calculate strain multipoles.'
+                alert(msg,thisfun)
+
         # Calculate strain
-        this.calchlm()
+        this.calchlm(w22=w22)
 
         # Clean the waveforms of junk radiation if desired
         this.__isclean__ = False
@@ -1552,21 +1569,25 @@ class gwylm:
         return ax
 
     # Strain via ffi method
-    def calchlm(this):
+    def calchlm(this,w22=None):
 
         # Calculate strain according to the fixed frequency method of http://arxiv.org/pdf/1006.1632v3
 
         #
         from numpy import array,double
 
+        # If there is no w22 given, then use the internally defined value of wstart
+        if w22 is None:
+            w22 = this.wstart
+
         # Reset
         this.hlm = []
         for y in this.ylm:
 
             # Calculate the strain for each part of psi4. NOTE that there is currently NO special sign convention imposed beyond that used for psi4.
-            w0 = this.wstart * double(y.m)/2.0 # NOTE that wstart is defined in characterize_start() using the l=m=2 Psi4 multipole.
+            w0 = w22 * double(y.m)/2.0 # NOTE that wstart is defined in characterize_start() using the l=m=2 Psi4 multipole.
             # Here, m=0 is a special case
-            if 0==y.m: w0 = this.wstart
+            if 0==y.m: w0 = w22
             # Let the people know
             print yellow('>> w0 = %f' % w0)
 

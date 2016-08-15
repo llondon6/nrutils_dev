@@ -37,7 +37,11 @@ from os.path import dirname, basename, isdir, realpath
 from commands import getstatusoutput as bash
 
 #
+import os
 verbose = True
+if not (  os.environ.get("koala_verbose",'') == '' or os.environ.get("koala_verbose",'').lower() == 'true'  ):
+    verbose = False
+
 
 # Search recurssively within the config's sim_dir for files matching the config's metadata_id
 this_file = realpath(__file__)
@@ -66,9 +70,10 @@ __all__ = internal_packages
 if verbose: print '\n>> Initiating nrutils ...'
 
 # Let the people know
-print "\n>> Sub-Packages to be imported:"
-for k in internal_packages:
-    print '   -> %s' % k
+if verbose:
+    print "\n>> Sub-Packages to be imported:"
+    for k in internal_packages:
+        print '   -> %s' % k
 
 # Some other notes
 if verbose: print '>> Please note style conventions:\
