@@ -10,7 +10,7 @@ system('clear')
 from nrutils import scbuild,scsearch,gwylm
 
 # Build the simulation catalog using the cofig files
-# scbuild()
+scbuild()
 
 # Search for simulations
 # A = scsearch(institute='sxs',nonspinning=True,q=[1,10],verbose=True,unique=True)

@@ -10,7 +10,8 @@ https://dcc.ligo.org/DocDB/0123/T1500606/002/NRInjectionInfrastructure.pdf
 # Import useful things
 from os import system, remove, makedirs, path
 from os.path import dirname, basename, isdir, realpath
-from numpy import array,ones,pi,loadtxt,hstack
+from numpy import arccos as acos
+from numpy import array,ones,pi,loadtxt,hstack,dot
 from numpy.linalg import norm
 from matplotlib.pyplot import *
 from os.path import expanduser
@@ -26,7 +27,7 @@ this_script = 'nr2h5_example'
 
 # Search for simulations: Use the CFUIB high resolution base case
 alert('Finding NR simulation catalog objects for realted HDF5 creation. This script is specialized to  work with BAM data.',this_script )
-A = scsearch(keyword='q1.2_base_96',verbose=True)
+A = scsearch(keyword='base_96',verbose=True) # base_96 # q1.2_dc2dcp2 # q1.2_dc1dc2
 
 # Extraction radius found using the "r" parameter in the realted config file for bam runs as well as a mapping of this to the actual extration radius as given by the bbh metadata files.
 alert('Manually defining extration radius to use for cropping of NR data. This is realted to the extration parameter in the institute''s config file, and allows the calculation of the retarded time, t_retarded = t + extraction_radius',this_script )
@@ -37,7 +38,7 @@ alert('Load and crop all waveforms. Waveforms will start at the after_junkradiat
 for a in A:
 
     # Convert a single simulation into a waveform object with desired multipoles
-    y = gwylm( scentry_obj = a, lmax=6, dt=0.4, verbose=True )
+    y = gwylm( scentry_obj = a, lmax=5, verbose=True, w22 = a.raw_metadata.freq_start_22 )
 
     # Crop initial junk radiation from waveform without smooth windowing to be consistent with the infrastructure's conventions
     y.clean( method='crop', crop_time=float(a.raw_metadata.after_junkradiation_time)+extraction_radius  )
@@ -70,13 +71,15 @@ for a in A:
     universal_t = [ k for k in y.hlm if (k.m==2 and k.l==2) ][0].t
     # Center universal time about peak
     universal_t -= universal_t[ list(universal_amp).index( max(universal_amp) ) ]
+    # Name the l=m=2 strain for use later
+    h22 = [ k for k in y.hlm if (k.m==2 and k.l==2) ][0]
 
     # Create dictionary of mode coordinates and waveform data
     alert('Creating dictionary of strain multipoles',this_script )
     nr_strain_data = {}
     for hlm in y.hlm:
         # NOTE that there's a -1 factored into the phase as the NR infrastructure uses the opposite sign convention compared to nrutils
-        nr_strain_data[  ( hlm.l, hlm.m )  ] = { 'amp':hlm.amp, 'phase': -1*hlm.phi, 't':universal_t }
+        nr_strain_data[  ( hlm.l, hlm.m )  ] = { 'amp':hlm.amp, 'phase': -1.0*hlm.phi, 't':universal_t }
 
     #
     alert('Creating metadata input for nr2h5',this_script )
@@ -98,16 +101,30 @@ for a in A:
     nr_meta_data['spin2x'] = y.S2[0] / (y.m2**2)
     nr_meta_data['spin2y'] = y.S2[1] / (y.m2**2)
     nr_meta_data['spin2z'] = y.S2[2] / (y.m2**2)
-    nr_meta_data['LNhatx'] = Lhat[0]
-    nr_meta_data['LNhaty'] = Lhat[1]
-    nr_meta_data['LNhatz'] = Lhat[2]
-    nr_meta_data['nhatx'] = nhat[0]
-    nr_meta_data['nhaty'] = nhat[1]
-    nr_meta_data['nhatz'] = nhat[2]
-    nr_meta_data['f_lower_at_1MSUN'] = physf( y.raw_metadata.freq_start_22/(2.0*pi) , 1.0 ) # here the "1" is for 1 solar mass
+
+    # nr_meta_data['LNhatx'] = Lhat[0]
+    # nr_meta_data['LNhaty'] = Lhat[1]
+    # nr_meta_data['LNhatz'] = Lhat[2]
+    # nr_meta_data['nhatx'] = nhat[0]
+    # nr_meta_data['nhaty'] = nhat[1]
+    # nr_meta_data['nhatz'] = nhat[2]
+
+    msg = red('Warning:')+yellow(' Forcing the appearance of LAL convention for the separation vector and angular momentum unit vector.')
+    alert(msg,'nr2h5_example')
+    nr_meta_data['LNhatx'] = 0.0
+    nr_meta_data['LNhaty'] = 0.0
+    nr_meta_data['LNhatz'] = 1.0
+    nr_meta_data['nhatx'] = 1.0
+    nr_meta_data['nhaty'] = 0.0
+    nr_meta_data['nhatz'] = 0.0
+
+    # nr_meta_data['f_lower_at_1MSUN'] = physf( y.raw_metadata.freq_start_22/(2.0*pi) , 1.0 ) # here the "1" is for 1 solar mass
+    nr_meta_data['f_lower_at_1MSUN'] = physf( h22.dphi[0]/(2.0*pi) , 1.0 ) # here the "1" is for 1 solar mass
+    print '>> Old f_lower_at_1MSUN = %f' % physf( y.raw_metadata.freq_start_22/(2.0*pi) , 1.0 )
+    print '>> New f_lower_at_1MSUN = %f' % nr_meta_data['f_lower_at_1MSUN']
     nr_meta_data['eccentricity'] =  y.raw_metadata.eccentricity
     nr_meta_data['PN_approximant'] = 'None'
-    nr_meta_data['coa_phase'] = 0
+    nr_meta_data['coa_phase'] = acos( dot( nhat,[0,1,0] ) )
 
 
     # ------------------------------------------------------- #
