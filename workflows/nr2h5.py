@@ -12,7 +12,7 @@ from os import system, remove, makedirs, path
 from os.path import dirname, basename, isdir, realpath
 from numpy import arccos as acos
 from numpy import array,ones,pi,loadtxt,hstack,dot
-from numpy.linalg import norm,dot
+from numpy.linalg import norm
 from matplotlib.pyplot import *
 from os.path import expanduser
 # Import needed libs
