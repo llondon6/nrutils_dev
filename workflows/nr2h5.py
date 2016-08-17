@@ -12,7 +12,7 @@ from os import system, remove, makedirs, path
 from os.path import dirname, basename, isdir, realpath
 from numpy import arccos as acos
 from numpy import array,ones,pi,loadtxt,hstack,dot
-from numpy.linalg import norm
+from numpy.linalg import norm,dot
 from matplotlib.pyplot import *
 from os.path import expanduser
 # Import needed libs
@@ -95,12 +95,28 @@ for a in A:
     nr_meta_data['mass1'] = y.m1
     nr_meta_data['mass2'] = y.m2
     nr_meta_data['eta'] = y.m1*y.m2 / (y.m1+y.m2)**2
-    nr_meta_data['spin1x'] = y.S1[0] / (y.m1**2)
-    nr_meta_data['spin1y'] = y.S1[1] / (y.m1**2)
-    nr_meta_data['spin1z'] = y.S1[2] / (y.m1**2)
-    nr_meta_data['spin2x'] = y.S2[0] / (y.m2**2)
-    nr_meta_data['spin2y'] = y.S2[1] / (y.m2**2)
-    nr_meta_data['spin2z'] = y.S2[2] / (y.m2**2)
+
+    # Writing spins
+    alert('Writing Dimensionless spins in the correct frame.',this_script )
+    X1_raw = y.S1 / (y.m1**2)
+    X2_raw = y.S2 / (y.m2**2)
+    # Define function to rotate spin
+    def RotateSpin(X_raw):
+        X = zeros( X_raw.shape )
+        X[0] = dot( X_raw, nhat )
+        X[1] = dot( X_raw, cross(Lhat,nhat) )
+        X[2] = dot( X_raw, Lhat )
+        return X
+    # Rptate spins
+    X1 = RotateSpin( X1_raw )
+    X2 = RotateSpin( X2_raw )
+    # Store spin values
+    nr_meta_data['spin1x'] = X1[0]
+    nr_meta_data['spin1y'] = X1[1]
+    nr_meta_data['spin1z'] = X1[2]
+    nr_meta_data['spin2x'] = X2[0]
+    nr_meta_data['spin2y'] = X2[1]
+    nr_meta_data['spin2z'] = X2[2]
 
     # nr_meta_data['LNhatx'] = Lhat[0]
     # nr_meta_data['LNhaty'] = Lhat[1]
@@ -109,14 +125,14 @@ for a in A:
     # nr_meta_data['nhaty'] = nhat[1]
     # nr_meta_data['nhatz'] = nhat[2]
 
-    msg = red('Warning:')+yellow(' Forcing the appearance of LAL convention for the separation vector and angular momentum unit vector.')
-    alert(msg,'nr2h5_example')
-    nr_meta_data['LNhatx'] = 0.0
-    nr_meta_data['LNhaty'] = 0.0
-    nr_meta_data['LNhatz'] = 1.0
-    nr_meta_data['nhatx'] = 1.0
-    nr_meta_data['nhaty'] = 0.0
-    nr_meta_data['nhatz'] = 0.0
+    # msg = red('Warning:')+yellow(' Forcing the appearance of LAL convention for the separation vector and angular momentum unit vector.')
+    # alert(msg,'nr2h5_example')
+    # nr_meta_data['LNhatx'] = 0.0
+    # nr_meta_data['LNhaty'] = 0.0
+    # nr_meta_data['LNhatz'] = 1.0
+    # nr_meta_data['nhatx'] = 1.0
+    # nr_meta_data['nhaty'] = 0.0
+    # nr_meta_data['nhatz'] = 0.0
 
     # nr_meta_data['f_lower_at_1MSUN'] = physf( y.raw_metadata.freq_start_22/(2.0*pi) , 1.0 ) # here the "1" is for 1 solar mass
     nr_meta_data['f_lower_at_1MSUN'] = physf( h22.dphi[0]/(2.0*pi) , 1.0 ) # here the "1" is for 1 solar mass
