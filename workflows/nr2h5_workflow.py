@@ -27,7 +27,7 @@ this_script = 'nr2h5_example'
 
 # Search for simulations: Use the CFUIB high resolution base case
 alert('Finding NR simulation catalog objects for realted HDF5 creation. This script is specialized to  work with BAM data.',this_script )
-A = scsearch(keyword='q1.2_dc1dc2',verbose=True) # base_96 # q1.2_dc2dcp2 # q1.2_dc1dc2
+A = scsearch(keyword='base_96',verbose=True) # base_96 # q1.2_dc2dcp2 # q1.2_dc1dc2
 
 # Extraction radius found using the "r" parameter in the realted config file for bam runs as well as a mapping of this to the actual extration radius as given by the bbh metadata files.
 alert('Manually defining extration radius to use for cropping of NR data. This is realted to the extration parameter in the institute''s config file, and allows the calculation of the retarded time, t_retarded = t + extraction_radius',this_script )
@@ -83,8 +83,9 @@ for a in A:
 
     #
     alert('Creating metadata input for nr2h5',this_script )
-    Lhat = (y.L1 + y.L2)   / norm( y.L1 + y.L2 )
-    nhat = ( y.R2 - y.R1 ) / norm( y.R2 - y.R1 )
+    Lhat = ( y.L1 + y.L2 )   / norm( y.L1 + y.L2 )
+    # NOTE: See above equation 19 in the reference pdf for the convention used here for nhat 
+    nhat = ( y.R1 - y.R2 ) / norm( y.R1 - y.R2 )
     # Define attributes
     nr_meta_data = {}
     nr_meta_data['NR-group'] = y.config.institute
