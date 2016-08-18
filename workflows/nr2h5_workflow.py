@@ -25,6 +25,9 @@ from nrutils.tools.unit.conversion import *
 #
 this_script = 'nr2h5_example'
 
+#
+HACK = False
+
 # Search for simulations: Use the CFUIB high resolution base case
 alert('Finding NR simulation catalog objects for realted HDF5 creation. This script is specialized to  work with BAM data.',this_script )
 A = scsearch(keyword='base_96',verbose=True) # base_96 # q1.2_dc2dcp2 # q1.2_dc1dc2
@@ -57,6 +60,10 @@ for a in A:
     else:
         run_label = a.simdir().split('/')[-1]
 
+    # If using the hacked version, then add a tag to the output file name
+    if HACK:
+        run_label = 'hacked_' + run_label
+
     # Where to save hdf5 file
     output_path = '/Users/book/JOKI/Libs/KOALA/nrutils_dev/review/data/%s.h5' % run_label
 
@@ -84,7 +91,7 @@ for a in A:
     #
     alert('Creating metadata input for nr2h5',this_script )
     Lhat = ( y.L1 + y.L2 )   / norm( y.L1 + y.L2 )
-    # NOTE: See above equation 19 in the reference pdf for the convention used here for nhat 
+    # NOTE: See above equation 19 in the reference pdf for the convention used here for nhat
     nhat = ( y.R1 - y.R2 ) / norm( y.R1 - y.R2 )
     # Define attributes
     nr_meta_data = {}
@@ -130,6 +137,17 @@ for a in A:
     nr_meta_data['nhatx'] = nhat[0]
     nr_meta_data['nhaty'] = nhat[1]
     nr_meta_data['nhatz'] = nhat[2]
+
+    #
+    if True is HACK:
+        msg = red('Warning:')+yellow(' Forcing the appearance of LAL convention for the separation vector and angular momentum unit vector.')
+        alert(msg,'nr2h5_example')
+        nr_meta_data['LNhatx'] = 0.0
+        nr_meta_data['LNhaty'] = 0.0
+        nr_meta_data['LNhatz'] = 1.0
+        nr_meta_data['nhatx'] = 1.0
+        nr_meta_data['nhaty'] = 0.0
+        nr_meta_data['nhatz'] = 0.0
 
     #
     print green('## ') + 'Lhat = (%f.%f,%f)' % tuple(Lhat)
