@@ -11,7 +11,7 @@ https://dcc.ligo.org/DocDB/0123/T1500606/002/NRInjectionInfrastructure.pdf
 from os import system, remove, makedirs, path
 from os.path import dirname, basename, isdir, realpath
 from numpy import arccos as acos
-from numpy import array,ones,pi,loadtxt,hstack,dot
+from numpy import array,ones,pi,loadtxt,hstack,dot,zeros,cross
 from numpy.linalg import norm
 from matplotlib.pyplot import *
 from os.path import expanduser
@@ -27,7 +27,7 @@ this_script = 'nr2h5_example'
 
 # Search for simulations: Use the CFUIB high resolution base case
 alert('Finding NR simulation catalog objects for realted HDF5 creation. This script is specialized to  work with BAM data.',this_script )
-A = scsearch(keyword='base_96',verbose=True) # base_96 # q1.2_dc2dcp2 # q1.2_dc1dc2
+A = scsearch(keyword='q1.2_dc1dc2',verbose=True) # base_96 # q1.2_dc2dcp2 # q1.2_dc1dc2
 
 # Extraction radius found using the "r" parameter in the realted config file for bam runs as well as a mapping of this to the actual extration radius as given by the bbh metadata files.
 alert('Manually defining extration radius to use for cropping of NR data. This is realted to the extration parameter in the institute''s config file, and allows the calculation of the retarded time, t_retarded = t + extraction_radius',this_script )
@@ -96,43 +96,58 @@ for a in A:
     nr_meta_data['mass2'] = y.m2
     nr_meta_data['eta'] = y.m1*y.m2 / (y.m1+y.m2)**2
 
+    # Check required mass convention
+    if nr_meta_data['mass1']<nr_meta_data['mass2']:
+        raise ValueError('Mass1 must be GREATER THAN mass2.')
+
     # Writing spins
     alert('Writing Dimensionless spins in the correct frame.',this_script )
-    X1_raw = y.S1 / (y.m1**2)
-    X2_raw = y.S2 / (y.m2**2)
-    # Define function to rotate spin
-    def RotateSpin(X_raw):
-        X = zeros( X_raw.shape )
-        X[0] = dot( X_raw, nhat )
-        X[1] = dot( X_raw, cross(Lhat,nhat) )
-        X[2] = dot( X_raw, Lhat )
-        return X
-    # Rptate spins
-    X1 = RotateSpin( X1_raw )
-    X2 = RotateSpin( X2_raw )
+    X1= y.S1 / (y.m1**2)
+    X2 = y.S2 / (y.m2**2)
+    # Define function to rotate spin ACCORDING TO EQS 9-11
+    def RotateSpin(X):
+        X_LAL = zeros( X.shape )
+        X_LAL[0] = dot( X, nhat )
+        X_LAL[1] = dot( X, cross(Lhat,nhat) )
+        X_LAL[2] = dot( X, Lhat )
+        return X_LAL
+    # Rotate spins
+    X1_LAL = RotateSpin( X1 )
+    X2_LAL = RotateSpin( X2 )
     # Store spin values
     nr_meta_data['spin1x'] = X1[0]
     nr_meta_data['spin1y'] = X1[1]
     nr_meta_data['spin1z'] = X1[2]
+    #
     nr_meta_data['spin2x'] = X2[0]
     nr_meta_data['spin2y'] = X2[1]
     nr_meta_data['spin2z'] = X2[2]
+    #
+    nr_meta_data['LNhatx'] = Lhat[0]
+    nr_meta_data['LNhaty'] = Lhat[1]
+    nr_meta_data['LNhatz'] = Lhat[2]
+    nr_meta_data['nhatx'] = nhat[0]
+    nr_meta_data['nhaty'] = nhat[1]
+    nr_meta_data['nhatz'] = nhat[2]
 
-    # nr_meta_data['LNhatx'] = Lhat[0]
-    # nr_meta_data['LNhaty'] = Lhat[1]
-    # nr_meta_data['LNhatz'] = Lhat[2]
-    # nr_meta_data['nhatx'] = nhat[0]
-    # nr_meta_data['nhaty'] = nhat[1]
-    # nr_meta_data['nhatz'] = nhat[2]
+    #
+    print green('## ') + 'Lhat = (%f.%f,%f)' % tuple(Lhat)
+    print green('## ') + 'nhat = (%f.%f,%f)' % tuple(nhat)
+    print green('## ') + 'm1   = %f' % y.m1
+    print green('## ') + 'm2   = %f' % y.m2
+    print green('## ') + green( 'X1_LAL = (%f.%f,%f)' % tuple(X1_LAL ) )
+    print green('## ') + green( 'X2_LAL = (%f.%f,%f)' % tuple(X2_LAL ) )
+    print green('## ') + 'X1   = (%f.%f,%f)' % tuple(X1)
+    print green('## ') + 'X2   = (%f.%f,%f)' % tuple(X2)
 
-    # msg = red('Warning:')+yellow(' Forcing the appearance of LAL convention for the separation vector and angular momentum unit vector.')
-    # alert(msg,'nr2h5_example')
-    # nr_meta_data['LNhatx'] = 0.0
-    # nr_meta_data['LNhaty'] = 0.0
-    # nr_meta_data['LNhatz'] = 1.0
-    # nr_meta_data['nhatx'] = 1.0
-    # nr_meta_data['nhaty'] = 0.0
-    # nr_meta_data['nhatz'] = 0.0
+    # Write store the projected spins to the meta-data dictionary for ease of reference
+    nr_meta_data['spin1x_lal'] = X1_LAL[0]
+    nr_meta_data['spin1y_lal'] = X1_LAL[1]
+    nr_meta_data['spin1z_lal'] = X1_LAL[2]
+    #
+    nr_meta_data['spin2x_lal'] = X2_LAL[0]
+    nr_meta_data['spin2y_lal'] = X2_LAL[1]
+    nr_meta_data['spin2z_lal'] = X2_LAL[2]
 
     # nr_meta_data['f_lower_at_1MSUN'] = physf( y.raw_metadata.freq_start_22/(2.0*pi) , 1.0 ) # here the "1" is for 1 solar mass
     nr_meta_data['f_lower_at_1MSUN'] = physf( h22.dphi[0]/(2.0*pi) , 1.0 ) # here the "1" is for 1 solar mass
