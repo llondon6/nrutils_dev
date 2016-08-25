@@ -1,24 +1,0 @@
-Script started on Wed Jul  6 11:25:08 2016
-[?1034hbash-3.2$ ls[K[Kls scripts/
-bam_inclination_to_thetajn.ipynb check-strain.py                  strain_effect_of_wstart.png      strain_effect_of_wstart_amp.png  strain_effect_of_wstart_full.png
-check-strain-cfuib0029.pdf       interfacte_example.ipynb         strain_effect_of_wstart.py       strain_effect_of_wstart_dphi.png
-bash-3.2$ ipython
-Python 2.7.11 (default, Mar  1 2016, 18:47:52) 
-Type "copyright", "credits" or "license" for more information.
-
-IPython 4.1.2 -- An enhanced Interactive Python.
-?         -> Introduction and overview of IPython's features.
-%quickref -> Quick reference.
-help      -> Python's own help system.
-object?   -> Details about 'object', use 'object??' for extra details.
-
-[0;34mIn [[1;34m1[0;34m]: [0mexit[K[K[K[Kexit
-bash-3.2$ [12@(reverse-i-search)`':[Cj': jupyter notebook[1@u[C[C[C[14Pbash-3.2$[C
-[32m[I 11:26:55.975 NotebookApp](B[m The port 8888 is already in use, trying another random port.
-[32m[I 11:26:55.987 NotebookApp](B[m Serving notebooks from local directory: /Users/book/JOKI/Libs/KOALA/nrutils_dev/review
-[32m[I 11:26:55.987 NotebookApp](B[m 0 active kernels 
-[32m[I 11:26:55.987 NotebookApp](B[m The Jupyter Notebook is running at: http://localhost:8889/
-[32m[I 11:26:55.988 NotebookApp](B[m Use Control-C to stop this server and shut down all kernels (twice to skip confirmation).
-[32m[I 11:27:03.785 NotebookApp](B[m Creating new notebook in 
-[32m[I 11:27:04.980 NotebookApp](B[m Kernel started: def8b50e-126f-4fae-9746-2ee1a1beae1e
-[32m[I 11:29:04.906 NotebookApp](B[m Saving file at /Untitled.ipynb

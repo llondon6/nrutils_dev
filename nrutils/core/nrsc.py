@@ -254,7 +254,7 @@ class scentry:
         L1 = array(this.L2); L2 = array(this.L1);
         S1 = array(this.S2); S2 = array(this.S1);
 
-        # Apply the flip to the current object 
+        # Apply the flip to the current object
         this.R1 = R1; this.R2 = R2
         this.m1 = m1; this.m2 = m2
         this.P1 = P1; this.P2 = P2
@@ -1058,8 +1058,8 @@ class gwf:
         # Ignore renderer warnings
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            tight_layout(pad=2, w_pad=1.2)
-            subplots_adjust(hspace = .001)
+            # tight_layout(pad=2, w_pad=1.2)
+            # subplots_adjust(hspace = .001)
 
         #
         xlabel(r'$f$',fontsize=fs,color=txclr)
@@ -1116,6 +1116,13 @@ class gwf:
         plot( this.t, this.cross, linewidth=lwid, color=0.5*grey )
         plot( this.t, this.amp,   linewidth=lwid, color=clr[0] )
         plot( this.t,-this.amp,   linewidth=lwid, color=clr[0] )
+
+        # Ignore renderer warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            # tight_layout(pad=2, w_pad=1.2)
+            # subplots_adjust(hspace = .001)
+
         #
         pylim( this.t, this.amp, domain=xlim, symmetric=True )
         if kind is None:
@@ -1147,12 +1154,6 @@ class gwf:
         # Set axis lines (e.g. grid lines) below plot lines
         for a in ax:
             a.set_axisbelow(True)
-
-        # Ignore renderer warnings
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            tight_layout(pad=2, w_pad=1.2)
-            subplots_adjust(hspace = .001)
 
         #
         xlabel(r'$t$',fontsize=fs,color=txclr)
