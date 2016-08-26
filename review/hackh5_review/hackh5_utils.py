@@ -543,8 +543,9 @@ def plot_td_waveform_resp(
             ax1H1.set_ylim(-ymax,ymax)
 
         # Prepare time range
-        xmin = (hp1.get_sample_times()[0]) if xmin == None else xmin
-        xmax = (hp1.get_sample_times()[-1])/5 if xmax == None else xmax
+        # xmin = (hp1.get_sample_times()[0]) if xmin == None else xmin
+        # xmax = (hp1.get_sample_times()[-1])/5 if xmax == None else xmax
+        xmin = -0.18; xmax = 0.18
         ax1H1.set_xlim(xmin,xmax)
 
         # Condition yticks
@@ -598,3 +599,49 @@ def plot_td_waveform_resp(
         # Kill figure
         plt.show()
         plt.close(fig)
+        
+
+#
+def plot_gwfs( frame_location1, frame_location2, label=['frame1','frame2'] ):
+    
+    #
+    import matplotlib as mpl
+    mpl.rc('font',family='Times New Roman')
+    from matplotlib.pyplot import plot,xlabel,ylabel,figure,legend,xlim,ylim,title
+    from pycbc import frame
+    import numpy
+
+    #
+    frame_location = [frame_location1,frame_location2]
+    #
+    figure( figsize=0.8*numpy.array([16,4]) )
+
+    clrspec = [ 'b', [0.8,0.8,0.8] ]
+    widspec = [ 1, 3 ]
+    for k in [1,0]:
+
+        #
+        data_L = frame.read_frame( frame_location[k], '%s1:HWINJ_INJECTED'%frame_location[k][0] )
+
+        #
+        trigger_time = data_L.end_time.gpsSeconds-10.0
+        time = data_L.delta_t * (numpy.array(range(len(data_L.data)))-1.0) + data_L.start_time - trigger_time
+        #channel_data_H = data_H.data.real
+        channel_data_L = data_L.data.real
+
+        #
+        xlim( numpy.array([-0.18,0.18]) )
+        #plot( time, channel_data_H, color=0.7*numpy.array([1,1,1]) )
+
+        # plot( time, channel_data_L, color=0.8*numpy.array([numpy.sin(numpy.pi/(k+1)),1,1]), label=label[k] )
+        plot( time, channel_data_L, color=clrspec[k], label=label[k], linewidth=widspec[k] )
+
+        #plot( trigger_time * numpy.array([1,1]) , ylim(), color='r' )
+
+    fs=22
+    hfont = {'fontname':'serif'}
+    title(frame_location[k][0]+'1')
+    xlabel(r'$t$ (sec)', fontsize=fs)
+    ylabel(r'$h(t)$', fontsize=fs)
+    legend(frameon=False, fontsize=fs )
+
