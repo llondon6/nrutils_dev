@@ -1,6 +1,6 @@
 
 #
-from nrutils.core.basics import smart_object,parent,blue,smart_load,green,alert
+from nrutils.core.basics import smart_object,parent,blue,smart_load,green,alert,error
 from glob import glob as ls
 from os.path import getctime
 from numpy import array,cross,zeros,dot,abs,sqrt
@@ -34,7 +34,7 @@ def validate( metadata_file_location, config = None ):
     #
     return status
 
-#
+# Learn the metadta (file) for this type of NR waveform
 def learn_metadata( metadata_file_location ):
 
     #
@@ -81,7 +81,6 @@ def learn_metadata( metadata_file_location ):
 
     # Mask away the initial junk region using the after-junk time given in the bbh metadata
     after_junkradiation_time = y.after_junkradiation_time
-    print '>> after_junkradiation_time = %i' % after_junkradiation_time
     after_junkradiation_mask = puncture_data_1[:,-1] > after_junkradiation_time
 
     puncture_data_1 = puncture_data_1[ after_junkradiation_mask, : ]
@@ -163,3 +162,24 @@ def learn_metadata( metadata_file_location ):
 
     #
     return standard_metadata, raw_metadata
+
+# # Create a file-name string based upon l,m and the extraction parameter(s)
+# # NOTE that the method name and inputs must conform to uniform name and input ordering
+# def make_datafilename( gwylm_object,                    # gwylm object
+#                        l,                               # l spherical index
+#                        m,                               # m index; |m|<=l
+#                        extraction_parameter = None ):   # dictionary of extraction information
+#
+#     # Validate the extraction parameter for BAM simulations
+#     if isinstance( extraction_parameter, list ):
+#
+#     # Validate l and m inputs
+#     if not isinstance(l, (int,float) ):
+#         raise ValueError('l input must be int or float, but %s found' % (type(l).__name__) )
+#     if not isinstance(m, (int,float) ):
+#         raise ValueError('m in input must be int or float, but %s found' % (type(m).__name__) )
+#
+#     # Create the filename string using inputs
+#
+#
+#     # Output the filename string

@@ -124,6 +124,9 @@ class scentry:
     # Create scentry object given location of metadata file
     def __init__( this, config_obj, metadata_file_location ):
 
+        # Keep an internal log for each scentry created
+        this.log = '[Log for %s] The file is "%s".' % (this,metadata_file_location)
+
         # Store primary inputs as object attributes
         this.config = config_obj
         this.metadata_file_location = metadata_file_location
@@ -133,18 +136,22 @@ class scentry:
 
         # If valid, learn metadata. Note that metadata property are defined as none otherise. Also NOTE that the standard metadata is stored directly to this object's attributes.
         this.raw_metadata = None
-        if this.is_valid:
-
+        if this.is_valid is True:
             #
             print '## Working: %s' % cyan(metadata_file_location)
+            this.log += ' This entry''s metadata file is valid.'
 
             # i.e. learn the meta_data_file
-            this.learn_metadata()
-
+            try:
+                this.learn_metadata()
+            except NameError:
+                this.log += ' [FATALERROR-1] The metadata failed to be read. There may be an external formatting inconsistency. It is being marked as invalid with None.'
+                this.is_valid = None # An external program may use this to do something
             #
             this.label = sclabel( this )
-        else:
+        elif this.is_valid is False:
             print '## The following is '+red('invalid')+': %s' % cyan(metadata_file_location)
+            this.log += ' This entry''s metadta file is invalid.'
 
     #
     def validate(this):
@@ -294,6 +301,7 @@ def scbuild(save=True):
     from os.path import realpath, abspath, join, splitext, basename
     from os import pardir,system,popen
     import pickle
+
     # Create a string with the current process name
     thisfun = inspect.stack()[0][3]
 
@@ -311,20 +319,34 @@ def scbuild(save=True):
     # For earch config
     for config in configs:
 
+        # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% #
+        # Create streaming log file        #
+        logfstr = gconfig.database_path + '/' + splitext(basename(config.config_file_location))[0] + '.log'
+        msg = 'Opening log file in: '+cyan(logfstr)
+        alert(msg,thisfun)
+        logfid = open(logfstr, 'w')
+        # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% #
+
         # Search recurssively within the config's catalog_dir for files matching the config's metadata_id
         msg = 'Searching for %s in %s.' % ( cyan(config.metadata_id), cyan(config.catalog_dir) ) + yellow(' This may take a long time if the folder being searched is mounted from a remote drive.')
         alert(msg,thisfun)
         mdfile_list = rfind(config.catalog_dir,config.metadata_id,verbose=True)
         alert('done.',thisfun)
 
-
         # (try to) Create a catalog entry for each valid metadata file
         config.catalog = []
+        h = -1
         for mdfile in mdfile_list:
+
             # Create tempoary scentry object
             entry = scentry(config,mdfile)
+
+            # Write to the master log file
+            h+=1
+            logfid.write( '%5i\t%s\n'% (h,entry.log) )
+
             # If the obj is valid, add it to the catalog list, else ignore
-            if entry.is_valid :
+            if entry.is_valid:
                 config.catalog.append( entry )
             else:
                 del entry
@@ -334,6 +356,9 @@ def scbuild(save=True):
             db = gconfig.database_path + '/' + splitext(basename(config.config_file_location))[0] + '.' + gconfig.database_ext
             with open(db, 'wb') as dbf:
                 pickle.dump( config.catalog , dbf, pickle.HIGHEST_PROTOCOL )
+
+        # Close the log file
+        logfid.close()
 
 
 
@@ -1433,6 +1458,8 @@ class gwylm:
 
         # Construct the string location of the waveform data. NOTE that config is inhereted indirectly from the scentry_obj. See notes in the constructor.
         if file_location is None: # Find file_location automatically. Else, it must be input
+
+            file_location = this.config.make_datafilename( extraction_parameter, l,m )
             # For all formatting possibilities in the configuration file
             for fmt in this.config.data_file_name_format :
                 #
