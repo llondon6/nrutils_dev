@@ -1338,3 +1338,30 @@ def tshift( t,      # time sries of data
 
     #
     return h_
+
+#
+def pnw0(m1,m2,D=10.0):
+    # https://arxiv.org/pdf/1310.1528v4.pdf
+    # Equation 228
+    # 2nd Reference: arxiv:0710.0614v1
+    # NOTE: this outputs orbital frequency
+    from numpy import sqrt,zeros,pi,array,sum
+    #
+    G = 1.0
+    c = 1.0
+    r = float(D)
+    M = float( m1+m2 )
+    v = m1*m2/( M**2 )
+    gamma = G*M/(r*c*c)     # Eqn. 225
+    #
+    trm = zeros((4,))
+    #
+    trm[0] = 1.0
+    trm[1] = v - 3.0
+    trm[2] = 6 + v*41.0/4.0 + v*v
+    trm[3] = -10.0 + v*( -75707.0/840.0 + pi*pi*41.0/64.0 ) + 19.0*0.5*v*v + v*v*v
+    #
+    w0 = sqrt( (G*M/(r*r*r)) * sum( array([ term*(gamma**k) for k,term in enumerate(trm) ]) ) )
+
+    #
+    return w0

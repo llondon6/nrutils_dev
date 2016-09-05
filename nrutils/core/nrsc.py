@@ -1324,9 +1324,10 @@ class gwylm:
 
         # If w22 is input, then use the input value for strain calculation. Otherwise, use the algorithmic estimate.
         if w22 is None:
-            w22 = this.wstart
+            w22 = this.wstart_pn
             if verbose:
-                msg = 'Using w22 from '+bold(magenta('algorithmic estimate'))+' to calculate strain multipoles.'
+                # msg = 'Using w22 from '+bold(magenta('algorithmic estimate'))+' to calculate strain multipoles.'
+                msg = 'Using w22 from a '+bold(magenta('PN estimate'))+' to calculate strain multipoles [see pnw0 in basics.py, and/or arxiv:1310.1528v4].'
                 alert(msg,thisfun)
         else:
             if verbose:
@@ -1607,7 +1608,10 @@ class gwylm:
 
         # If there is no w22 given, then use the internally defined value of wstart
         if w22 is None:
-            w22 = this.wstart
+            # w22 = this.wstart
+            # NOTE: here we choose to use the ORBITAL FREQUENCY as a lower bound for the l=m=2 mode.
+            w22 = this.wstart_pn
+
 
         # Reset
         this.hlm = []
@@ -1647,6 +1651,9 @@ class gwylm:
         # store the expected min frequency in the waveform to this object as:
         this.wstart = this.starting.left_dphi
         this.startindex = this.starting.left_index
+        # Estimate the smallest orbital frequency relevant for this waveform using a PN formula.
+        safety_factor = 0.95
+        this.wstart_pn = safety_factor*2.0*pnw0(this.m1,this.m2,this.b)
 
     # Clean the time domain waveform by removing junk radiation.
     def clean( this, method=None, crop_time=None ):
