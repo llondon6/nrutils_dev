@@ -8,10 +8,17 @@ pip install git+https://github.com/llondon6/nrutils_dev.git
 ###Or clone, then install:
 ```bash
 git clone https://github.com/llondon6/nrutils_dev.git
-python setup.py install
+pip install .
+```
+###Or clone, then install in editable mode (useful if installing in a virtual environment):
+```bash
+git clone https://github.com/llondon6/nrutils_dev.git
+pip install -e .
 ```
 
 ## 2. Setup .ini files
+If you installed `nrutils` in editable mode then you should edit the files in the cloned
+repository otherwise you should edit the files installed in you python environment.
 
 1. nrutils/settings/paths.template -> nrutils/settings/paths.ini
 2. nrutils/config/bam.template -> nrutils/config/bam.ini
