@@ -2,9 +2,8 @@
 #
 from nrutils.core.nrsc import *
 
-import matplotlib as mpl
-# print mpl.rcParams
-mpl.use('macosx')
+#
+scbuild()
 
 # Search for simulations
 # A = scsearch(institute='sxs',nonspinning=True,q=[1,10],verbose=True,unique=True)
