@@ -1083,8 +1083,8 @@ class gwf:
         # Ignore renderer warnings
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            # tight_layout(pad=2, w_pad=1.2)
-            # subplots_adjust(hspace = .001)
+            tight_layout(pad=2, w_pad=1.2)
+            subplots_adjust(hspace = .001)
 
         #
         xlabel(r'$f$',fontsize=fs,color=txclr)
@@ -1145,8 +1145,8 @@ class gwf:
         # Ignore renderer warnings
         with warnings.catch_warnings():
             warnings.simplefilter("ignore")
-            # tight_layout(pad=2, w_pad=1.2)
-            # subplots_adjust(hspace = .001)
+            tight_layout(pad=2, w_pad=1.2)
+            subplots_adjust(hspace = .001)
 
         #
         pylim( this.t, this.amp, domain=xlim, symmetric=True )
@@ -1459,7 +1459,8 @@ class gwylm:
         # Construct the string location of the waveform data. NOTE that config is inhereted indirectly from the scentry_obj. See notes in the constructor.
         if file_location is None: # Find file_location automatically. Else, it must be input
 
-            file_location = this.config.make_datafilename( extraction_parameter, l,m )
+            # file_location = this.config.make_datafilename( extraction_parameter, l,m )
+
             # For all formatting possibilities in the configuration file
             for fmt in this.config.data_file_name_format :
                 #
@@ -1569,7 +1570,7 @@ class gwylm:
 
             # Plot waveform data
             for y in wflm:
-                ax = y.plot(fig=fig,title='%s: %s' % (this.setname.replace('_','\_'),this.label.replace('_','\_')),kind=kind,domain=domain)
+                ax = y.plot(fig=fig,title='%s: %s' % (this.setname,this.label),kind=kind,domain=domain)
 
             # If there is start characterization, plot some of it
             if 'starting' in this.__dict__:

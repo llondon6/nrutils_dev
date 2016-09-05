@@ -15,9 +15,10 @@ import random
 import h5py
 import copy
 
-from matplotlib import rc
-rc('font',**{'family':'sans-serif','sans-serif':['Helvetica']})
-rc('text', usetex=True)
+# from matplotlib import rc
+# rc('font',**{'family':'sans-serif','sans-serif':['Helvetica']})
+# NOTE that uncommenting the line below may cause errors in OSX install relating to fonts 
+# rc('text', usetex=True)
 
 def linenum():
     """Returns the current line number in our program."""
