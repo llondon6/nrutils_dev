@@ -17,7 +17,7 @@ import copy
 
 # from matplotlib import rc
 # rc('font',**{'family':'sans-serif','sans-serif':['Helvetica']})
-# NOTE that uncommenting the line below may cause errors in OSX install relating to fonts 
+# NOTE that uncommenting the line below may cause errors in OSX install relating to fonts
 # rc('text', usetex=True)
 
 def linenum():
@@ -883,6 +883,17 @@ def rfind( path , pattern = None, verbose = False, ignore = None ):
     import os
     # Create a string with the current process name
     thisfun = inspect.stack()[0][3]
+
+    # # Use find with regex to get matches
+    # from subprocess import Popen, PIPE
+    # (stdout, stderr) = Popen(['find',path,'-regex','.*/[^/]*%s*'%(pattern)], stdout=PIPE).communicate()
+    #
+    # if 'None' is stderr:
+    #     raise ValueError( 'Unable to find files matching '+red(pattern)+' in '+red(path)+'. The system says '+red(stderr) )
+    #
+    # #
+    # matches = stdout.split('\n')
+
 
     # All items containing these string will be ignored
     if ignore is None:
