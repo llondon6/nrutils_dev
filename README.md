@@ -10,7 +10,7 @@ pip install git+https://github.com/llondon6/nrutils_dev.git
 git clone https://github.com/llondon6/nrutils_dev.git
 pip install .
 ```
-###Or clone, then install in editable mode:
+###Or clone, then install in editable mode (useful if installing in a virtual environment):
 ```bash
 git clone https://github.com/llondon6/nrutils_dev.git
 pip install -e .
