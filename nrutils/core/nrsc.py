@@ -65,7 +65,7 @@ class scconfig(smart_object):
                                                         # learn_metadata functions
                            'is_extrapolated',           # users should set this to true if waveform is extrapolated
                                                         # to infinity
-                           'default_extraction_par' ]   # default extraction parameter for loading
+                           'default_par_list' ]   # list of default parameters for loading: default_extraction_parameter, default_level. NOTE that list must be of length 2
 
         # Make sure that each required attribute is a member of this objects dictionary representation. If it's not, throw an error.
         for attr in required_attrs:
@@ -97,11 +97,10 @@ class scconfig(smart_object):
             msg = 'catalog_dir values must be string'
             error(red(msg),thisfun)
 
-        for k in this.data_file_param_order:
 
-            if not ( ('l' == k) or ('m' == k) or ('extraction_parameter' == k) ):
-                msg = '(!!) Error in %s: data_file_param_order must be list containing "l" "m" and "extraction_parameter" (no quotation marks) in an order that coincides with data_file_name_format as defined within the same file. Invalide string found: %s' % (magenta(this.config_file_location),k)
-                raise ValueError(msg)
+        if 2 != len(this.default_par_list):
+            msg = '(!!) Error in %s: default_par_list must be list containing default extraction parameter (Numeric value) and default level (also Numeric in value). Invalide case found: %s' % (magenta(this.config_file_location),list(this.default_par_list))
+            raise ValueError(msg)
 
         # Make sure that all directories end with a forward slash
         for attr in this.__dict__:
@@ -1276,6 +1275,7 @@ class gwylm:
                   load                  = True,     # IF true, we will try to load data from the scentry_object
                   clean                 = False,    # Toggle automatic tapering
                   extraction_parameter  = None,     # Extraction parameter labeling extraction zone/radius for run
+                  level = None,                     # Opional refinement level for simulation. NOTE that not all NR groups use this specifier. In such cases, this input has no effect on loading.
                   w22 = None,                       # Optional input for lowest physical frequency in waveform; by default an wstart value is calculated from the waveform itself and used in place of w22
                   verbose               = None ):   # be verbose
 
@@ -1301,12 +1301,17 @@ class gwylm:
         # Tag this object with the simulation location of the given scentry_obj. NOTE that the right hand side of this assignment depends on the user's configuration file. Also NOTE that the configuration object is reconfigured to the system's settings within simdir()
         this.simdir = scentry_obj.simdir()
 
+        # Load default values for extraction_parameter and level (e.g. resolution level)
+        default_extraction_par = this.config.default_par_list[0]
+        default_level = this.config.default_par_list[1]
         # If no extraction parameter is given, retrieve default. NOTE that this depends on the current user's configuration.
         if extraction_parameter is None:
-            extraction_parameter = this.config.default_extraction_par
-
-        # Store the extraction parameter
+            extraction_parameter = default_extraction_par
+        if level is None:
+            level = default_level
+        # Store the extraction parameter and level
         this.extraction_parameter = extraction_parameter
+        this.level = level
 
         # These fields are initiated here for visiility, but they are filled as lists of gwf object in load()
         this.ylm = []; this.hlm = []
@@ -1382,6 +1387,7 @@ class gwylm:
                   lmax=None,                 # max l to use
                   lm=None,                   # (l,m) pair or list of pairs to use
                   extraction_parameter=None, # the label for different extraction zones/radii
+                  level = None,              # Simulation resolution level (Optional and not supported for all groups )
                   dt=None,
                   verbose=None ):
 
@@ -1395,20 +1401,20 @@ class gwylm:
                 #
                 for m in range(-l,l+1):
                     #
-                    this.load(lm=[l,m],dt=dt,extraction_parameter=extraction_parameter,verbose=verbose)
+                    this.load(lm=[l,m],dt=dt,extraction_parameter=extraction_parameter,level=level,verbose=verbose)
         else: # Else, load the given lis of lm values
             # If lm is a list of specific multipole indeces
             if len(shape(lm))==2:
                 #
                 for k in lm:
                     if len(k)==2:
-                        this.load(lm=k,extraction_parameter=extraction_parameter,dt=dt)
+                        this.load(lm=k,extraction_parameter=extraction_parameter,level=level,dt=dt)
                     else:
                         msg = 'Found list of multipole indeces (e.g. [[2,2],[3,3]]), but length of one of the index values is not two. Please check your lm input.'
                         error(msg,'__load__')
             else: # Else, if lm is a single mode index
                 #
-                this.load(lm=lm,extraction_parameter=extraction_parameter,dt=dt)
+                this.load(lm=lm,extraction_parameter=extraction_parameter,level=level,dt=dt)
 
     # load the waveform data
     def load(this,                  # The current object
@@ -1417,6 +1423,7 @@ class gwylm:
                                     # otherwise the function determines teh file string automatically.
              dt = None,             # Time step to enforce for data
              extraction_parameter=None,
+             level=None,            # (Optional) Level specifyer for simulation. Not all simulation groups use this!
              output=False,          # Toggle whether to store data to the current object, or output it
              verbose=None):
 
@@ -1447,7 +1454,7 @@ class gwylm:
         # NOTE that l,m and extraction_parameter MUST be defined for the correct file location string to be created. Also NOTE that this.config.data_file_param_order must contain strings 'l', 'm' and 'extraction_parameter'.
         l = lm[0]; m = lm[1]
 
-        # If the extraction parameter is input, then label the current object with the input value, and use the input value to load the file. Else,
+        # Load default file name parameters: extraction_parameter,l,m,level
         if extraction_parameter is None:
             # Use the default value
             extraction_parameter = this.extraction_parameter
@@ -1456,6 +1463,14 @@ class gwylm:
             # Use the input value
             this.extraction_parameter = extraction_parameter
             if verbose: alert('Using the '+cyan('input')+' extraction_parameter of '+cyan('%g' % extraction_parameter))
+        if level is None:
+            # Use the default value
+            level = this.level
+            if verbose: alert('Using the '+cyan('default')+' level of %g' % level)
+        else:
+            # Use the input value
+            this.level = level
+            if verbose: alert('Using the '+cyan('input')+' level of '+cyan('%g' % level))
 
         # This boolean will be set to true if the file location to load is found to exist
         proceed = False
@@ -1466,9 +1481,15 @@ class gwylm:
             # file_location = this.config.make_datafilename( extraction_parameter, l,m )
 
             # For all formatting possibilities in the configuration file
+             # NOTE standard parameter order for every simulation catalog
+             # extraction_parameter l m level
             for fmt in this.config.data_file_name_format :
-                #
-                file_location = this.simdir + fmt % ( eval(this.config.data_file_param_order[0]), eval(this.config.data_file_param_order[1]), eval(this.config.data_file_param_order[2]) )
+
+                # NOTE the ordering here, and that the filename format in the config file has to be consistent with: extraction_parameter, l, m, level
+                file_location = (this.simdir + fmt).format( extraction_parameter, l, m, level )
+                # OLD Formatting Style:
+                # file_location = this.simdir + fmt % ( extraction_parameter, l, m, level )
+
                 # test whether the file exists
                 if isfile( file_location ):
                     break
