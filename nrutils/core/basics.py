@@ -326,7 +326,11 @@ def parsin( keys, dict, default=False, verbose=False, fname='*', **kwarg ):
     return value
 
 # Rough grep equivalent using the subprocess module
-def grep( flag, file_location, options='', comment='' ):
+def grep( flag, file_location, options=None, comment=None ):
+    #
+    if options is None: options = ''
+    if comment is None: comment = []
+    if not isinstance(comment,list): comment = [comment]
     # Create string for the system command
     cmd = "grep " + '"' + flag + '" ' + file_location + options
     # Pass the command to the operating system
@@ -336,9 +340,12 @@ def grep( flag, file_location, options='', comment='' ):
     output = raw_output.splitlines()
     # Mask the lines that are comments
     if comment:
-        # Masking in Python:
-        mask = [line[0]!=comment for line in output]
-        output = [output[k] for k in xrange(len(output)) if mask[k]]
+        for commet in comment:
+            if not isinstance(commet,str):
+                raise TypeError('Hi there!! Comment input must be string or list of stings. :D ')
+            # Masking in Python:
+            mask = [line[0]!=commet for line in output]
+            output = [output[k] for k in xrange(len(output)) if mask[k]]
 
     # Return the list of lines
     return output
@@ -503,7 +510,7 @@ class smart_object:
     # Function for parsing entire files into class attributes and values
     def learn_file( this, file_location, eqls="=", **kwargs ):
         # Use grep to read each line in the file that contains an equals sign
-        line_list = grep(eqls,file_location,comment='#')
+        line_list = grep(eqls,file_location,**kwargs)
         for line in line_list:
             this.learn_string( line,eqls, **kwargs )
         # Learn file location
@@ -512,7 +519,7 @@ class smart_object:
         this.source_dir.append( parent(file_location) )
 
     # Function for parsing single lines strings into class attributes and values
-    def learn_string(this,string,eqls="=",**kwargs):
+    def learn_string(this,string,eqls='=',comment=None,**kwargs):
 
         #
         from numpy import array
@@ -524,7 +531,20 @@ class smart_object:
         keys = ('verbose','verb')
         VERB = parsin( keys, kwargs )
         if VERB:
-            print('[%s]>> VERBOSE mode on.' % thisfun)
+            print '[%s]>> VERBOSE mode on.' % thisfun
+            print 'Lines with %s will not be considered.' % comment
+
+        # Get rid of partial line comments. NOTE that full line comments have been removed in grep
+        done = False
+        if comment is not None:
+            if not isinstance(comment,list): comment = [comment]
+            for c in comment:
+                if not isinstance(c,str):
+                    raise TypeError('Hi there!! Comment input must be string or list of stings. I found %s :D '%[c])
+                for k in range( string.count(c) ):
+                    h = string.find(c)
+                    # Keep only text that comes before the comment marker
+                    string = string[:h]
 
         # The string must be of the format "A eqls B", in which case the result is
         # that the field A is added to this object with the value B

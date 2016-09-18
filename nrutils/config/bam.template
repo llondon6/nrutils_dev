@@ -24,4 +24,4 @@ default_par_list = 5,5
 is_extrapolated = 1
 
 #
-handler_location = /Users/book/JOKI/Libs/KOALA/nrutils_dev/nrutils/bin/bam.py
+handler_location = /Users/book/JOKI/Libs/KOALA/nrutils_dev/nrutils/handlers/bam.py

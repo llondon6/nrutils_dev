@@ -91,12 +91,12 @@ for p in internal_packages:
 # Import select modules for high level access
 from manipulate import nr2h5
 from tools.unit.conversion import *
-from core.nrsc import gwf,scsearch,gwylm,scbuild
+from core.nrsc import scsearch,scbuild,gwylm,gwf
 
 #
 if verbose: print ''
 # Cleanup
-del internal_packages, cmd, bash, p, dir_list, status, output, this_file, basename, dirname, isdir, realpath
+del cmd, bash, p, dir_list, status, output, this_file, basename, dirname, isdir, realpath
 
 # for d in modules:
 #     print '\n|&) Importing: %s' % d

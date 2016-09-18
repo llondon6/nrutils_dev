@@ -23,4 +23,4 @@ default_par_list = 2,4
 is_extrapolated = 1
 
 #
-handler_location = /Users/book/JOKI/Libs/KOALA/nrutils_dev/nrutils/bin/sxs.py
+handler_location = /Users/book/JOKI/Libs/KOALA/nrutils_dev/nrutils/handlers/sxs.py

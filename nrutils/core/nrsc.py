@@ -37,7 +37,7 @@ class scconfig(smart_object):
             raise ValueError(msg)
 
         # learn the contents of the configuration file
-        this.learn_file( this.config_file_location )
+        this.learn_file( this.config_file_location, comment=[';','#'] )
 
         # validate the information learned from the configuration file against minimal standards
         this.valid = this.validate()
@@ -60,7 +60,6 @@ class scconfig(smart_object):
                            'catalog_dir',               # local directory where all simulation folders are stored
                                                         # this directory allows catalog files to be portable
                            'data_file_name_format',     # formatting string for referencing l m and extraction parameter
-                           'data_file_param_order',     # order of inpts to formatting string
                            'handler_location',          # location of python script which contains validator and
                                                         # learn_metadata functions
                            'is_extrapolated',           # users should set this to true if waveform is extrapolated
@@ -87,11 +86,6 @@ class scconfig(smart_object):
         else:
             msg = '(!!)  Error in %s: data_file_name_format must be comma separated list.' %  magenta(this.config_file_location)
 
-        # Make sure that data_file_param_order has the required elements
-        if not isinstance(this.data_file_param_order,list):
-            msg = '(!!) Error in %s: data_file_param_order must be comma separated list with no string quotes' %  magenta(this.config_file_location)
-            raise ValueError(msg)
-
         # Make sure that catalog_dir is string
         if not isinstance( this.catalog_dir, str ):
             msg = 'catalog_dir values must be string'
@@ -106,7 +100,7 @@ class scconfig(smart_object):
         for attr in this.__dict__:
             if 'dir' in attr:
                 if this.__dict__[attr][-1] != '/':
-                    this.__dict__[attr][-1] += '/'
+                    this.__dict__[attr] += '/'
         # Make sure that user symbols (~) are expanded
         for attr in this.__dict__:
             if ('dir' in attr) or ('location' in attr):
@@ -143,11 +137,12 @@ class scentry:
             # i.e. learn the meta_data_file
             try:
                 this.learn_metadata()
+                this.label = sclabel( this )
             except NameError:
                 this.log += ' [FATALERROR-1] The metadata failed to be read. There may be an external formatting inconsistency. It is being marked as invalid with None.'
                 this.is_valid = None # An external program may use this to do something
-            #
-            this.label = sclabel( this )
+                this.label = 'invalid!'
+
         elif this.is_valid is False:
             print '## The following is '+red('invalid')+': %s' % cyan(metadata_file_location)
             this.log += ' This entry''s metadta file is invalid.'
@@ -695,6 +690,9 @@ def sclabel( entry,             # scentry object
             tag.append('s2')
 
         # Run is spin aligned if net spin is parallel to net L
+        print e.S1
+        print e.S2
+        print L
         if allclose( dot(e.S1,L) , norm(e.S1)*norm(L) , atol=tol ) and allclose( dot(e.S2,L) , norm(e.S2)*norm(L) , atol=tol ) and (not 'ns' in tag):
             tag.append('sa')
 
@@ -1451,7 +1449,7 @@ class gwylm:
             msg = '(!!) '+yellow('Error. ')+'Input file location is type %s, but must instead be '+green('str')+'.' % magenta(type(file_location).__name__)
             raise ValueError(msg)
 
-        # NOTE that l,m and extraction_parameter MUST be defined for the correct file location string to be created. Also NOTE that this.config.data_file_param_order must contain strings 'l', 'm' and 'extraction_parameter'.
+        # NOTE that l,m and extraction_parameter MUST be defined for the correct file location string to be created.
         l = lm[0]; m = lm[1]
 
         # Load default file name parameters: extraction_parameter,l,m,level
@@ -1542,7 +1540,7 @@ class gwylm:
         else:
 
             # There has been an error. Let the people know.
-            msg = '(!!) Cannot find "%s". Please check that catalog_dir, data_file_name_format and data_file_param_order in %s are as desired. Also be sure that input l and m are within ranges that are actually present on disk.' % ( red(file_location), magenta(this.config.config_file_location) )
+            msg = '(!!) Cannot find "%s". Please check that catalog_dir and data_file_name_format in %s are as desired. Also be sure that input l and m are within ranges that are actually present on disk.' % ( red(file_location), magenta(this.config.config_file_location) )
             raise NameError(msg)
 
     # Plotting function for class: plot plus cross amp phi of waveforms USING the plot function of gwf()
@@ -1583,7 +1581,7 @@ class gwylm:
                 kind = 'strain'
                 # Determine whether to calc strain here. If so, then let the people know.
                 if len(this.hlm) == 0:
-                    msg = '(**) You have requested that strain be plotted before having explicitelly called gwfylm.calchlm(). I will now call calchlm() for you.'
+                    msg = '(**) You have requested that strain be plotted before having explicitelly called MMRDNSlm.calchlm(). I will now call calchlm() for you.'
                     print magenta(msg)
                     this.calchlm()
                 # Assign strain to the general placeholder.
