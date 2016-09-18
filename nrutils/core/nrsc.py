@@ -132,20 +132,20 @@ class scentry:
         if this.is_valid is True:
             #
             print '## Working: %s' % cyan(metadata_file_location)
-            this.log += ' This entry''s metadata file is valid.'
+            this.log += ' This entry\'s metadata file is valid.'
 
             # i.e. learn the meta_data_file
             try:
                 this.learn_metadata()
                 this.label = sclabel( this )
-            except NameError:
-                this.log += ' [FATALERROR-1] The metadata failed to be read. There may be an external formatting inconsistency. It is being marked as invalid with None.'
+            except:
+                this.log += '%80s'%' [FATALERROR-1] The metadata failed to be read. There may be an external formatting inconsistency. It is being marked as invalid with None. Please see terminal output for more information.'
                 this.is_valid = None # An external program may use this to do something
                 this.label = 'invalid!'
 
         elif this.is_valid is False:
             print '## The following is '+red('invalid')+': %s' % cyan(metadata_file_location)
-            this.log += ' This entry''s metadta file is invalid.'
+            this.log += ' This entry\'s metadta file is invalid.'
 
     #
     def validate(this):
