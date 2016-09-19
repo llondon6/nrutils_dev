@@ -504,9 +504,12 @@ def scsearch( catalog = None,           # Manually input list of scentry objects
             keyword = [keyword]
         keyword = filter( lambda s: isinstance(s,str), keyword )
         keyword = [ k.lower() for k in keyword ]
-        for w in keyword:
-            test = lambda k: w in k.metadata_file_location.lower()
-            catalog = filter( test, catalog )
+        temp_catalogs = [ catalog for w in keyword ]
+        new_catalog = []
+        for j,key in enumerate(keyword):
+            test = lambda k: key in k.metadata_file_location.lower()
+            new_catalog += filter( test, temp_catalogs[j] )
+        catalog = list(set(new_catalog))
 
     # Compare not keyword
     if notkeyword is not None:
@@ -525,7 +528,7 @@ def scsearch( catalog = None,           # Manually input list of scentry objects
         output_descriptor = green(' unique')
 
     # Sort by final dimnesionless spin
-    catalog = sorted( catalog, key = lambda e: e.xf, reverse = True )
+    catalog = sorted( catalog, key = lambda e: e.date_number, reverse = True )
 
     #
     if verbose:
