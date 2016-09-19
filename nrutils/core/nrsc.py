@@ -731,7 +731,7 @@ def sclabel( entry,             # scentry object
     return label
 
 
-# Loest level class for gravitational waveform data
+# Lowest level class for gravitational waveform data
 class gwf:
 
     # Class constructor
@@ -1646,7 +1646,8 @@ class gwylm:
             # Here, m=0 is a special case
             if 0==y.m: w0 = w22
             # Let the people know
-            print yellow('>> w0 = %f' % w0)
+            if this.verbose:
+                print magenta('* w0(w22) = %f' % w0)+yellow(' (this is the lower frequency used for FFI method [arxiv:1006.1632v3])')
 
             # Create the core waveform information
             t       =  y.t

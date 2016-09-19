@@ -37,8 +37,12 @@ def validate( metadata_file_location, config = None ):
 # Learn the metadta (file) for this type of NR waveform
 def learn_metadata( metadata_file_location ):
 
+    # Try to load the related par file
+    par_file_location = metadata_file_location[:-3]+'par'
+
     #
-    raw_metadata = smart_object( metadata_file_location )
+    raw_metadata = smart_object( [metadata_file_location,par_file_location] )
+
     # shortand
     y = raw_metadata
 

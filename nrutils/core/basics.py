@@ -524,7 +524,7 @@ class smart_object:
     def learn_string(this,string,eqls='=',comment=None,**kwargs):
 
         #
-        from numpy import array
+        from numpy import array,ndarray,append
 
         # Create a string with the current process name
         thisfun = inspect.stack()[0][3]
@@ -552,11 +552,15 @@ class smart_object:
         # that the field A is added to this object with the value B
         part = string.split(eqls)
 
-        # Remove harmful and unneeded characters
+        # Remove harmful and unneeded characters from the attribute side
         attr = part[0].replace('-','_')
         attr = attr.replace(' ','')
         attr = attr.replace('#','')
-        part[1] = part[1].replace(' ','')
+
+        # Detect space separated lists on the value side
+        # NOTE that this will mean that 1,2,3,4 5 is treated as 1,2,3,4,5
+        part[1] = ','.join( [ p for p in part[1].split(' ') if p ] )
+
         if VERB: print( '   ** Trying to learn:\n \t\t[%s]=[%s]' % (attr,part[1]))
 
         # Correctly formatted lines will be parsed into exactly two parts
@@ -583,8 +587,19 @@ class smart_object:
             #
             if 1==len(value):
                 value = value[0]
-            #
-            setattr( this, attr, value )
+
+            # If the attr does not already exist, then add it
+            if not ( attr in this.__dict__.keys() ):
+                setattr( this, attr, value )
+            else:
+                # If it's already a list, then append
+                if isinstance( getattr(this,attr), ndarray ):
+                    setattr(  this, attr, append(getattr(this,attr),value)  )
+                else:
+                    # If it's not already a list, then make it one
+                    old_value = getattr(this,attr)
+                    setattr( this, attr, array([old_value,value]) )
+
         else:
             raise ValueError('Impoperly formatted input string.')
 
