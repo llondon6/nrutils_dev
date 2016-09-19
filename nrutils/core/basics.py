@@ -27,11 +27,11 @@ def linenum():
 # Class for basic print manipulation
 class print_format:
    magenta = '\033[1;35m'
-   cyan = '\033[1;36m'
+   cyan = '\033[0;36m'
    darkcyan = '\033[0;36m'
    blue = '\033[0;34m'
    green = '\033[0;32m'
-   yellow = '\033[1;33m'
+   yellow = '\033[0;33m'
    red = '\033[31m'
    bold = '\033[1m'
    grey = gray = '\033[1;30m'
@@ -54,6 +54,8 @@ def grey(string):
     return print_format.grey + string + print_format.end
 def yellow(string):
     return print_format.yellow + string + print_format.end
+def orange(string):
+    return print_format.orange + string + print_format.end
 def cyan(string):
     return print_format.cyan + string + print_format.end
 def darkcyan(string):
@@ -883,7 +885,7 @@ def warning(msg,fname=None):
     if fname is None:
         fname = 'warning'
 
-    print '('+yellow(fname)+')>> '+msg
+    print '('+yellow(fname+'!')+')>> '+msg
 
 #
 def error(msg,fname=None):
@@ -891,7 +893,7 @@ def error(msg,fname=None):
     if fname is None:
         fname = 'error'
 
-    raise ValueError( '('+red(fname)+')!! '+msg )
+    raise ValueError( '('+red(fname+'!!')+')>> '+msg )
 
 
 

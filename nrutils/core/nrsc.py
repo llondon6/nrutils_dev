@@ -12,7 +12,7 @@ Modules for Numerical Relativity Simulation Catalog:
 from nrutils.core import settings as gconfig
 from nrutils.core.basics import *
 from nrutils.core import M_RELATIVE_SIGN_CONVENTION
-import warnings
+import warnings,sys
 
 # Class representation of configuration files. The contents of these files define where the metadata for each simulation is stored, and where the related NR data is stored.
 class scconfig(smart_object):
@@ -139,7 +139,9 @@ class scentry:
                 this.learn_metadata()
                 this.label = sclabel( this )
             except:
-                this.log += '%80s'%' [FATALERROR-1] The metadata failed to be read. There may be an external formatting inconsistency. It is being marked as invalid with None. Please see terminal output for more information.'
+                emsg = sys.exc_info()[1].message
+                this.log += '%80s'%' [FATALERROR-1] The metadata failed to be read. There may be an external formatting inconsistency. It is being marked as invalid with None. The system says: %s'%emsg
+                warning( 'The following error message will be logged: '+red(emsg),'scentry')
                 this.is_valid = None # An external program may use this to do something
                 this.label = 'invalid!'
 
@@ -560,7 +562,7 @@ def scunique( catalog = None, tol = 1e-3, verbose = False ):
 
             # Let the people know.
             if verbose:
-                print cyan('[%i] %s:%s' % (d,entry.setname,entry.label))
+                alert( '[%i] %s:%s' % (d,entry.setname,entry.label), 'scunique' )
 
             # Create a map of all simulations with matching initial parameters (independently of initial setaration)
 
@@ -690,9 +692,6 @@ def sclabel( entry,             # scentry object
             tag.append('s2')
 
         # Run is spin aligned if net spin is parallel to net L
-        print e.S1
-        print e.S2
-        print L
         if allclose( dot(e.S1,L) , norm(e.S1)*norm(L) , atol=tol ) and allclose( dot(e.S2,L) , norm(e.S2)*norm(L) , atol=tol ) and (not 'ns' in tag):
             tag.append('sa')
 

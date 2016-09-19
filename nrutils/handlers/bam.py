@@ -1,6 +1,6 @@
 
 #
-from nrutils.core.basics import smart_object,parent,blue,smart_load,green,alert,error
+from nrutils.core.basics import smart_object,parent,blue,smart_load,green,alert,error,warning,yellow,green,bold,cyan
 from glob import glob as ls
 from os.path import getctime
 from numpy import array,cross,zeros,dot,abs,sqrt
@@ -50,6 +50,9 @@ def learn_metadata( metadata_file_location ):
     # shorthand
     x = standard_metadata
 
+    # Keep NOTE of important information
+    x.note = ''
+
     # Creation date of metadata file
     x.date_number = getctime(  metadata_file_location  )
 
@@ -63,45 +66,61 @@ def learn_metadata( metadata_file_location ):
     x.m1 = y.mass1
     x.m2 = y.mass2
 
-    #
-    P1 = array( [ y.initial_bh_momentum1x, y.initial_bh_momentum1y, y.initial_bh_momentum1z ] )
-    P2 = array( [ y.initial_bh_momentum2x, y.initial_bh_momentum2y, y.initial_bh_momentum2z ] )
-
     # NOTE that some bbh files may not have after_junkradiation_spin data (i.e. empty). In these cases we will take the initial spin data
     S1 = array( [ y.after_junkradiation_spin1x, y.after_junkradiation_spin1y, y.after_junkradiation_spin1z ] )
     S2 = array( [ y.after_junkradiation_spin2x, y.after_junkradiation_spin2y, y.after_junkradiation_spin2z ] )
 
-    # find puncture data locations
-    puncture_data_1_location = ls( parent( metadata_file_location )+ 'moving_puncture_integrate1*' )[0]
-    puncture_data_2_location = ls( parent( metadata_file_location )+ 'moving_puncture_integrate2*' )[0]
+    #%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%#
+    # NOTE that sometimes the afterjunk spins may not be stored correctely or at all in the bbh files. Therefore an additional validation step is needed here.
+    x.isafterjunk = not ( (not S1) or ( not S2 ) )
+    #%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%#
 
-    # load puncture data
-    puncture_data_1,_ = smart_load( puncture_data_1_location )
-    puncture_data_2,_ = smart_load( puncture_data_2_location )
+    # If the data is to be stored using afterjunk parameters:
+    if x.isafterjunk:
+        #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
+        # Use afterjunk information                   #
+        msg = cyan('Initial parameters corresponding to the bbh file\'s aftrejunktime will be used to populate metadata.')
+        alert(msg,'bam.py')
+        x.note += msg
+        #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
+        # find puncture data locations
+        puncture_data_1_location = ls( parent( metadata_file_location )+ 'moving_puncture_integrate1*' )[0]
+        puncture_data_2_location = ls( parent( metadata_file_location )+ 'moving_puncture_integrate2*' )[0]
 
-    # Mask away the initial junk region using the after-junk time given in the bbh metadata
-    after_junkradiation_time = y.after_junkradiation_time
-    after_junkradiation_mask = puncture_data_1[:,-1] > after_junkradiation_time
+        # load puncture data
+        puncture_data_1,_ = smart_load( puncture_data_1_location )
+        puncture_data_2,_ = smart_load( puncture_data_2_location )
 
-    puncture_data_1 = puncture_data_1[ after_junkradiation_mask, : ]
-    puncture_data_2 = puncture_data_2[ after_junkradiation_mask, : ]
+        # Mask away the initial junk region using the after-junk time given in the bbh metadata
+        after_junkradiation_time = y.after_junkradiation_time
+        after_junkradiation_mask = puncture_data_1[:,-1] > after_junkradiation_time
 
-    R1 = array( [  puncture_data_1[0,0],puncture_data_1[0,1],puncture_data_1[0,2],  ] )
-    R2 = array( [  puncture_data_2[0,0],puncture_data_2[0,1],puncture_data_2[0,2],  ] )
+        puncture_data_1 = puncture_data_1[ after_junkradiation_mask, : ]
+        puncture_data_2 = puncture_data_2[ after_junkradiation_mask, : ]
 
-    # Note that here the shift is actually contained within puncture_data, and the shift is -1 times the velocity
-    P1 = x.m1 * array( [  -puncture_data_1[0,3],-puncture_data_1[0,4],-puncture_data_1[0,5],  ] )
-    P2 = x.m2 * array( [  -puncture_data_2[0,3],-puncture_data_2[0,4],-puncture_data_2[0,5],  ] )
+        R1 = array( [  puncture_data_1[0,0],puncture_data_1[0,1],puncture_data_1[0,2],  ] )
+        R2 = array( [  puncture_data_2[0,0],puncture_data_2[0,1],puncture_data_2[0,2],  ] )
 
-    # # Old code for referencing the initial positions
-    # R1_old = array( [ y.initial_bh_position1x, y.initial_bh_position1y, y.initial_bh_position1z ] )
-    # R2_old = array( [ y.initial_bh_position2x, y.initial_bh_position2y, y.initial_bh_position2z ] )
-    #
-    # print '>> old: %s' % R1_old
-    # print '>> new: %s' % R1
+        # NOTE that here the shift is actually contained within puncture_data, and NOTE that the shift is -1 times the velocity
+        P1 = x.m1 * -array( [  puncture_data_1[0,3],puncture_data_1[0,4],puncture_data_1[0,5],  ] )
+        P2 = x.m2 * -array( [  puncture_data_2[0,3],puncture_data_2[0,4],puncture_data_2[0,5],  ] )
+    else:
+        #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
+        # Use initial data information                #
+        msg = cyan('Warning:')+yellow(' The afterjunk spins appear to have been stored incorrectly. All parameters according to the initial data (as stored in the bbh files) will be stored. ')
+        warning(msg,'bam.py')
+        x.note += msg
+        #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
+        # Spins
+        S1 = array( [ y.initial_bh_spin1x, y.initial_bh_spin1y, y.initial_bh_spin1z ] )
+        S2 = array( [ y.initial_bh_spin2x, y.initial_bh_spin2y, y.initial_bh_spin2z ] )
+        # Momenta
+        P1 = array( [ y.initial_bh_momentum1x, y.initial_bh_momentum1y, y.initial_bh_momentum1z ] )
+        P2 = array( [ y.initial_bh_momentum2x, y.initial_bh_momentum2y, y.initial_bh_momentum2z ] )
+        # positions
+        R1 = array( [ y.initial_bh_position1x, y.initial_bh_position1y, y.initial_bh_position1z ] )
+        R2 = array( [ y.initial_bh_position2x, y.initial_bh_position2y, y.initial_bh_position2z ] )
 
-    #
-    x.note = ''
 
     # Estimate the component angular momenta
     L1 = cross(R1,P1)
@@ -117,8 +136,14 @@ def learn_metadata( metadata_file_location ):
     # Estimate the initial biary separation (afterjunk), and warn the user if this value is significantly different than the bbh file
     x.b = norm(R1-R2) # float( y.initial_separation )
     if abs( y.initial_separation - norm(R1-R2) ) > 1e-1:
-        msg = 'warning: The estimated after junk binary separation is significantly different than the value stored in the bbh file: \n\t\tx from calculation = %f\n\t\ta from bbh file=%f' % (norm(R1-R2),y.initial_separation)
-        alert(msg,'bam.py')
+        msg = cyan('Warning:')+' The estimated after junk binary separation is significantly different than the value stored in the bbh file: '+yellow('x from calculation = %f, x from bbh file=%f' % (norm(R1-R2),y.initial_separation) )+'. The user should understand whether this is an erorr or not.'
+        x.note += msg
+        warning(msg,'bam.py')
+    # Let the use know that the binary separation is possibly bad
+    if x.b<4:
+        msg = cyan('Warning:')+' The estimated initial binary separation is very small. This may be due to an error in the puncture data. You may wish to use the initial binary separation from the bbh file which is %f'%y.initial_separation+'. '
+        warning(msg,'bam.py')
+        x.note += msg
 
     #
     x.R1 = R1; x.R2 = R2
