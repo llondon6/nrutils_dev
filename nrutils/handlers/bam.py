@@ -76,7 +76,9 @@ def learn_metadata( metadata_file_location ):
 
     #%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%#
     # NOTE that sometimes the afterjunk spins may not be stored correctely or at all in the bbh files. Therefore an additional validation step is needed here.
-    x.isafterjunk = not ( (not S1) or ( not S2 ) )
+    S1bool = S1.astype(list).astype(bool)
+    S2bool = S2.astype(list).astype(bool)
+    x.isafterjunk = S1bool.all() and S2bool.all()
     #%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%#
 
     # If the data is to be stored using afterjunk parameters:

@@ -334,7 +334,7 @@ def grep( flag, file_location, options=None, comment=None ):
     return output
 
 # Simple function to determine whether or not a string is intended to be a
-# number: all numbers are composed of a set dictionary of characters
+# number: can it be cast as float?
 def isnumeric( s ):
     try:
         float(s)
@@ -561,10 +561,9 @@ class smart_object:
                         if VERB: print( '>> Learning character: %s' % val )
                         value.append( val )
                     else:                       # Else
-                        print '>> '+val
                         if VERB: print( '>> Learning number: %s' % val)
                         if val:
-                            value.append( eval(val) )
+                            value.append( float(val) )
                 #
                 if is_number:
                     value = array(value)
