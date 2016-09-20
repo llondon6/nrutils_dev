@@ -341,7 +341,6 @@ def isnumeric( s ):
         ans = True
     except:
         ans = False
-    print '%100s ---> %40r'%(s,ans)
     return ans
 
 # Rudimentary function for printing text in the center of the terminal window
