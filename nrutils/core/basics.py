@@ -563,7 +563,8 @@ class smart_object:
                     else:                       # Else
                         if VERB: print( '>> Learning number: %s' % val)
                         if val:
-                            value.append( float(val) )
+                            # NOTE that the line below contains eval rather than float becuase we want our data collation process to preserve type
+                            value.append( eval(val) )
                 #
                 if is_number:
                     value = array(value)

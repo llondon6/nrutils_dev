@@ -1491,6 +1491,8 @@ class gwylm:
             for fmt in this.config.data_file_name_format :
 
                 # NOTE the ordering here, and that the filename format in the config file has to be consistent with: extraction_parameter, l, m, level
+                print fmt
+                print this.simdir
                 file_location = (this.simdir + fmt).format( extraction_parameter, l, m, level )
                 # OLD Formatting Style:
                 # file_location = this.simdir + fmt % ( extraction_parameter, l, m, level )
