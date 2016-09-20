@@ -18,11 +18,12 @@ import warnings,sys
 class scconfig(smart_object):
 
     # Create scconfig object from configuration file location
-    def __init__(this,config_file_location=None):
+    def __init__(this,config_file_location=None,overwrite=True):
 
         # Required fields from smart_object
         this.source_file_path = []
         this.source_dir = []
+        this.overwrite = overwrite
 
         # call wrapper for constructor
         this.config_file_location = config_file_location

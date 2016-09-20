@@ -189,25 +189,6 @@ def h5tofiles( h5_path, save_dir, file_filter= lambda s: True, cleanup = False, 
         # Raise Error
         raise NameError('No file at "%s".' % h5_path)
 
-
-# file_path = '/home/janus/WORK/Data/Waveforms/SXS/SXS0001/rPsi4_FiniteRadii_CodeUnits.h5'
-#
-# h5tofiles( file_path, parent(file_path), file_filter= lambda s: l_test(s,5)  )
-#
-# #
-# tree = h5py.File(file_path,'r')
-#
-# j=0
-# for item in tree.keys():
-#     print '\t'*0 + item + ":", tree[item]
-#     k=0
-#     for branch in tree[item]:
-#         k+=1
-#         print '\t'*1 + branch + ": ",tree[item][branch]
-#     j+=1
-#     if j==1:
-#         break
-
 #
 def replace_line(file_path, pattern, substitute, **kwargs):
     '''
@@ -474,13 +455,14 @@ class smart_object:
     ~ll2'14
     '''
 
-    def __init__(this,attrfile=None,id=None,**kwargs):
+    def __init__(this,attrfile=None,id=None,overwrite=False,**kwargs):
         #
         this.valid = False
         this.source_file_path = []
         this.source_dir  = []
 
         #
+        this.overwrite = overwrite
         if attrfile is not None:
 
             if isinstance( attrfile, list ):
@@ -588,17 +570,20 @@ class smart_object:
             if 1==len(value):
                 value = value[0]
 
-            # If the attr does not already exist, then add it
-            if not ( attr in this.__dict__.keys() ):
-                setattr( this, attr, value )
-            else:
-                # If it's already a list, then append
-                if isinstance( getattr(this,attr), ndarray ):
-                    setattr(  this, attr, append(getattr(this,attr),value)  )
+            if this.overwrite is False:
+                # If the attr does not already exist, then add it
+                if not ( attr in this.__dict__.keys() ):
+                    setattr( this, attr, value )
                 else:
-                    # If it's not already a list, then make it one
-                    old_value = getattr(this,attr)
-                    setattr( this, attr, array([old_value,value]) )
+                    # If it's already a list, then append
+                    if isinstance( getattr(this,attr), ndarray ):
+                        setattr(  this, attr, append(getattr(this,attr),value)  )
+                    else:
+                        # If it's not already a list, then make it one
+                        old_value = getattr(this,attr)
+                        setattr( this, attr, array([old_value,value]) )
+            else:
+                setattr( this, attr, value )
 
         else:
             raise ValueError('Impoperly formatted input string.')
