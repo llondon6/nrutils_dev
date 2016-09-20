@@ -136,19 +136,17 @@ class scentry:
             this.log += ' This entry\'s metadata file is valid.'
 
             # i.e. learn the meta_data_file
-            this.learn_metadata()
-            this.label = sclabel( this )
-            # try:
-            #     this.learn_metadata()
-            #     this.label = sclabel( this )
-            # except:
-            #     e = sys.exc_info()[0]
-            #     write_to_page( "<p>Error: %s</p>" % e )
-            #     emsg = sys.exc_info()[1].message
-            #     this.log += '%80s'%' [FATALERROR-1] The metadata failed to be read. There may be an external formatting inconsistency. It is being marked as invalid with None. The system says: %s'%emsg
-            #     warning( 'The following error message will be logged: '+red(emsg),'scentry')
-            #     this.is_valid = None # An external program may use this to do something
-            #     this.label = 'invalid!'
+            try:
+                this.learn_metadata()
+                this.label = sclabel( this )
+            except:
+                e = sys.exc_info()[0]
+                write_to_page( "<p>Error: %s</p>" % e )
+                emsg = sys.exc_info()[1].message
+                this.log += '%80s'%' [FATALERROR-1] The metadata failed to be read. There may be an external formatting inconsistency. It is being marked as invalid with None. The system says: %s'%emsg
+                warning( 'The following error message will be logged: '+red(emsg),'scentry')
+                this.is_valid = None # An external program may use this to do something
+                this.label = 'invalid!'
 
         elif this.is_valid is False:
             print '## The following is '+red('invalid')+': %s' % cyan(metadata_file_location)
