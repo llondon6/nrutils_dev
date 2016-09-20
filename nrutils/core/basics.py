@@ -335,10 +335,14 @@ def grep( flag, file_location, options=None, comment=None ):
 
 # Simple function to determine whether or not a string is intended to be a
 # number: all numbers are composed of a set dictionary of characters
-def isnumeric( str ):
-    for mark in list('12345678901e- ,][.'):
-        str = str.replace(mark,'')
-    return len(str)==0
+def isnumeric( s ):
+    try:
+        float(s)
+        ans = True
+    except:
+        ans = False
+    print '%100s ---> %40r'%(s,ans)
+    return ans
 
 # Rudimentary function for printing text in the center of the terminal window
 def center_space(str):
@@ -553,11 +557,12 @@ class smart_object:
                 is_number = True
                 for val in part[1].split(','):
                     #
-                    if  not isnumeric( val ):   # IF
+                    if  not isnumeric(val):   # IF
                         is_number = False
                         if VERB: print( '>> Learning character: %s' % val )
                         value.append( val )
                     else:                       # Else
+                        print '>> '+val
                         if VERB: print( '>> Learning number: %s' % val)
                         if val:
                             value.append( eval(val) )
