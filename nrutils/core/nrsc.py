@@ -333,7 +333,7 @@ def scbuild(save=True):
         alert('done.',thisfun)
 
         # (try to) Create a catalog entry for each valid metadata file
-        config.catalog = []
+        catalog = []
         h = -1
         for mdfile in mdfile_list:
 
@@ -346,7 +346,7 @@ def scbuild(save=True):
 
             # If the obj is valid, add it to the catalog list, else ignore
             if entry.is_valid:
-                config.catalog.append( entry )
+                catalog.append( entry )
             else:
                 del entry
 
@@ -354,7 +354,7 @@ def scbuild(save=True):
         if save:
             db = gconfig.database_path + '/' + splitext(basename(config.config_file_location))[0] + '.' + gconfig.database_ext
             with open(db, 'wb') as dbf:
-                pickle.dump( config.catalog , dbf, pickle.HIGHEST_PROTOCOL )
+                pickle.dump( catalog , dbf, pickle.HIGHEST_PROTOCOL )
 
         # Close the log file
         logfid.close()
