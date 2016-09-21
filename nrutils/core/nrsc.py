@@ -38,10 +38,15 @@ class scconfig(smart_object):
             raise ValueError(msg)
 
         # learn the contents of the configuration file
-        this.learn_file( this.config_file_location, comment=[';','#'] )
-
-        # validate the information learned from the configuration file against minimal standards
-        this.valid = this.validate()
+        if os.path.exists( this.config_file_location ):
+            this.learn_file( this.config_file_location, comment=[';','#'] )
+            # validate the information learned from the configuration file against minimal standards
+            this.validate()
+            this.config_exists = True
+        else:
+            msg = 'There is a simulation catalog entry (scentry) object which references \"%s\", however such a file cannot be found by the OS. The related scentry object will be marked as invalid.'%cyan(this.config_file_location)
+            this.config_exists = False
+            warning(msg,'scconfig.reconfig')
 
         # In some cases, it is useful to have this function return this
         return this
@@ -126,11 +131,11 @@ class scentry:
         this.metadata_file_location = metadata_file_location
 
         # Validate the location of the metadata file: does it contain waveform information? is the file empty? etc
-        this.is_valid = this.validate()
+        this.isvalid = this.validate()
 
         # If valid, learn metadata. Note that metadata property are defined as none otherise. Also NOTE that the standard metadata is stored directly to this object's attributes.
         this.raw_metadata = None
-        if this.is_valid is True:
+        if this.isvalid is True:
             #
             print '## Working: %s' % cyan(metadata_file_location)
             this.log += ' This entry\'s metadata file is valid.'
@@ -143,10 +148,10 @@ class scentry:
                 emsg = sys.exc_info()[1].message
                 this.log += '%80s'%' [FATALERROR-1] The metadata failed to be read. There may be an external formatting inconsistency. It is being marked as invalid with None. The system says: %s'%emsg
                 warning( 'The following error message will be logged: '+red(emsg),'scentry')
-                this.is_valid = None # An external program may use this to do something
+                this.isvalid = None # An external program may use this to do something
                 this.label = 'invalid!'
 
-        elif this.is_valid is False:
+        elif this.isvalid is False:
             print '## The following is '+red('invalid')+': %s' % cyan(metadata_file_location)
             this.log += ' This entry\'s metadta file is invalid.'
 
@@ -224,15 +229,15 @@ class scentry:
             raise ValueError(msg)
         # Check that final mass is float
         if not isinstance( this.mf , float ) :
-            msg = ''
+            msg = 'final mass must be float, but %s found' % type(this.mf).__name__
             raise ValueError(msg)
         # Check that inital mass1 is float
         if not isinstance( this.m1 , float ) :
-            msg = ''
+            msg = 'm1 must be float but %s found' % type(this.m1).__name__
             raise ValueError(msg)
         # Check that inital mass2 is float
         if not isinstance( this.m2 , float ) :
-            msg = ''
+            msg = 'm2 must be float but %s found' % type(this.m2).__name__
             raise ValueError(msg)
         # Enfore m1>m2 convention.
         satisfies_massratio_convetion = lambda e: (not e.m1 > e.m2) and (not allclose(e.m1,e.m2,atol=1e-4))
@@ -243,7 +248,12 @@ class scentry:
             raise ValueError(msg)
 
     # Create dynamic function that references the user's current configuration to construct the simulation directory of this run.
-    def simdir(this): return this.config.reconfig().catalog_dir + this.relative_simdir
+    def simdir(this):
+        ans = this.config.reconfig().catalog_dir + this.relative_simdir
+        if not this.config.config_exists:
+            msg = 'The current object has been marked as '+red('non-existent')+', likely by reconfig(). Please verify that the ini file for the related run exists. You may see this message for other (yet unpredicted) reasons.'
+            error(msg,'scentry.simdir()')
+        return ans
 
     # Flip 1->2 associations.
     def flip(this):
@@ -291,7 +301,7 @@ class scentry:
 
 
 # Create the catalog database, and store it as a pickled file.
-def scbuild(save=True):
+def scbuild(keyword=None,save=True):
 
     # Load useful packages
     from commands import getstatusoutput as bash
@@ -304,6 +314,10 @@ def scbuild(save=True):
 
     # Look for config files
     cpath_list = glob.glob( gconfig.config_path+'*.ini' )
+    if isinstance(keyword,(str,unicode)):
+        msg = 'Filtering ini files for \"%s\"'%cyan(keyword)
+        alert(msg,'scbuild')
+        cpath_list = filter( lambda path: keyword in path, cpath_list )
 
     #
     if not cpath_list:
@@ -343,7 +357,7 @@ def scbuild(save=True):
             logfid.write( '%5i\t%s\n'% (h,entry.log) )
 
             # If the obj is valid, add it to the catalog list, else ignore
-            if entry.is_valid:
+            if entry.isvalid:
                 catalog.append( entry )
             else:
                 del entry
@@ -356,6 +370,10 @@ def scbuild(save=True):
 
         # Close the log file
         logfid.close()
+
+        #
+        msg = 'Done with \"%s\". The related log file is at \"%s\".'%(cyan(config.catalog_dir),logfstr)
+        alert(msg,'scbuild')
 
 
 
@@ -389,7 +407,7 @@ def scsearch( catalog = None,           # Manually input list of scentry objects
                 print '[%s]>> Found %s (=%r) keyword.' % (thisfun,textul(k),eval(k))
 
     '''
-    Handle individual cases:
+    Handle individual cases in serial
     '''
 
     #
@@ -522,13 +540,18 @@ def scsearch( catalog = None,           # Manually input list of scentry objects
             test = lambda k: not ( w in k.metadata_file_location.lower() )
             catalog = filter( test, catalog )
 
+    # Validate the existance of the related config files and simulation directories
+    # NOTE that this effectively requires two reconfigure instances and is surely suboptimal
+    if catalog is not None:
+        catalog = filter( lambda e: (e.config).reconfig().config_exists and os.path.exists(e.simdir()) , catalog )
+
     # Filter out physically degenerate simuations within a default tolerance
     output_descriptor = magenta(' possibly degenerate')
     if unique:
         catalog = scunique(catalog,verbose=False)
         output_descriptor = green(' unique')
 
-    # Sort by final dimnesionless spin
+    # Sort by date
     catalog = sorted( catalog, key = lambda e: e.date_number, reverse = True )
 
     #
@@ -1487,8 +1510,6 @@ class gwylm:
             for fmt in this.config.data_file_name_format :
 
                 # NOTE the ordering here, and that the filename format in the config file has to be consistent with: extraction_parameter, l, m, level
-                print fmt
-                print this.simdir
                 file_location = (this.simdir + fmt).format( extraction_parameter, l, m, level )
                 # OLD Formatting Style:
                 # file_location = this.simdir + fmt % ( extraction_parameter, l, m, level )
