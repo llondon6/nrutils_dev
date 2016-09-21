@@ -37,10 +37,8 @@ def validate( metadata_file_location, config = None ):
 # Learn the metadta (file) for this type of NR waveform
 def learn_metadata( metadata_file_location ):
 
-    # Try to load the related par file
+    # Try to load the related par file as well as the metadata file
     par_file_location = metadata_file_location[:-3]+'par'
-
-    #
     raw_metadata = smart_object( [metadata_file_location,par_file_location] )
 
     # shortand
@@ -193,6 +191,12 @@ def learn_metadata( metadata_file_location ):
 
     #
     return standard_metadata, raw_metadata
+
+# There are instances when having the extraction radius rather than the extraction paramer is useful.
+# Here we define a function which maps between extraction_parameter and extraction radius -- IF such
+# a map can be constructed.
+def extraction_parameter2radius():
+    return None 
 
 # # Create a file-name string based upon l,m and the extraction parameter(s)
 # # NOTE that the method name and inputs must conform to uniform name and input ordering
