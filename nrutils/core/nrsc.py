@@ -314,6 +314,8 @@ def scbuild(keyword=None,save=True):
 
     # Look for config files
     cpath_list = glob.glob( gconfig.config_path+'*.ini' )
+
+    # If a keyword is give, filter against found config files
     if isinstance(keyword,(str,unicode)):
         msg = 'Filtering ini files for \"%s\"'%cyan(keyword)
         alert(msg,'scbuild')
@@ -365,6 +367,8 @@ def scbuild(keyword=None,save=True):
         # Store the catalog to the database_path
         if save:
             db = gconfig.database_path + '/' + splitext(basename(config.config_file_location))[0] + '.' + gconfig.database_ext
+            msg = 'Saving database file to %s'%cyan(db)
+            alert(msg,'scbuild')
             with open(db, 'wb') as dbf:
                 pickle.dump( catalog , dbf, pickle.HIGHEST_PROTOCOL )
 
@@ -372,7 +376,7 @@ def scbuild(keyword=None,save=True):
         logfid.close()
 
         #
-        msg = 'Done with \"%s\". The related log file is at \"%s\".'%(cyan(config.catalog_dir),logfstr)
+        msg = '%sDone with \"%s\". The related log file is at \"%s\".'%('#.-'*10,cyan(config.catalog_dir),logfstr)
         alert(msg,'scbuild')
 
 
@@ -397,6 +401,7 @@ def scsearch( catalog = None,           # Manually input list of scentry objects
                                         # directory string
               unique = None,            # if true, only simulations with unique initial conditions will be used
               plot = None,              # whether or not to show a plot of results
+              exists=None,              # Test whether data directory related to scentry and ini file exist (True/False)
               verbose = None):          # be verbose
 
     # Print non None inputs to screen
@@ -542,8 +547,15 @@ def scsearch( catalog = None,           # Manually input list of scentry objects
 
     # Validate the existance of the related config files and simulation directories
     # NOTE that this effectively requires two reconfigure instances and is surely suboptimal
-    if catalog is not None:
-        catalog = filter( lambda e: (e.config).reconfig().config_exists and os.path.exists(e.simdir()) , catalog )
+    if exists is not None:
+        def isondisk(e):
+            ans = (e.config).reconfig().config_exists and os.path.isdir(e.simdir())
+            if not ans:
+                msg = 'Ignoring entry at %s becuase its config file cannot be found and/or its simulation directory cannot be found.' % cyan(e.simdir())
+                warning(msg,'scsearch')
+            return ans
+        if catalog is not None:
+            catalog = filter( isondisk , catalog )
 
     # Filter out physically degenerate simuations within a default tolerance
     output_descriptor = magenta(' possibly degenerate')
@@ -559,7 +571,7 @@ def scsearch( catalog = None,           # Manually input list of scentry objects
         if len(catalog)>0:
             print '## Found %s%s simulations:' % ( bold(str(len(catalog))), output_descriptor )
             for k,entry in enumerate(catalog):
-                print '[%04i] %s: %s' % ( k+1, cyan(entry.setname), entry.label )
+                print '[%04i][%s] %s: %s' % ( k+1, green(entry.config.config_file_location.split('/')[-1].split('.')[0]), cyan(entry.setname), entry.label )
         else:
             print red('!! Found %s simulations.' % str(len(catalog)))
         print ''
@@ -1435,7 +1447,7 @@ class gwylm:
                         this.load(lm=k,extraction_parameter=extraction_parameter,level=level,dt=dt)
                     else:
                         msg = 'Found list of multipole indeces (e.g. [[2,2],[3,3]]), but length of one of the index values is not two. Please check your lm input.'
-                        error(msg,'__load__')
+                        error(msg,'gwylm.__load__')
             else: # Else, if lm is a single mode index
                 #
                 this.load(lm=lm,extraction_parameter=extraction_parameter,level=level,dt=dt)
@@ -1535,7 +1547,7 @@ class gwylm:
                       m=m,
                       extraction_parameter=extraction_parameter,
                       dt=dt,
-                      kind='psi4')
+                      kind='$rM\psi_{%i%i}$'%(l,m))
 
             # ---------------------------------------------------- #
             # Enforce internal sign convention for Psi4 multipoles
@@ -1613,7 +1625,7 @@ class gwylm:
                 # Assign strain to the general placeholder.
                 wflm = this.hlm
                 if 1 == len(wflm):
-                    kind = r'$rh_{%i%i}$' % (wflm[0].l,wflm[0].m)
+                    kind = r'$rh_{%i%i}/M$' % (wflm[0].l,wflm[0].m)
                 else:
                     kind = r'$rh$'
 
@@ -1682,7 +1694,7 @@ class gwylm:
             wfarr = array( [ t, h_plus, h_cross ] ).T
 
             # Add the new strain multipole to this object's list of multipoles
-            this.hlm.append( gwf( wfarr, l=y.l, m=y.m, kind='strain' ) )
+            this.hlm.append( gwf( wfarr, l=y.l, m=y.m, kind='$rh_{%i%i}/M$'%(y.l,y.m) ) )
 
     # Characterise the start of the waveform using the l=m=2 psi4 multipole
     def characterize_start(this):
