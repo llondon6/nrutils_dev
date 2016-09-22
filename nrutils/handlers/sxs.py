@@ -30,6 +30,9 @@ def validate( metadata_file_location, config = None ):
 def learn_metadata( metadata_file_location ):
 
     #
+    from numpy import array
+
+    #
     raw_metadata = smart_object( metadata_file_location )
     # shortand
     y = raw_metadata
@@ -53,15 +56,15 @@ def learn_metadata( metadata_file_location ):
     x.m2 = y.initial_mass2
 
     #
-    J = y.initial_ADM_angular_momentum
-    S1 = y.initial_spin1; S2 = y.initial_spin2
+    J = array(y.initial_ADM_angular_momentum)
+    S1 = array(y.initial_spin1); S2 = array(y.initial_spin2)
     S = S1 + S2
     L = J-S
     P = y.initial_ADM_linear_momentum
 
     # Prepare to deduce initial linear momenta
-    R1 = y.initial_position1;
-    R2 = y.initial_position2; rr = R2-R1
+    R1 = array(y.initial_position1);
+    R2 = array(y.initial_position2); rr = R2-R1
     R = array(   [  [0,rr[2],-rr[1]],  [-rr[2],0,rr[0]],  [rr[1],-rr[0],0]  ]   )
     H = L - cross( y.initial_position2, P )
 
@@ -71,7 +74,7 @@ def learn_metadata( metadata_file_location ):
 
     P1 = zeros( P.shape )
     P1[k:] = dot( inv(R[k:,k:]), H[k:] )
-    P2 = y.initial_ADM_linear_momentum - P1
+    P2 = array(y.initial_ADM_linear_momentum) - P1
 
     #
     x.note = 'The SXS metadata give only total initial linear and angular momenta. In this code, the momenta of each BH has been deduced from basic linear algebra. However, this appraoch does not constrain the X COMPONENT of the total algular momentum, resulting in disagreement between the meta data value, and the value resulting from the appropriate sum. Use the metadata value.'

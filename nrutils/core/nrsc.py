@@ -141,15 +141,17 @@ class scentry:
             this.log += ' This entry\'s metadata file is valid.'
 
             # i.e. learn the meta_data_file
-            try:
-                this.learn_metadata()
-                this.label = sclabel( this )
-            except:
-                emsg = sys.exc_info()[1].message
-                this.log += '%80s'%' [FATALERROR-1] The metadata failed to be read. There may be an external formatting inconsistency. It is being marked as invalid with None. The system says: %s'%emsg
-                warning( 'The following error message will be logged: '+red(emsg),'scentry')
-                this.isvalid = None # An external program may use this to do something
-                this.label = 'invalid!'
+            this.learn_metadata()
+            this.label = sclabel( this )
+            # try:
+            #     this.learn_metadata()
+            #     this.label = sclabel( this )
+            # except:
+            #     emsg = sys.exc_info()[1].message
+            #     this.log += '%80s'%' [FATALERROR-1] The metadata failed to be read. There may be an external formatting inconsistency. It is being marked as invalid with None. The system says: %s'%emsg
+            #     warning( 'The following error message will be logged: '+red(emsg),'scentry')
+            #     this.isvalid = None # An external program may use this to do something
+            #     this.label = 'invalid!'
 
         elif this.isvalid is False:
             print '## The following is '+red('invalid')+': %s' % cyan(metadata_file_location)
@@ -524,16 +526,41 @@ def scsearch( catalog = None,           # Manually input list of scentry objects
 
     # Compare keyword
     if keyword is not None:
+
+        # If string, make list
         if isinstance( keyword, str ):
             keyword = [keyword]
         keyword = filter( lambda s: isinstance(s,str), keyword )
+
+        # Determine whether to use AND or OR based on type
+        if isinstance( keyword, list ):
+            allkeys = True
+            if verbose:
+                msg = 'List of keywords or string keyword found: '+cyan('ALL scentry objects matching will be passed.')+' To pass ANY entries matching the keywords, input the keywords using an iterable of not of type list.'
+                alert(msg,'scsearch')
+        else:
+            allkeys = False # NOTE that this means: ANY keys will be passed
+            if verbose:
+                msg = 'List of keywords found: '+cyan('ANY scentry objects matching will be passed.')+' To pass ALL entries matching the keywords, input the kwywords using a list object.'
+                alert(msg,'scsearch')
+
+        # Always lower
         keyword = [ k.lower() for k in keyword ]
-        temp_catalogs = [ catalog for w in keyword ]
-        new_catalog = []
-        for j,key in enumerate(keyword):
-            test = lambda k: key in k.metadata_file_location.lower()
-            new_catalog += filter( test, temp_catalogs[j] )
-        catalog = list(set(new_catalog))
+
+        # Handle two cases
+        if allkeys:
+            # Treat different keys with AND
+            for key in keyword:
+                test = lambda k: key in k.metadata_file_location.lower()
+                catalog = filter( test, catalog )
+        else:
+            # Treat different keys with OR
+            temp_catalogs = [ catalog for w in keyword ]
+            new_catalog = []
+            for j,key in enumerate(keyword):
+                test = lambda k: key in k.metadata_file_location.lower()
+                new_catalog += filter( test, temp_catalogs[j] )
+            catalog = list(set(new_catalog))
 
     # Compare not keyword
     if notkeyword is not None:
@@ -788,7 +815,7 @@ class gwf:
 
         # The kind of obejct to be created : e.g. psi4 or strain
         if kind is None:
-            kind = r'y'
+            kind = r'$y$'
         this.kind = kind
 
         # Set optional fields to none as default. These will be set externally is they are of use.
@@ -1011,8 +1038,7 @@ class gwf:
               show=False,
               fig = None,
               title = None,
-              domain = None,
-              kind = None ):
+              domain = None):
 
         # Handle which default domain to plot
         if domain is None:
@@ -1023,9 +1049,9 @@ class gwf:
 
         # Plot selected domain.
         if domain == 'time':
-            ax = this.plottd( show=show,fig=fig,title=title,kind=kind )
+            ax = this.plottd( show=show,fig=fig,title=title )
         elif domain == 'freq':
-            ax = this.plotfd( show=show,fig=fig,title=title,kind=kind )
+            ax = this.plotfd( show=show,fig=fig,title=title )
 
         #
         return ax
@@ -1035,7 +1061,6 @@ class gwf:
                 show    =   False,
                 fig     =   None,
                 title   =   None,
-                kind    =   None,
                 verbose =   False ):
 
         #
@@ -1052,8 +1077,7 @@ class gwf:
             fig.set_facecolor("white")
 
         #
-        if kind is None:
-            kind = this.kind
+        kind = this.kind
 
         #
         clr = rgb(3)
@@ -1134,8 +1158,7 @@ class gwf:
     def plottd( this,
               show=False,
               fig = None,
-              title = None,
-              kind = None ):
+              title = None):
 
         #
         import warnings
@@ -1184,8 +1207,7 @@ class gwf:
 
         #
         pylim( this.t, this.amp, domain=xlim, symmetric=True )
-        if kind is None:
-            kind = this.kind
+        kind = this.kind
         yl(kind,fontsize=fs,color=txclr, family=font_family )
 
         # Time domain phase
@@ -1350,7 +1372,7 @@ class gwylm:
         this.level = level
 
         # These fields are initiated here for visiility, but they are filled as lists of gwf object in load()
-        this.ylm = []; this.hlm = []
+        this.ylm,this.hlm,this.flm = [],[],[] # psi4 (loaded), strain(calculated by default), news(optional non-default)
 
         # time step
         this.dt = dt
@@ -1380,7 +1402,7 @@ class gwylm:
         # Clean the waveforms of junk radiation if desired
         this.__isclean__ = False
         if clean:
-            this = this.clean()
+            this.clean()
 
         # Create a dictionary representation of the mutlipoles
         this.lm = {}
@@ -1542,12 +1564,16 @@ class gwylm:
             wfarr,_ = smart_load( file_location, verbose=this.verbose )
 
             # Initiate waveform object and check that sign convetion is in accordance with core settings
-            y_ = gwf( wfarr,
-                      l=l,
-                      m=m,
-                      extraction_parameter=extraction_parameter,
-                      dt=dt,
-                      kind='$rM\psi_{%i%i}$'%(l,m))
+            def mkgwf(wfarr_):
+                return gwf( wfarr_,
+                            l=l,
+                            m=m,
+                            extraction_parameter=extraction_parameter,
+                            dt=dt,
+                            kind='$rM\psi_{%i%i}$'%(l,m))
+
+            #
+            y_ = mkgwf(wfarr)
 
             # ---------------------------------------------------- #
             # Enforce internal sign convention for Psi4 multipoles
@@ -1563,7 +1589,7 @@ class gwylm:
 
             if M_RELATIVE_SIGN_CONVENTION != external_sign_convention:
                 wfarr[:,2] = -wfarr[:,2]
-                y_ = gwf(wfarr,l=l,m=m,extraction_parameter=extraction_parameter)
+                y_ = mkgwf(wfarr)
                 # Let the people know what is happening.
                 msg = yellow('Re-orienting waveform phase')+' to be consistent with internal sign convention for Psi4, where sign(dPhi/dt)=%i*sign(m).' % M_RELATIVE_SIGN_CONVENTION + ' Note that the internal sign convention is defined in ... nrutils/core/__init__.py as "M_RELATIVE_SIGN_CONVENTION". This message has appeared becuase the waveform is determioned to obey and sign convention: sign(dPhi/dt)=%i*sign(m).'%(external_sign_convention)
                 thisfun=inspect.stack()[0][3]
@@ -1595,7 +1621,7 @@ class gwylm:
 
         # Handle default kind of waveform to plot
         if kind is None:
-            kind = 'psi4'
+            kind = 'both'
 
         # Handle which default domain to plot
         if domain is None:
@@ -1609,14 +1635,8 @@ class gwylm:
 
             # Handle kind options
             if kind in ['psi4','y4','psilm','ylm','psi4lm','y4lm']:
-                kind = 'psi4'
                 wflm = this.ylm
-                if 1 == len(wflm):
-                    kind = r'$r\psi_{%i%i}$' % (wflm[0].l,wflm[0].m)
-                else:
-                    kind = r'$r\psi_4$'
             elif kind in ['hlm','h','strain']:
-                kind = 'strain'
                 # Determine whether to calc strain here. If so, then let the people know.
                 if len(this.hlm) == 0:
                     msg = '(**) You have requested that strain be plotted before having explicitelly called MMRDNSlm.calchlm(). I will now call calchlm() for you.'
@@ -1624,14 +1644,10 @@ class gwylm:
                     this.calchlm()
                 # Assign strain to the general placeholder.
                 wflm = this.hlm
-                if 1 == len(wflm):
-                    kind = r'$rh_{%i%i}/M$' % (wflm[0].l,wflm[0].m)
-                else:
-                    kind = r'$rh$'
 
             # Plot waveform data
             for y in wflm:
-                ax = y.plot(fig=fig,title='%s: %s' % (this.setname,this.label),kind=kind,domain=domain)
+                ax = y.plot(fig=fig,title='%s: %s' % (this.setname,this.label),domain=domain)
 
             # If there is start characterization, plot some of it
             if 'starting' in this.__dict__:
@@ -1785,6 +1801,70 @@ class gwylm:
         #
         from copy import deepcopy as copy
         return copy(this)
+
+
+    #--------------------------------------------------------------------------------#
+    # Calculate the luminosity if needed (NOTE that this could be calculated by default during calcstrain but isnt)
+    #--------------------------------------------------------------------------------#
+    def calcflm(this,w22=None):
+
+        # Make sure that the l=m=2 multipole exists
+        if not ( (2,2) in this.lm.keys() ):
+            msg = 'There must be a l=m=2 multipole prewsent to estimate the waveform\'s ringdown part.'
+            error(msg,'gwylm.ringdown')
+
+        # Import useful things
+        from numpy import array,double
+
+        # If there is no w22 given, then use the internally defined value of wstart
+        if w22 is None:
+            # w22 = this.wstart
+            # NOTE: here we choose to use the ORBITAL FREQUENCY as a lower bound for the l=m=2 mode.
+            w22 = this.wstart_pn
+
+        # Calculate the luminosity for all multipoles
+        flm = []
+        for y in this.ylm:
+
+            # Calculate the strain for each part of psi4. NOTE that there is currently NO special sign convention imposed beyond that used for psi4.
+            w0 = w22 * double(y.m)/2.0 # NOTE that wstart is defined in characterize_start() using the l=m=2 Psi4 multipole.
+            # Here, m=0 is a special case
+            if 0==y.m: w0 = w22
+            # Let the people know
+            if this.verbose:
+                print magenta('* w0(w22) = %f' % w0)+yellow(' (this is the lower frequency used for FFI method [arxiv:1006.1632v3])')
+
+            # Create the core waveform information
+            t       =  y.t
+            l_plus  =  ffintegrate( y.t, y.plus,  w0, 1 )
+            l_cross =  ffintegrate( y.t, y.cross, w0, 1 )
+
+            # Constrcut the waveform array for the news object
+            wfarr = array( [ t, l_plus, l_cross ] ).T
+
+            # Add the news multipole to this object's list of multipoles
+            this.flm.append( gwf( wfarr, l=y.l, m=y.m, kind='$r\dot{h}_{%i%i}$'%(y.l,y.m) ) )
+
+
+    #--------------------------------------------------------------------------------#
+    # Get a gwylm object that only contains ringdown
+    #--------------------------------------------------------------------------------#
+    def ringdown(this,              # The current object
+                 T0 = 10,           # Starting time relative to peak luminosity of the l=m=2 multipole
+                 df = None,         # Optional df in frequency domain (determines time domain padding)
+                 verbose = True):
+
+        # Make sure that the l=m=2 multipole exists
+        if not ( (2,2) in this.lm.keys() ):
+            msg = 'There must be a l=m=2 multipole prewsent to estimate the waveform\'s ringdown part.'
+            error(msg,'gwylm.ringdown')
+
+        # Use the l=m=2 multipole to estimate the luminosity
+
+        #
+        return None
+
+
 
     # pad each mode to a new_length
     def pad(this,new_length=None):
