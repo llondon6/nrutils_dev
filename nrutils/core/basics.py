@@ -545,7 +545,7 @@ class smart_object:
 
         # Detect space separated lists on the value side
         # NOTE that this will mean that 1,2,3,4 5 is treated as 1,2,3,4,5
-        part[1] = ','.join( [ p for p in part[1].split(' ') if p ] )
+        part[1] = (','.join( [ p for p in part[1].split(' ') if p ] )).replace(',,',',')
 
         if VERB: print( '   ** Trying to learn:\n \t\t[%s]=[%s]' % (attr,part[1]))
 
