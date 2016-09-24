@@ -1,6 +1,6 @@
 
 #
-from nrutils.core.basics import smart_object,parent,blue,smart_load,green,alert,error,warning,yellow,green,bold,cyan
+from nrutils.core.basics import *
 from glob import glob as ls
 from os.path import getctime
 from numpy import array,cross,zeros,dot,abs,sqrt
@@ -196,7 +196,7 @@ def learn_metadata( metadata_file_location ):
 # Here we define a function which maps between extraction_parameter and extraction radius -- IF such
 # a map can be constructed.
 def extraction_parameter2radius():
-    return None 
+    return None
 
 # # Create a file-name string based upon l,m and the extraction parameter(s)
 # # NOTE that the method name and inputs must conform to uniform name and input ordering

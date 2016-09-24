@@ -38,6 +38,7 @@ class print_format:
    grey = gray = '\033[1;30m'
    ul = '\033[4m'
    end = '\x1b[0m'
+   hlb = '\033[5;30;42m'
    underline = '\033[4m'
 
 # Function that uses the print_format class to make tag text for bold printing
@@ -61,6 +62,8 @@ def cyan(string):
     return print_format.cyan + string + print_format.end
 def darkcyan(string):
     return print_format.darkcyan + string + print_format.end
+def hlblack(string):
+    return print_format.hlb + string + print_format.end
 def textul(string):
     return print_format.underline + string + print_format.end
 
@@ -308,6 +311,15 @@ def parsin( keys, dict, default=False, verbose=False, fname='*', **kwarg ):
             break
     #
     return value
+
+
+# Bash emulator
+def bash( cmd ):
+    # Pass the command to the operating system
+    process = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
+    raw_output = process.communicate()[0]
+    #
+    return raw_output
 
 # Rough grep equivalent using the subprocess module
 def grep( flag, file_location, options=None, comment=None ):
@@ -586,7 +598,7 @@ class smart_object:
                     else:
                         # If it's not already a list, then make it one
                         old_value = getattr(this,attr)
-                        setattr( this, attr, array([old_value,value]) )
+                        setattr( this, attr, [old_value,value] )
             else:
                 setattr( this, attr, value )
 
@@ -952,8 +964,8 @@ def rfind( path , pattern = None, verbose = False, ignore = None ):
 
 # Derivative function that preserves array length: [(d/dt)^n y(t)] is returned
 def intrp_diff( t,        # domain values
-              y,        # range values
-              n = 1 ):  # degree of derivative
+                y,        # range values
+                n = 1 ):  # degree of derivative
 
     #
     from numpy import diff,append
@@ -1392,3 +1404,34 @@ def pnw0(m1,m2,D=10.0):
 
     #
     return w0
+
+
+# Find the interpolated global max location of a data series
+def intrp_argmax( y,
+                  domain=None,
+                  verbose=False ):
+
+    #
+    from scipy.interpolate import InterpolatedUnivariateSpline as spline
+    from scipy.optimize import fmin
+    from numpy import linspace,argmax
+
+    #
+    x = range(len(y)) if domain is None else domain
+
+    #
+    yspline = spline( x, y )
+
+    # Find the approximate max location in index
+    k = argmax( y )
+
+    #
+    x0 = x[k]
+    f = lambda X: -yspline(X)
+    xmax = fmin(f,x0,disp=False)
+
+    #
+    ans = xmax
+
+    #
+    return ans

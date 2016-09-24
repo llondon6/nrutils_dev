@@ -141,17 +141,17 @@ class scentry:
             this.log += ' This entry\'s metadata file is valid.'
 
             # i.e. learn the meta_data_file
-            this.learn_metadata()
-            this.label = sclabel( this )
-            # try:
-            #     this.learn_metadata()
-            #     this.label = sclabel( this )
-            # except:
-            #     emsg = sys.exc_info()[1].message
-            #     this.log += '%80s'%' [FATALERROR-1] The metadata failed to be read. There may be an external formatting inconsistency. It is being marked as invalid with None. The system says: %s'%emsg
-            #     warning( 'The following error message will be logged: '+red(emsg),'scentry')
-            #     this.isvalid = None # An external program may use this to do something
-            #     this.label = 'invalid!'
+            # this.learn_metadata()
+            # this.label = sclabel( this )
+            try:
+                this.learn_metadata()
+                this.label = sclabel( this )
+            except:
+                emsg = sys.exc_info()[1].message
+                this.log += '%80s'%' [FATALERROR-1] The metadata failed to be read. There may be an external formatting inconsistency. It is being marked as invalid with None. The system says: %s'%emsg
+                warning( 'The following error message will be logged: '+red(emsg),'scentry')
+                this.isvalid = None # An external program may use this to do something
+                this.label = 'invalid!'
 
         elif this.isvalid is False:
             print '## The following is '+red('invalid')+': %s' % cyan(metadata_file_location)
@@ -378,7 +378,9 @@ def scbuild(keyword=None,save=True):
         logfid.close()
 
         #
-        msg = '%sDone with \"%s\". The related log file is at \"%s\".'%('#.-'*10,cyan(config.catalog_dir),logfstr)
+        wave_train = ''#'~~~~<vvvvvvvvvvvvvWw>~~~~'
+        hline = wave_train*3
+        msg = '\n\n#%s#\n%s with \"%s\". The related log file is at \"%s\".\n#%s#'%(hline,hlblack('Done'),green(config.catalog_dir),green(logfstr),hline)
         alert(msg,'scbuild')
 
 
@@ -939,6 +941,7 @@ class gwf:
         # this.dphi   = diff( this.phi )/this.dt                # Derivative of phase, last point interpolated to preserve length
 
         this.k_amp_max = argmax(this.amp)                           # index location of max ampitude
+        this.intrp_t_amp_max = intrp_argmax(this.amp,domain=this.t) # Interpolated time coordinate of max
 
         #
         this.n      = len(this.t)                                   # Number of time samples
@@ -1806,44 +1809,61 @@ class gwylm:
     #--------------------------------------------------------------------------------#
     # Calculate the luminosity if needed (NOTE that this could be calculated by default during calcstrain but isnt)
     #--------------------------------------------------------------------------------#
-    def calcflm(this,w22=None):
+    def calcflm(this,           # The current object
+                w22=None,       # Frequency used for FFI integration
+                force=False,    # Force the calculation if it has already been performed
+                verbose=False): # Let the people know
 
         # Make sure that the l=m=2 multipole exists
         if not ( (2,2) in this.lm.keys() ):
             msg = 'There must be a l=m=2 multipole prewsent to estimate the waveform\'s ringdown part.'
             error(msg,'gwylm.ringdown')
 
-        # Import useful things
-        from numpy import array,double
+        # Determine whether or not to proceed with the calculation
+        # Only proceed if the calculation has not been performed before and if the force option is False
+        proceed = (not this.flm) or force
+        if proceed:
 
-        # If there is no w22 given, then use the internally defined value of wstart
-        if w22 is None:
-            # w22 = this.wstart
-            # NOTE: here we choose to use the ORBITAL FREQUENCY as a lower bound for the l=m=2 mode.
-            w22 = this.wstart_pn
+            # Import useful things
+            from numpy import array,double
 
-        # Calculate the luminosity for all multipoles
-        flm = []
-        for y in this.ylm:
+            # If there is no w22 given, then use the internally defined value of wstart
+            if w22 is None:
+                # w22 = this.wstart
+                # NOTE: here we choose to use the ORBITAL FREQUENCY as a lower bound for the l=m=2 mode.
+                w22 = this.wstart_pn
 
-            # Calculate the strain for each part of psi4. NOTE that there is currently NO special sign convention imposed beyond that used for psi4.
-            w0 = w22 * double(y.m)/2.0 # NOTE that wstart is defined in characterize_start() using the l=m=2 Psi4 multipole.
-            # Here, m=0 is a special case
-            if 0==y.m: w0 = w22
-            # Let the people know
-            if this.verbose:
-                print magenta('* w0(w22) = %f' % w0)+yellow(' (this is the lower frequency used for FFI method [arxiv:1006.1632v3])')
+            # Calculate the luminosity for all multipoles
+            flm = []
+            proceed = True
+            for y in this.ylm:
 
-            # Create the core waveform information
-            t       =  y.t
-            l_plus  =  ffintegrate( y.t, y.plus,  w0, 1 )
-            l_cross =  ffintegrate( y.t, y.cross, w0, 1 )
+                # Calculate the strain for each part of psi4. NOTE that there is currently NO special sign convention imposed beyond that used for psi4.
+                w0 = w22 * double(y.m)/2.0 # NOTE that wstart is defined in characterize_start() using the l=m=2 Psi4 multipole.
+                # Here, m=0 is a special case
+                if 0==y.m: w0 = w22
+                # Let the people know
+                if this.verbose:
+                    print magenta('* w0(w22) = %f' % w0)+yellow(' (this is the lower frequency used for FFI method [arxiv:1006.1632v3])')
 
-            # Constrcut the waveform array for the news object
-            wfarr = array( [ t, l_plus, l_cross ] ).T
+                # Create the core waveform information
+                t       =  y.t
+                l_plus  =  ffintegrate( y.t, y.plus,  w0, 1 )
+                l_cross =  ffintegrate( y.t, y.cross, w0, 1 )
 
-            # Add the news multipole to this object's list of multipoles
-            this.flm.append( gwf( wfarr, l=y.l, m=y.m, kind='$r\dot{h}_{%i%i}$'%(y.l,y.m) ) )
+                # Constrcut the waveform array for the news object
+                wfarr = array( [ t, l_plus, l_cross ] ).T
+
+                # Add the news multipole to this object's list of multipoles
+                flm.append( gwf( wfarr, l=y.l, m=y.m, kind='$r\dot{h}_{%i%i}$'%(y.l,y.m) ) )
+
+            else:
+
+                msg = 'flm, the first integral of Psi4, will not be calculated because it has already been calculated for the current object'
+                warning(msg,'gwylm.calcflm')
+
+            # Store the flm list to the current object
+            this.flm = flm
 
 
     #--------------------------------------------------------------------------------#
@@ -1854,16 +1874,52 @@ class gwylm:
                  df = None,         # Optional df in frequency domain (determines time domain padding)
                  verbose = True):
 
+        #
+        from numpy import linspace,array
+        from scipy.interpolate import InterpolatedUnivariateSpline as spline
+
         # Make sure that the l=m=2 multipole exists
         if not ( (2,2) in this.lm.keys() ):
             msg = 'There must be a l=m=2 multipole prewsent to estimate the waveform\'s ringdown part.'
             error(msg,'gwylm.ringdown')
 
-        # Use the l=m=2 multipole to estimate the luminosity
+        # Use the l=m=2 multipole to estimate the luminosity.
+        this.calcflm()
+
+        # Retrieve the l=m=2 component
+        f = [ a for a in this.flm if a.l==a.m==2 ][0]
+
+        # Use its time series to define a mask
+        a = f.intrp_t_amp_max+T0
+        b = f.t[-1]
+        n = abs(float(b-a))/f.dt
+        t = linspace(a,b,n)
 
         #
-        return None
+        that = this.copy()
 
+        #
+        def __ringdown__(wlm):
+            #
+            xlm = []
+            for k,y in enumerate(wlm):
+                # Create interpolated plus and cross parts
+                plus  = spline(y.t,y.plus)(t)
+                cross = spline(y.t,y.cross)(t)
+                # Create waveform array
+                wfarr = array( [t-f.intrp_t_amp_max,plus,cross] ).T
+                # Create gwf object
+                xlm.append(  gwf(wfarr,l=y.l,m=y.m,kind=y.kind)  )
+            #
+            return xlm
+        #
+        that.ylm = __ringdown__( this.ylm )
+        that.flm = __ringdown__( this.flm )
+        that.hlm = __ringdown__( this.hlm )
+        that.characterize_start()
+
+        #
+        return that
 
 
     # pad each mode to a new_length
@@ -1874,6 +1930,25 @@ class gwylm:
             y.pad( new_length=new_length )
         for h in this.hlm:
             h.pad( new_length=new_length )
+
+
+    # Extrapolate to infinite radius: http://arxiv.org/pdf/1503.00718.pdf
+    def extrapolate(this,method=None):
+
+        msg = 'This method is under development and cannot currently be used.'
+        error(msg,'gwylm.extrapolate')
+
+        # If the simulation is already extrapolated, then do nothing
+        if this.__isextrapolated__:
+            # Do nothing
+            print
+        else: # Else, extrapolate
+            # Use radius only scaling
+            print
+
+        return None
+
+
 
 # Time Domain LALSimulation Waveform Approximant h_pluss and cross, but using nrutils data conventions
 def lswfa( apx      ='IMRPhenomPv2',    # Approximant name; must be compatible with lal convenions
@@ -1960,36 +2035,47 @@ class gwfcharstart:
             msg = 'First imput must be a '+cyan('gwf')+' object. Type %s found instead.' % type(y).__name__
             error(msg,thisfun)
 
-        # 1. Find the pre-peak portion of the waveform.
-        val_mask = arange( y.k_amp_max )
-        # 2. Find the peak locations of the plus part.
-        pks,pk_mask = findpeaks( y.cross[ val_mask ] )
-        pk_mask = pk_mask[ pks > y.amp[y.k_amp_max]*5e-4 ]
+        # If the waveform starts at its peak (e.g. in the case of ringdown)
+        if not y.k_amp_max:
 
-        # 3. Find the difference between the peaks
-        D = diff(pk_mask)
-        # 4. Find location of the first peak that is separated from its adjacent by greater than the largest value. This location is stored to start_map.
-        start_map = find(  D >= max(D)  )[0]
+            #
+            this.left_index = 0
+            this.right_index = 0
+            this.left_dphi=this.center_dphi=this.right_dphi = y.dphi[this.right_index]
+            this.peak_mask = [0]
 
-        # 5. Determine the with of waveform turn on in indeces based on the results above. NOTE that the width is bound below by half the difference betwen the wf start and the wf peak locations.
-        index_width = min( [ 1+pk_mask[start_map+shift]-pk_mask[start_map], 0.5*(1+y.k_amp_max-pk_mask[ start_map ]) ] )
-        # 6. Estimate where the waveform begins to turn on. This is approximately where the junk radiation ends. Note that this area will be very depressed upon windowing, so is can be
-        j_id = pk_mask[ start_map ]
+        else:
 
-        # 7. Use all results thus far to construct this object
-        this.left_index     = int(j_id)                                         # Where the initial junk radiation is thought to end
-        this.right_index    = int(j_id + index_width - 1)                       # If tapering is desired, then this index will be
-                                                                                # the end of the tapered region.
-        this.left_dphi      = y.dphi[ this.left_index  ]                        # A lowerbound estimate for the min frequency within
-                                                                                # the waveform.
-        this.right_dphi     = y.dphi[ this.right_index ]                        # An upperbound estimate for the min frequency within
-                                                                                # the waveform
-        this.center_dphi    = mean(y.dphi[ this.left_index:this.right_index ])  # A moderate estimate for the min frequency within they
-                                                                                # waveform
-        this.peak_mask      = pk_mask
+            # 1. Find the pre-peak portion of the waveform.
+            val_mask = arange( y.k_amp_max )
+            # 2. Find the peak locations of the plus part.
+            pks,pk_mask = findpeaks( y.cross[ val_mask ] )
+            pk_mask = pk_mask[ pks > y.amp[y.k_amp_max]*5e-4 ]
+
+            # 3. Find the difference between the peaks
+            D = diff(pk_mask)
+            # 4. Find location of the first peak that is separated from its adjacent by greater than the largest value. This location is stored to start_map.
+            start_map = find(  D >= max(D)  )[0]
+
+            # 5. Determine the with of waveform turn on in indeces based on the results above. NOTE that the width is bound below by half the difference betwen the wf start and the wf peak locations.
+            index_width = min( [ 1+pk_mask[start_map+shift]-pk_mask[start_map], 0.5*(1+y.k_amp_max-pk_mask[ start_map ]) ] )
+            # 6. Estimate where the waveform begins to turn on. This is approximately where the junk radiation ends. Note that this area will be very depressed upon windowing, so is can be
+            j_id = pk_mask[ start_map ]
+
+            # 7. Use all results thus far to construct this object
+            this.left_index     = int(j_id)                                         # Where the initial junk radiation is thought to end
+            this.right_index    = int(j_id + index_width - 1)                       # If tapering is desired, then this index will be
+                                                                                    # the end of the tapered region.
+            this.left_dphi      = y.dphi[ this.left_index  ]                        # A lowerbound estimate for the min frequency within
+                                                                                    # the waveform.
+            this.right_dphi     = y.dphi[ this.right_index ]                        # An upperbound estimate for the min frequency within
+                                                                                    # the waveform
+            this.center_dphi    = mean(y.dphi[ this.left_index:this.right_index ])  # A moderate estimate for the min frequency within they
+                                                                                    # waveform
+            this.peak_mask      = pk_mask
 
 
-# Characterize the END of a time domain waveform
+# Characterize the END of a time domain waveform: Where is the noise floor?
 def gwfend():
     #
     return None
