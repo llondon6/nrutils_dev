@@ -86,7 +86,7 @@ class scconfig(smart_object):
                 if not isinstance(k,str):
                     msg = '(!!) Error in %s: each element of data_file_name_format must be character not numeric. Found data_file_name_format = %s' % (magenta(this.config_file_location),k)
                     raise ValueError(msg)
-                if len( k.split('%i') ) != 4:
+                if False: # NOTE that this is turned off becuase it is likely not the appropriate way to check. More thought needed. Original line: len( k.split('%i') ) != 4:
                     msg = '(!!) Error in %s: All elements of data_file_name_format must have three integer formatting tags (%%i). The offending entry is %s.' % ( magenta(this.config_file_location), red(k) )
                     raise ValueError(msg)
         else:
