@@ -15,7 +15,7 @@ import glob
 # Search recurssively within the config's sim_dir for files matching the config's metadata_id
 this_file = realpath(__file__)
 if this_file[-1] == 'c': this_file = this_file[:-1]
-cmd = 'find %s -name "__init__.py" -depth 2' % dirname(this_file)
+cmd = 'find %s -maxdepth 2 -name "__init__.py"' % dirname(this_file)
 status, output = bash(cmd)
 
 # make a list of all packages within the directory which contains this file
