@@ -70,6 +70,7 @@ class scconfig(smart_object):
                                                         # learn_metadata functions
                            'is_extrapolated',           # users should set this to true if waveform is extrapolated
                                                         # to infinity
+                           'is_rscaled',                # Boolean for whether waveform data are scaled by extraction radius (ie rPsi4)
                            'default_par_list' ]   # list of default parameters for loading: default_extraction_parameter, default_level. NOTE that list must be of length 2
 
         # Make sure that each required attribute is a member of this objects dictionary representation. If it's not, throw an error.
@@ -143,6 +144,7 @@ class scentry:
             # i.e. learn the meta_data_file
             # this.learn_metadata()
             # this.label = sclabel( this )
+
             try:
                 this.learn_metadata()
                 this.label = sclabel( this )
@@ -157,17 +159,26 @@ class scentry:
             print '## The following is '+red('invalid')+': %s' % cyan(metadata_file_location)
             this.log += ' This entry\'s metadta file is invalid.'
 
-    #
+    # Method to load handler module
+    def loadhandler(this):
+        # Import the module
+        from imp import load_source
+        handler_module = load_source( '', this.config.handler_location )
+        # Validate the handler module: it has to have a few requried methods
+        required_methods = [ 'learn_metadata', 'validate', 'extraction_map' ]
+        for m in required_methods:
+            if not ( m in handler_module.__dict__ ):
+                msg = 'Handler module must contain a method of the name %s, but no such method was found'%(cyan(m))
+                error(msg,'scentry.validate')
+        # Return the module
+        return handler_module
+
+    # Validate the metadata file using the handler's validation function
     def validate(this):
 
-        # determine the validity of the current object
-
         # import validation function given in config file
-        from imp import load_source
-        validator_module = load_source( '', this.config.handler_location )
-
         # Name the function representation that will be used to load the metadata file, and convert it to raw and standardized metadata
-        validator = validator_module.validate
+        validator = this.loadhandler().validate
 
         # vet the directory where the metadata file lives for: waveform and additional metadata
         status = validator( this.metadata_file_location, config = this.config )
@@ -179,14 +190,10 @@ class scentry:
     def learn_metadata(this):
 
         #
-        from imp import load_source
         from numpy import allclose
 
-        # import metadata converter functiongiven in config file
-        converter_module = load_source( '', this.config.handler_location )
-
         # Name the function representation that will be used to load the metadata file, and convert it to raw and standardized metadata
-        learn_institute_metadata = converter_module.learn_metadata
+        learn_institute_metadata = this.loadhandler().learn_metadata
 
         # Eval and store standard metadata
         [standard_metadata, this.raw_metadata] = learn_institute_metadata( this.metadata_file_location )
@@ -202,10 +209,6 @@ class scentry:
                            'L1', 'L2',      # initial component angular momental (Vectors ~ M)
                            'S1', 'S2',      # initial component spins (Vectors ~ M*M)
                            'mf', 'Sf',      # Final mass (~M) and final dimensionful spin (~M*M)
-                           'extraction_parameter_is_radius', # If False, then raw data must be scaled by the extraction
-                                                             # radius (it's ~ 1 ); else, raw data is not scaled by the
-                                                             # extractino radius (it's ~ 1/r, and it will need to be
-                                                             # scaled by r to then be proportional to 1).
                            'xf' ]           # Final dimensionless spin *Magnitude*: xf = |Sf|/(mf*mf)
 
         for attr in required_attrs:
@@ -843,10 +846,15 @@ class gwf:
         this.__rawgwfarr__ = wfarr
 
     # set fields of standard wf object
-    def setfields(this,wfarr=None,dt=None):
+    def setfields(this,         # The current object
+                  wfarr=None,   # The waveform array to apply to the current object
+                  dt=None):     # The time spacing to apply to the current object
 
         # If given dt, then interpolote waveform array accordingly
         if dt is not None:
+            if this.verbose:
+                msg = 'Interpolating data to '+cyan('dt=%f'%dt)
+                alert(msg,'gwylm.setfields')
             wfarr = intrp_wfarr(wfarr,delta=dt)
 
         # Alert the use if improper input is given
@@ -1006,7 +1014,7 @@ class gwf:
         # if there is a non-uniform timestep, or if the input dt is not None and not equal to the given dt
         NONUNIFORMT = not isunispaced(t)
         INPUTDTNOTGIVENDT = this.dt is None
-        if NONUNIFORMT:
+        if NONUNIFORMT and (not INPUTDTNOTGIVENDT):
             msg = '(**) Waveform not uniform in time-step. Interpolation will be applied.'
             print magenta(msg)
         if NONUNIFORMT and INPUTDTNOTGIVENDT:
@@ -1016,7 +1024,7 @@ class gwf:
                 msg = '(**) Warning: No dt given to gwf(). We will assume that the input waveform array is in geometric units, and that dt = %g will more than suffice.' % this.dt
                 print magenta(msg)
             # interpolate waveform array
-            intrp_t = this.dt * arange( 0, double(round( (t[-1]-t[0]))/this.dt )+1 ) + t[0]
+            intrp_t = this.dt * arange( len(t) ) + t[0]
             intrp_R = InterpolatedUnivariateSpline( t, this.wfarr[:,1] )( intrp_t )
             intrp_I = InterpolatedUnivariateSpline( t, this.wfarr[:,2] )( intrp_t )
             # create final waveform array
@@ -1356,6 +1364,9 @@ class gwylm:
         for attr in scentry_obj.__dict__.keys():
             setattr( this, attr, scentry_obj.__dict__[attr] )
 
+        # Store the scentry object to optionally access its methods
+        this.__scentry__ = scentry_obj
+
         ''' Explicitely reconfigure the scentry object for the current user. '''
         # this.config.reconfig() # NOTE that this line is commented out because scentry_obj.simdir() below calls the reconfigure function internally.
 
@@ -1477,6 +1488,11 @@ class gwylm:
                 #
                 this.load(lm=lm,extraction_parameter=extraction_parameter,level=level,dt=dt)
 
+    #Given an extraction parameter, use the handler's extraction_map to determine extraction radius
+    def __r__(this,extraction_parameter):
+        #
+        return this.__scentry__.loadhandler().extraction_map(extraction_parameter)
+
     # load the waveform data
     def load(this,                  # The current object
              lm=None,               # the l amd m values of the multipole to load
@@ -1566,6 +1582,14 @@ class gwylm:
             if this.verbose: alert('Loading: %s' % cyan(basename(file_location)), thisfun )
             wfarr,_ = smart_load( file_location, verbose=this.verbose )
 
+            # Handle extraction radius scaling
+            if not this.config.is_rscaled:
+                # If the data is not in the format r*Psi4, then multiply by r (units M) to make it so
+                extraction_radius = this.__r__(extraction_parameter)
+                print '>> %f'%extraction_radius
+                wfarr[:,1] *= extraction_radius
+                wfarr[:,2] *= extraction_radius
+
             # Initiate waveform object and check that sign convetion is in accordance with core settings
             def mkgwf(wfarr_):
                 return gwf( wfarr_,
@@ -1573,7 +1597,7 @@ class gwylm:
                             m=m,
                             extraction_parameter=extraction_parameter,
                             dt=dt,
-                            kind='$rM\psi_{%i%i}$'%(l,m))
+                            kind='$rM\psi_{%i%i}$'%(l,m) )
 
             #
             y_ = mkgwf(wfarr)
@@ -1930,6 +1954,19 @@ class gwylm:
             y.pad( new_length=new_length )
         for h in this.hlm:
             h.pad( new_length=new_length )
+
+
+    # Recompose the waveforms at a sky position about the source
+    # NOTE that this function returns a gwf object
+    def recompose( this,         # The current object
+                  theta,        # The polar angle
+                  phi,          # The anzimuthal angle
+                  verbose ):
+
+        #
+        from numpy import dot
+
+        # Create Matrix of Multipole time series
 
 
     # Extrapolate to infinite radius: http://arxiv.org/pdf/1503.00718.pdf

@@ -775,17 +775,17 @@ def lim(x):
     return array([min(z),max(z)])
 
 # Determine whether numpy array is uniformly spaced
-def isunispaced(x,tol=1e-6):
+def isunispaced(x,tol=1e-5):
 
     # import usefull fun
-    from numpy import diff
+    from numpy import diff,amax
 
     # If t is not a numpy array, then let the people know.
     if not type(x).__name__=='ndarray':
         msg = '(!!) The first input must be a numpy array of 1 dimension.'
 
     # Return whether the input is uniformly spaced
-    return max(diff(x,2))<tol
+    return amax(diff(x,2))<tol
 
 # Calculate rfequency domain (~1/t Hz) given time series array
 def getfreq( t, shift=False ):

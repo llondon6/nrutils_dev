@@ -47,7 +47,7 @@ def learn_metadata( metadata_file_location ):
     thisfun = 'maya.learn_metadata'
 
     # Look for stdout files
-    stdout_file_list = ls( parent(metadata_file_location)+'/stdout*' )
+    stdout_file_list = sorted( ls( parent(metadata_file_location)+'/stdout*' ) )
     if not stdout_file_list:
         msg = 'cannot find stdout files which contain important metadata'
         error(msg,'maya.learn_metadata')
@@ -185,11 +185,18 @@ def learn_metadata( metadata_file_location ):
     x.xf = array([xfx,xfy,xfz])
     x.Sf = Mf*Mf*x.xf
 
-    # True if extraction parameter is extraction radius
-    x.extraction_parameter_is_radius = True
-
     #
     x.valid = True
 
     #
     return standard_metadata, raw_metadata
+
+
+# Given an extraction parameter, return an extraction radius
+def extraction_map( extraction_parameter ):
+
+    # Given an extraction parameter, return an extraction radius
+    extraction_radius = extraction_parameter
+
+    #
+    return extraction_radius

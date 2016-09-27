@@ -14,7 +14,7 @@ catalog_dir = /Volumes/athena/bradwr/
 
 # NOTE that the ordering here is: extraction_parameter, l, m, level
 # NOTE that information on the string formatting here can be found at https://pyformat.info/
-data_file_name_format = mp_WeylScal4::Psi4i_l{1:d}_m{2:d}_r{0:d}.00.asc
+data_file_name_format = mp_WeylScal4::Psi4i_l{1:d}_m{2:d}_r{0:d}.00.asc, Ylm_WEYLSCAL4::Psi4r_l{1:d}_m{2:d}_r{0:d}.00.asc
 
 
 # NOTE that the ordering here is: default_extraction_parameter, default_level. NOTE that not all groups use level as a sepcifier and that not all levels exist for each single simulation.
@@ -22,6 +22,9 @@ default_par_list = 75,0
 
 #
 is_extrapolated = 0
+
+# Toggle for whether waveform is scaled by extration radius or not
+is_rscaled = 0
 
 #
 handler_location = /Users/book/JOKI/Libs/KOALA/nrutils_dev/nrutils/handlers/maya.py

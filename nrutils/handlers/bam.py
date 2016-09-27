@@ -185,18 +185,26 @@ def learn_metadata( metadata_file_location ):
         x.mf = 0.0
         x.xf = array([0.0,0.0,0.0])
 
-
-    # True if ectraction parameter is extraction radius
-    x.extraction_parameter_is_radius = False
-
     #
     return standard_metadata, raw_metadata
 
 # There are instances when having the extraction radius rather than the extraction paramer is useful.
 # Here we define a function which maps between extraction_parameter and extraction radius -- IF such
 # a map can be constructed.
-def extraction_parameter2radius():
-    return None
+def extraction_map( this,                   # this may be an nrsc object or an gwylm object (it must have a raw_metadata attribute )
+                    extraction_parameter ): # The extraction parameter that will be converted to radius
+
+    # Given an extraction parameter, return an extraction radius
+    # NOTE that the indexing starts at 1 below becuase the first element is expected to be a string valued 'finite-radii'
+    if this.raw_metadata.extraction_radius[0] != 'finite-radii':
+        msg = 'The raw metadata field, "extraction radius" is expected to have "finite-radii" as its first element, but %s was found instead. This may a result of the bbh file\'s formatting. The metadata file is as %s'%(cyan(this.raw_metadata.extraction_radius[0]),cyan(this.raw_metadata.source_file_path))
+        error(msg,'bam.extraction_map')
+    _map_ = [ int(k) for k in this.raw_metadata.extraction_radius[1:] ]
+
+    #
+    extraction_radius = _map_[ extraction_parameter-1 ]
+
+    return extraction_radius
 
 # # Create a file-name string based upon l,m and the extraction parameter(s)
 # # NOTE that the method name and inputs must conform to uniform name and input ordering

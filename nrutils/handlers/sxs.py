@@ -119,8 +119,22 @@ def learn_metadata( metadata_file_location ):
     x.Sf = y.remnant_spin
     x.xf = norm(x.Sf)/(x.mf**2)
 
-    # True if ectraction parameter is extraction radius
-    x.extraction_parameter_is_radius = False
-
     #
     return standard_metadata, raw_metadata
+
+
+# Given an extraction parameter, return an extraction radius
+def extraction_map( extraction_parameter ):
+
+    #
+    from numpy import inf
+
+    # NOTE that the current set of sxs data is extrapolated to infinity -- this may change if finite radius data is downloaded
+    extraction_radius = inf
+
+    #
+    msg = 'The current set of SXS data is extrapolated to infinity making the extraction radius inf. Thankfully, this means that you do not need to call this function at all.'
+    error(msg,'sxs.py->extraction_map')
+
+    #
+    return extraction_radius
