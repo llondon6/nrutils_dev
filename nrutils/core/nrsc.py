@@ -830,6 +830,7 @@ class gwf:
 
         # use the raw waveform data to define all fields
         this.wfarr = wfarr
+
         this.setfields(wfarr=wfarr,dt=dt)
 
         # If desired, Copy fields from related gwf object.
@@ -869,8 +870,8 @@ class gwf:
         ##########################################################
 
         # Imports
-        from numpy import abs,sign,linspace,exp,arange,angle,diff,ones
-        from numpy import vstack,sqrt,unwrap,arctan,argmax,mod,floor
+        from numpy import abs,sign,linspace,exp,arange,angle,diff,ones,isnan
+        from numpy import vstack,sqrt,unwrap,arctan,argmax,mod,floor,logical_not
         from scipy.interpolate import InterpolatedUnivariateSpline
         from scipy.fftpack import fft, fftfreq, fftshift, ifft
 
@@ -941,8 +942,9 @@ class gwf:
         this.amp    = abs( this.y )                                 # Amplitude
 
         phi_    = unwrap( angle( this.y ) )                         # Phase: NOTE, here we make the phase constant where the amplitude is zero
-        k = find( (this.amp > 0) * (this.amp<max(this.amp)) )[0]
-        phi_[0:k] = phi_[k]
+        # print find( (this.amp > 0) * (this.amp<max(this.amp)) )
+        # k = find( (this.amp > 0) * (this.amp<max(this.amp)) )[0]
+        # phi_[0:k] = phi_[k]
         this.phi = phi_
 
         this.dphi   = intrp_diff( this.t, this.phi )                # Derivative of phase, last point interpolated to preserve length
@@ -1007,10 +1009,45 @@ class gwf:
     # validate whether there is a constant time step
     def valdt(this):
         #
-        from numpy import diff,var,allclose,vstack,mean,linspace,arange,array,double
+        from numpy import diff,var,allclose,vstack,mean,linspace,diff,amin,allclose
+        from numpy import arange,array,double,isnan,nan,logical_not,hstack
         from scipy.interpolate import InterpolatedUnivariateSpline
-        # note the shape convention
+
+        # # Look for and remove nans
+        # t,A,B = this.wfarr[:,0],this.wfarr[:,1],this.wfarr[:,2]
+        # nan_mask = logical_not( isnan(t) ) * logical_not( isnan(A) ) * logical_not( isnan(B) )
+        # if logical_not(nan_mask).any():
+        #     msg = red('There are NANs in the data which mill be masked away.')
+        #     warning(msg,'gwf.setfields')
+        #     this.wfarr = this.wfarr[nan_mask,:]
+        #     t = this.wfarr[:,0]; A = this.wfarr[:,1]; B = this.wfarr[:,2];
+
+        # Note the shape convention
         t = this.wfarr[:,0]
+
+        # check whether t is monotonically increasing
+        isincreasing = allclose( t, sorted(t), 1e-6 )
+        if not isincreasing:
+            # Let the people know
+            msg = red('The time series has been found to be non-monotonic. We will sort the data to enforce monotinicity.')
+            warning(msg,'gwf.valdt')
+            # In this case, we must sort the data and time array
+            map_ = arange( len(t) )
+            map_ = sorted( map_, key = lambda x: t[x] )
+            this.wfarr = this.wfarr[ map_, : ]
+            t = this.wfarr[:,0]
+
+        # Look for duplicate time data
+        hasduplicates = 0 == amin( diff(t) )
+        if hasduplicates:
+            # Let the people know
+            msg = red('The time series has been found to have duplicate data. We will delete the corresponding rows.')
+            warning(msg,'gwf.valdt')
+            # delete the offending rows
+            dup_mask = hstack( [True, diff(t)!=0] )
+            this.wfarr = this.wfarr[dup_mask,:]
+            t = this.wfarr[:,0]
+
         # if there is a non-uniform timestep, or if the input dt is not None and not equal to the given dt
         NONUNIFORMT = not isunispaced(t)
         INPUTDTNOTGIVENDT = this.dt is None
@@ -1023,8 +1060,8 @@ class gwf:
                 this.dt = diff(lim(t))/len(t)
                 msg = '(**) Warning: No dt given to gwf(). We will assume that the input waveform array is in geometric units, and that dt = %g will more than suffice.' % this.dt
                 print magenta(msg)
-            # interpolate waveform array
-            intrp_t = this.dt * arange( len(t) ) + t[0]
+            # Interpolate waveform array
+            intrp_t = arange( min(t), max(t), this.dt )
             intrp_R = InterpolatedUnivariateSpline( t, this.wfarr[:,1] )( intrp_t )
             intrp_I = InterpolatedUnivariateSpline( t, this.wfarr[:,2] )( intrp_t )
             # create final waveform array
@@ -1586,9 +1623,7 @@ class gwylm:
             if not this.config.is_rscaled:
                 # If the data is not in the format r*Psi4, then multiply by r (units M) to make it so
                 extraction_radius = this.__r__(extraction_parameter)
-                print '>> %f'%extraction_radius
-                wfarr[:,1] *= extraction_radius
-                wfarr[:,2] *= extraction_radius
+                wfarr[:,1:3] *= extraction_radius
 
             # Initiate waveform object and check that sign convetion is in accordance with core settings
             def mkgwf(wfarr_):
@@ -1941,6 +1976,10 @@ class gwylm:
         that.flm = __ringdown__( this.flm )
         that.hlm = __ringdown__( this.hlm )
         that.characterize_start()
+        # Create a dictionary representation of the mutlipoles
+        that.lm = {}
+        for k,y in enumerate(that.ylm):
+            that.lm[(y.l,y.m)] = { 'psi4':y, 'strain':that.hlm[k] }
 
         #
         return that
@@ -1959,14 +1998,50 @@ class gwylm:
     # Recompose the waveforms at a sky position about the source
     # NOTE that this function returns a gwf object
     def recompose( this,         # The current object
-                  theta,        # The polar angle
-                  phi,          # The anzimuthal angle
-                  verbose ):
+                   theta,        # The polar angle
+                   phi,          # The anzimuthal angle
+                   kind=None,
+                   verbose=False ):
 
         #
-        from numpy import dot
+        from numpy import dot,array,zeros
+
+        #
+        if kind is None:
+            msg = 'no kind specified for recompose calculation. We will proceed assuming that you desire recomposed strain. Please specify the desired kind (e.g. strain, psi4 or news) you wishe to be output as a keyword (e.g. kind=news)'
+            warning( msg, 'gwylm.recompose' )
+            kind = 'strain'
 
         # Create Matrix of Multipole time series
+        def __recomp__(alm,kind=None):
+
+            M = zeros( [ alm[0].n, len(alm) ], dtype=complex )
+            Y = zeros( [ len(alm), 1 ], dtype=complex )
+            # Seed the matrix as well as the vector of spheroical harmonic values
+            for k,a in enumerate(alm):
+                M[:,k] = a.y
+                Y[k] = sYlm(-2,a.l,a.m,theta,phi)
+            # Perform the matrix multiplication and create the output gwf object
+            Z = dot( M,Y )[:,0]
+            # Perform the matrix multiplication and create the output gwf object
+            Z = dot( M,Y )[:,0]
+
+
+            wfarr = array( [ alm[0].t, Z.real, Z.imag ] ).T
+            # return the ouput
+            return gwf( wfarr, kind=kind )
+
+        #
+        if kind=='psi4':
+            y = __recomp__( this.ylm, kind=r'$rM\,\psi_4(t,\theta,\phi)$' )
+        elif kind=='strain':
+            y = __recomp__( this.hlm, kind=r'$r\,h(t,\theta,\phi)/M$' )
+        elif kind=='news':
+            y = __recomp__( this.flm, kind=r'$r\,\dot{h}(t,\theta,\phi)/M$' )
+
+        #
+        return y
+
 
 
     # Extrapolate to infinite radius: http://arxiv.org/pdf/1503.00718.pdf
