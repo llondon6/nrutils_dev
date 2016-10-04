@@ -808,9 +808,9 @@ class gwf:
                   dt                    = None, # If given, the waveform array will be interpolated to this
                                                 # timestep if needed
                   ref_scentry           = None, # reference scentry object
-                  l                     = None,
-                  m                     = None,
-                  extraction_parameter  = None,
+                  l                     = None, # Optional polar index (an eigenvalue of a differential eq)
+                  m                     = None, # Optional azimuthal index (an eigenvalue of a differential eq)
+                  extraction_parameter  = None, # Optional extraction parameter ( a map to an extraction radius )
                   kind                  = None, # strain or psi4
                   friend                = None, # gwf object from which to clone fields
                   verbose = False ):    # Verbosity toggle
@@ -864,6 +864,11 @@ class gwf:
             raise ValueError(msg)
         elif wfarr is not None:
             this.wfarr = wfarr
+        elif (wfarr is None) and not (this.wfarr is None):
+            wfarr = this.wfarr
+        else:
+            msg = 'unhandled waveform array configuration: input wfarr is %s and this.wfarr is %s'%(wfarr,this.wfarr)
+            error(msg,'gwf.setfields')
 
         ##########################################################
         # Make sure that waveform array is in t-plus-cross format #
@@ -905,7 +910,7 @@ class gwf:
         this.df             = None      # frequnecy domain spacing
 
         # Validate time step. Interpolate for constant time steo if needed.
-        this.valdt()
+        this.__validatet__()
         # Determine formatting of wfarr
         t = this.wfarr[:,0]; A = this.wfarr[:,1]; B = this.wfarr[:,2];
 
@@ -922,7 +927,7 @@ class gwf:
         if typ == 'amp-phase':
             C = A*exp(1j*B)
             this.wfarr = vstack( [ t, C.real, C.imag ] ).T
-            this.valwfarr()
+            this.__validatewfarr__()
 
         # --------------------------------------------------- #
         # Set time domain properties
@@ -1007,7 +1012,7 @@ class gwf:
         return this
 
     # validate whether there is a constant time step
-    def valdt(this):
+    def __validatet__(this):
         #
         from numpy import diff,var,allclose,vstack,mean,linspace,diff,amin,allclose
         from numpy import arange,array,double,isnan,nan,logical_not,hstack
@@ -1030,7 +1035,7 @@ class gwf:
         if not isincreasing:
             # Let the people know
             msg = red('The time series has been found to be non-monotonic. We will sort the data to enforce monotinicity.')
-            warning(msg,'gwf.valdt')
+            warning(msg,'gwf.__validatet__')
             # In this case, we must sort the data and time array
             map_ = arange( len(t) )
             map_ = sorted( map_, key = lambda x: t[x] )
@@ -1042,7 +1047,7 @@ class gwf:
         if hasduplicates:
             # Let the people know
             msg = red('The time series has been found to have duplicate data. We will delete the corresponding rows.')
-            warning(msg,'gwf.valdt')
+            warning(msg,'gwf.__validatet__')
             # delete the offending rows
             dup_mask = hstack( [True, diff(t)!=0] )
             this.wfarr = this.wfarr[dup_mask,:]
@@ -1071,7 +1076,7 @@ class gwf:
             this.dt = mean(diff(t))
 
     # validate shape of waveform array
-    def valwfarr(this):
+    def __validatewfarr__(this):
         # check shape width
         if this.wfarr.shape[-1] != 3 :
             msg = '(!!) Waveform arr should have 3 columns'
@@ -1102,7 +1107,10 @@ class gwf:
             ax = this.plotfd( show=show,fig=fig,title=title )
 
         #
-        return ax
+        from matplotlib.pyplot import gcf
+
+        #
+        return ax,gcf()
 
     # Plot frequency domain
     def plotfd( this,
@@ -1366,6 +1374,68 @@ class gwf:
             # Confer to the current object
             this.setfields(wfarr)
 
+    # Align the gwf with a reference gwf using a desired method
+    def align( this,
+               that,            # The reference gwf object
+               method=None,     # The alignment type e.g. phase
+               options=None,    # Addtional options for subroutines
+               verbose=False ):
+
+        #
+        if not isinstance(that,gwf):
+            msg = 'first input must be gwf -- the gwf object to alignt the current object to'
+            error(msg,'gwf.align')
+
+        # Set default method
+        if method is None:
+            msg = 'No method chosen. We will proceed by aligning the waveform\'s average phase.'
+            warning(msg,'gwf.align')
+            memthod = ['phase']
+
+        # Make sure method is list or tuple
+        if not isinstance(method,(list,tuple)):
+            method = [method]
+
+        # Make sure all methods are strings
+        for k in method:
+            if not isinstance(k,str):
+                msg = 'non-string method type found: %s'%k
+                error(msg,'gwf.align')
+
+        # Check for handled methods
+        handled_methods = [ 'phase' ]
+        for k in method:
+            if not ( k in handled_methods ):
+                msg = 'non-handled method input: %s'%red(k)
+                error(msg,'gwf.align')
+
+        # Look for phase-alignement
+        if 'phase' in method:
+            this.wfarr = align_wfarr_average_phase( this.wfarr, that.wfarr )
+            this.setfields()
+
+    # Shift the waveform phase
+    def shift_phase(this,
+                    dphi,
+                    fromraw=False,    # If True, rotate the wavefor relative to its default wfarr (i.e. __rawgwfarr__)
+                    verbose=False):
+
+        #
+        if not isinstance(dphi,(float,int)):
+            error('input must of float or int real valued','gwf.shift_phase')
+
+        if not fromraw:
+            wfarr = this.__rawgwfarr__
+        else:
+            wfarr = this.wfarr
+
+        #
+        msg = 'This function could be spead up by manually aligning relevant fields, rather than regenerating all fields which includes taking an FFT.'
+        warning(msg,'gwf.shift_phase')
+
+        #
+        this.wfarr = shift_wfarr_phase( wfarr, dphi )
+        this.setfields()
 
 # Class for waveforms: Psi4 multipoles, strain multipoles (both spin weight -2), recomposed waveforms containing h+ and hx. NOTE that detector response waveforms will be left to pycbc to handle
 class gwylm:
@@ -1767,6 +1837,14 @@ class gwylm:
             t       =  y.t
             h_plus  =  ffintegrate( y.t, y.plus,  w0, 2 )
             h_cross =  ffintegrate( y.t, y.cross, w0, 2 )
+            #%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%#
+            # NOTE that there is NOT a minus sign above which is INconsistent with equation 3.4 of
+            # arxiv:0707.4654v3. Here we choose to be consistent with eq 4 of arxiv:1006.1632 and not add a
+            # minus sign.
+            if this.verbose:
+                msg = yellow('The user should note that there is no minus sign used in front of the double time integral for strain (i.e. Eq 4 of arxiv:1006.1632). This differs from Eq 3.4 of arxiv:0707.4654v3. The net effect is a rotation of the overall polarization of pi degrees. The user should also note that there is no minus sign applied to h_cross meaning that the user must be mindful to write h_pluss-1j*h_cross when appropriate.')
+                alert(msg,'gwylm.calchlm')
+            #%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%#
 
             # Constrcut the waveform array for the new strain object
             wfarr = array( [ t, h_plus, h_cross ] ).T
@@ -2261,24 +2339,3 @@ def gwftaper( y,                        # gwf object to be windowed
 
     #
     return window
-
-
-# Shift a gwf object in time by some abount t0
-def gwftshift( y,               # the gwf object to be shifted
-               t0,              # Amount to shift the object
-               verbose=None):   # Whether or not to let the people know
-
-    #
-    from numpy import rem
-
-    #
-    if type(y).__name__!='gwf':
-        msg = 'input must be gwf object'
-        error(msg,'gwftshift')
-
-    #
-    T = y.t(-1) - y.t(0)
-    t0 = rem( t0, T )
-
-    #
-    a = y.arr

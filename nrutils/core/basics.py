@@ -1435,3 +1435,53 @@ def intrp_argmax( y,
 
     #
     return ans
+
+# Shift phase of waveform array
+def shift_wfarr_phase(wfarr,dphi):
+
+    #
+    from numpy import array,ndarray,sin,cos
+
+    #
+    if not isinstance(wfarr,ndarray):
+        error( 'input must be numpy array type' )
+
+    #
+    t,r,c = wfarr[:,0],wfarr[:,1],wfarr[:,2]
+
+    #
+    r_ = r*cos(dphi) - c*sin(dphi)
+    c_ = r*sin(dphi) + c*cos(dphi)
+
+    #
+    wfarr[:,0],wfarr[:,1],wfarr[:,2] = t , r_, c_
+
+    #
+    return wfarr
+
+# Find the average phase difference and align two wfarr's
+def align_wfarr_average_phase(this,that):
+    '''
+    'this' phase will be aligned to 'that' phase over their domains
+    '''
+
+    #
+    from numpy import angle,unwrap,mean
+
+    #
+    u = this[:,1]+1j*this[:,2]
+    v = that[:,1]+1j*that[:,2]
+
+    #
+    _a = unwrap( angle(u) )
+    _b = unwrap( angle(v) )
+
+    #
+    a,b = mean( _a ), mean( _b )
+    dphi = -a + b
+
+    #
+    this_ = shift_wfarr_phase(this,dphi)
+
+    #
+    return this_
