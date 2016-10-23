@@ -1460,7 +1460,39 @@ def shift_wfarr_phase(wfarr,dphi):
     return wfarr
 
 # Find the average phase difference and align two wfarr's
-def align_wfarr_average_phase(this,that):
+def align_wfarr_average_phase(this,that,mask=None):
+    '''
+    'this' phase will be aligned to 'that' phase over their domains
+    '''
+
+    #
+    from numpy import angle,unwrap,mean
+
+    #
+    if mask is None:
+        u = this[:,1]+1j*this[:,2]
+        v = that[:,1]+1j*that[:,2]
+    else:
+        u = this[mask,1]+1j*this[mask,2]
+        v = that[mask,1]+1j*that[mask,2]
+
+    #
+    _a = unwrap( angle(u) )
+    _b = unwrap( angle(v) )
+
+
+    #
+    a,b = mean( _a ), mean( _b )
+    dphi = -a + b
+
+    #
+    this_ = shift_wfarr_phase(this,dphi)
+
+    #
+    return this_
+
+# Find the average phase difference and align two wfarr's
+def align_wfarr_initial_phase(this,that):
     '''
     'this' phase will be aligned to 'that' phase over their domains
     '''
@@ -1473,15 +1505,157 @@ def align_wfarr_average_phase(this,that):
     v = that[:,1]+1j*that[:,2]
 
     #
-    _a = unwrap( angle(u) )
-    _b = unwrap( angle(v) )
+    _a = unwrap( angle(u) )[0]
+    _b = unwrap( angle(v) )[0]
 
-    #
-    a,b = mean( _a ), mean( _b )
-    dphi = -a + b
+    dphi = -_a + _b
 
     #
     this_ = shift_wfarr_phase(this,dphi)
 
     #
     return this_
+
+
+#
+
+
+#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#
+# Given a 1D array, determine the set of N lines that are optimally representative  #
+#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#
+def romline(  domain,           # Domain of Map
+              range_,           # Range of Map
+              N,                # Number of Lines to keep for final linear interpolator
+              positive=True,   # Toggle to use positive greedy algorithm ( where rom points are added rather than removed )
+              verbose = False ):
+
+    # Use a linear interpolator, and a reverse greedy process
+    from numpy import interp, linspace, array, inf, arange, mean, zeros, std, argmax, argmin
+    linterp = lambda x,y: lambda newx: interp(newx,x,y)
+
+    # Domain and range shorthand
+    d = domain
+    R = range_
+    # Normalize Data
+    R0,R1 = mean(R), std(R)
+    r = (R-R0)/R1
+
+    #
+    if not positive:
+        #
+        done = False
+        space = range( len(d) )
+        raw_space = range( len(d) )
+        err = lambda x: mean( abs(x) ) # std(x) #
+        raw_mask = []
+        while not done:
+            #
+            min_sigma = inf
+            for k in range(len(space)):
+                # Remove a trial domain point
+                trial_space = list(space)
+                trial_space.pop(k)
+                # Determine the residual error incured by removing this trial point after linear interpolation
+                # Apply linear interpolation ON the new domain TO the original domain
+                trial_domain = d[ trial_space ]
+                trial_range = r[ trial_space ]
+                # Calculate the ROM's representation error using ONLY the points that differ from the raw domain, as all other points are perfectly represented by construction. NOTE that doing this significantly speeds up the algorithm.
+                trial_mask = list( raw_mask ).append( k )
+                sigma = err( linterp( trial_domain, trial_range )( d[trial_mask] ) - r[trial_mask] ) / ( err(r[trial_mask]) if err(r[trial_mask])!=0 else 1e-8  )
+                #
+                if sigma < min_sigma:
+                    min_k = k
+                    min_sigma = sigma
+                    min_space = array( trial_space )
+
+            #
+            raw_mask.append( min_k )
+            #
+            space = list(min_space)
+
+            #
+            done = len(space) == N
+
+        #
+        rom = linterp( d[min_space], R[min_space] )
+        knots = min_space
+
+    else:
+        from numpy import inf,argmin,argmax
+        seed_list = [ 0, argmax(R), argmin(R), len(R)-1 ]
+        min_sigma = inf
+        for k in seed_list:
+            trial_knots,trial_rom,trial_sigma = positive_romline( d, R, N, seed = k )
+            print trial_sigma
+            if trial_sigma < min_sigma:
+                knots,rom,min_sigma = trial_knots,trial_rom,trial_sigma
+
+    #
+    print min_sigma
+
+    return knots,rom
+
+
+#
+def positive_romline(   domain,           # Domain of Map
+                        range_,           # Range of Map
+                        N,                # Number of Lines to keep for final linear interpolator
+                        seed = None,      # First point in domain (index) to use
+                        verbose = False ):
+
+    # Use a linear interpolator, and a reverse greedy process
+    from numpy import interp, linspace, array, inf, arange, mean, zeros, std, argmax, argmin, amin, amax, ones
+    linterp = lambda x,y: lambda newx: interp(newx,x,y)
+
+    # Domain and range shorthand
+    d = domain
+    R = range_
+    # Normalize Data
+    R0,R1 = mean(R), std(R)
+    r = (R-R0)/R1
+    #
+    weights = (r-amin(r)) / amax( r-amin(r) )
+    weights = ones( d.size )
+
+    #
+    if seed is None:
+        seed = argmax(r)
+    else:
+        if not isinstance(seed,int):
+            msg = 'seed input must be int'
+            error( msg, 'positive_romline' )
+
+    #
+    done = False
+    space = [ seed ]
+    domain_space = range(len(d))
+    err = lambda x: mean( abs(x) ) # std(x) #
+    while not done:
+        #
+        min_sigma = inf
+        for k in [ a for a in domain_space if not (a in space) ]:
+            # Add a trial point
+            trial_space = list(space)
+            trial_space.append(k)
+            trial_space.sort()
+            # Apply linear interpolation ON the new domain TO the original domain
+            trial_domain = d[ trial_space ]
+            trial_range = r[ trial_space ]
+            #
+            sigma = err( weights * (linterp( trial_domain, trial_range )( d ) - r) ) / ( err(r) if err(r)!=0 else 1e-8  )
+            #
+            if sigma < min_sigma:
+                min_k = k
+                min_sigma = sigma
+                min_space = array( trial_space )
+
+        #
+        space = list(min_space)
+        #
+        done = len(space) == N
+
+    #
+    rom = linterp( d[min_space], R[min_space] )
+    knots = min_space
+
+    return knots,rom,min_sigma

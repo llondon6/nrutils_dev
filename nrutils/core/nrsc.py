@@ -443,9 +443,10 @@ def scsearch( catalog = None,           # Manually input list of scentry objects
                 catalog = catalog + pickle.load( dbf )
 
     # mass-ratio
+    qtol = 1e-3
     if q is not None:
         # handle int of float input
-        if isinstance(q,(int,float)): q = [q-1e-6,q+1e-6]
+        if isinstance(q,(int,float)): q = [q-qtol,q+qtol]
         # NOTE: this could use error checking
         test = lambda k: k.m1/k.m2 >= min(q) and k.m1/k.m2 <= max(q)
         catalog = filter( test, catalog )
@@ -813,6 +814,9 @@ class gwf:
                   extraction_parameter  = None, # Optional extraction parameter ( a map to an extraction radius )
                   kind                  = None, # strain or psi4
                   friend                = None, # gwf object from which to clone fields
+                  mf                    = None, # Optional remnant mass input
+                  xf                    = None, # Optional remnant spin input
+                  label                 = None, # Optional label input (see gwylm)
                   verbose = False ):    # Verbosity toggle
 
         #
@@ -823,13 +827,26 @@ class gwf:
             kind = r'$y$'
         this.kind = kind
 
+        # Optional field to be set externally if needed
+        source_location = None
+
         # Set optional fields to none as default. These will be set externally is they are of use.
         this.l = l
         this.m = m
         this.extraction_parameter = extraction_parameter
 
+        #
+        this.verbose = verbose
+
         # use the raw waveform data to define all fields
         this.wfarr = wfarr
+
+        # Optional Holders for remnant mass and spin
+        this.mf = mf
+        this.xf = xf
+
+        # Optional label input (see gwylm)
+        this.label = label
 
         this.setfields(wfarr=wfarr,dt=dt)
 
@@ -845,6 +862,9 @@ class gwf:
         # scaled, phase shifted), and after any of these changes, we may want to reaccess the initial waveform
         # though the "reset" method (i.e. this.reset)
         this.__rawgwfarr__ = wfarr
+
+        # Tag for whether the wavform has been low pass filtered since creation
+        this.__lowpassfiltered__ = False
 
     # set fields of standard wf object
     def setfields(this,         # The current object
@@ -1374,11 +1394,18 @@ class gwf:
             # Confer to the current object
             this.setfields(wfarr)
 
+    # Analog of the numpy ndarray conj()
+    def conj(this):
+        this.wfarr[:,2] *= -1
+        this.setfields()
+        return this
+
     # Align the gwf with a reference gwf using a desired method
     def align( this,
                that,            # The reference gwf object
                method=None,     # The alignment type e.g. phase
                options=None,    # Addtional options for subroutines
+               mask=None,       # Boolean mask to apply for alignment (useful e.g. for average-phase alignment)
                verbose=False ):
 
         #
@@ -1388,9 +1415,9 @@ class gwf:
 
         # Set default method
         if method is None:
-            msg = 'No method chosen. We will proceed by aligning the waveform\'s average phase.'
+            msg = 'No method chosen. We will proceed by aligning the waveform\'s initial phase.'
             warning(msg,'gwf.align')
-            memthod = ['phase']
+            memthod = ['initial-phase']
 
         # Make sure method is list or tuple
         if not isinstance(method,(list,tuple)):
@@ -1403,16 +1430,22 @@ class gwf:
                 error(msg,'gwf.align')
 
         # Check for handled methods
-        handled_methods = [ 'phase' ]
+        handled_methods = [ 'initial-phase','average-phase' ]
         for k in method:
             if not ( k in handled_methods ):
-                msg = 'non-handled method input: %s'%red(k)
+                msg = 'non-handled method input: %s. Handled methods include %s'%(red(k),handled_methods)
                 error(msg,'gwf.align')
 
         # Look for phase-alignement
-        if 'phase' in method:
-            this.wfarr = align_wfarr_average_phase( this.wfarr, that.wfarr )
+        if 'initial-phase' in method:
+            this.wfarr = align_wfarr_initial_phase( this.wfarr, that.wfarr )
             this.setfields()
+        if 'average-phase' in method:
+            this.wfarr = align_wfarr_average_phase( this.wfarr, that.wfarr, mask=mask)
+            this.setfields()
+
+        #
+        return this
 
     # Shift the waveform phase
     def shift_phase(this,
@@ -1437,6 +1470,31 @@ class gwf:
         this.wfarr = shift_wfarr_phase( wfarr, dphi )
         this.setfields()
 
+    # frequency domain filter the waveform given a window state for the frequency domain
+    def fdfilter(this,window):
+        #
+        from scipy.fftpack import fft, fftfreq, fftshift, ifft
+        from numpy import floor,array,log
+        from matplotlib.pyplot import plot,show
+        #
+        if this.__lowpassfiltered__:
+            msg = 'wavform already low pass filtered'
+            warning(msg,'gwf.lowpass')
+        else:
+            #
+            fd_y = this.fd_y * window
+            plot( log(this.f), log( abs(this.fd_y) ) )
+            plot( log(this.f), log( abs(fd_y) ) )
+            show()
+            #
+            y = ifft( fftshift( fd_y ) )
+            this.wfarr[:,1],this.wfarr[:,2] = y.real,y.imag
+            #
+            this.setfields()
+            #
+            this.__lowpassfiltered__ = True
+
+
 # Class for waveforms: Psi4 multipoles, strain multipoles (both spin weight -2), recomposed waveforms containing h+ and hx. NOTE that detector response waveforms will be left to pycbc to handle
 class gwylm:
 
@@ -1453,6 +1511,7 @@ class gwylm:
                   extraction_parameter  = None,     # Extraction parameter labeling extraction zone/radius for run
                   level = None,                     # Opional refinement level for simulation. NOTE that not all NR groups use this specifier. In such cases, this input has no effect on loading.
                   w22 = None,                       # Optional input for lowest physical frequency in waveform; by default an wstart value is calculated from the waveform itself and used in place of w22
+                  lowpass=False,                    # Toggle to lowpass filter waveform data upon load using "romline" (in basics.py) routine to define window
                   verbose               = None ):   # be verbose
 
         # Print non None inputs to screen
@@ -1499,7 +1558,7 @@ class gwylm:
         this.dt = dt
 
         # Load the waveform data
-        if load==True: this.__load__(lmax=lmax,lm=lm)
+        if load==True: this.__load__(lmax=lmax,lm=lm,dt=dt)
 
         # Characterize the waveform's start and store related information to this.starting
         this.starting = None # In charasterize_start(), the information about the start of the waveform is actually stored to "starting". Here this field is inintialized for visibility.
@@ -1516,6 +1575,11 @@ class gwylm:
             if verbose:
                 msg = 'Using w22 from '+bold(magenta('user input'))+' to calculate strain multipoles.'
                 alert(msg,thisfun)
+
+        # Low-pass filter waveform (Psi4) data using "romline" routine in basics.py to determin windowed region
+        this.__lowpassfiltered__ = False
+        if lowpass:
+            this.lowpass()
 
         # Calculate strain
         this.calchlm(w22=w22)
@@ -1702,6 +1766,10 @@ class gwylm:
                             m=m,
                             extraction_parameter=extraction_parameter,
                             dt=dt,
+                            verbose=this.verbose,
+                            mf = this.mf,
+                            xf = this.xf,
+                            label = this.label,
                             kind='$rM\psi_{%i%i}$'%(l,m) )
 
             #
@@ -1779,18 +1847,17 @@ class gwylm:
 
             # Plot waveform data
             for y in wflm:
-                ax = y.plot(fig=fig,title='%s: %s' % (this.setname,this.label),domain=domain)
-
-            # If there is start characterization, plot some of it
-            if 'starting' in this.__dict__:
-                clr = 0.4*array([1./0.6,1./0.6,1])
-                dy = 100*diff( ax[0].get_ylim() )
-                for a in ax:
-                    dy = 100*diff( a.get_ylim() )
-                    if domain == 'time':
-                        a.plot( wflm[0].t[this.startindex]*array([1,1]) , [-dy,dy], ':', color=clr )
-                    if domain == 'freq':
-                        a.plot( this.wstart*array([1,1])/(2*pi) , [-dy,dy], ':', color=clr )
+                ax,_ = y.plot(fig=fig,title='%s: %s' % (this.setname,this.label),domain=domain)
+                # If there is start characterization, plot some of it
+                if 'starting' in this.__dict__:
+                    clr = 0.4*array([1./0.6,1./0.6,1])
+                    dy = 100*diff( ax[0].get_ylim() )
+                    for a in ax:
+                        dy = 100*diff( a.get_ylim() )
+                        if domain == 'time':
+                            a.plot( wflm[0].t[this.startindex]*array([1,1]) , [-dy,dy], ':', color=clr )
+                        if domain == 'freq':
+                            a.plot( this.wstart*array([1,1])/(2*pi) , [-dy,dy], ':', color=clr )
             #
             if show:
                 # Let the people know what is being plotted.
@@ -1850,7 +1917,7 @@ class gwylm:
             wfarr = array( [ t, h_plus, h_cross ] ).T
 
             # Add the new strain multipole to this object's list of multipoles
-            this.hlm.append( gwf( wfarr, l=y.l, m=y.m, kind='$rh_{%i%i}/M$'%(y.l,y.m) ) )
+            this.hlm.append( gwf( wfarr, l=y.l, m=y.m, mf=this.mf, xf=this.xf, kind='$rh_{%i%i}/M$'%(y.l,y.m) ) )
 
     # Characterise the start of the waveform using the l=m=2 psi4 multipole
     def characterize_start(this):
@@ -1859,7 +1926,7 @@ class gwylm:
         y22_list = filter( lambda y: y.l==y.m==2, this.ylm )
         # If it doesnt exist in this.ylm, then load it
         if 0==len(y22_list):
-            y22 = this.load(lm=[2,2],output=True)
+            y22 = this.load(lm=[2,2],output=True,dt=this.dt)
         else:
             y22 = y22_list[0]
         # Use the l=m=2 psi4 multipole to determine the waveform start
@@ -2008,6 +2075,7 @@ class gwylm:
     #--------------------------------------------------------------------------------#
     def ringdown(this,              # The current object
                  T0 = 10,           # Starting time relative to peak luminosity of the l=m=2 multipole
+                 T1 = None,         # Maximum time
                  df = None,         # Optional df in frequency domain (determines time domain padding)
                  verbose = True):
 
@@ -2026,9 +2094,18 @@ class gwylm:
         # Retrieve the l=m=2 component
         f = [ a for a in this.flm if a.l==a.m==2 ][0]
 
+        # Handle T1 Input
+        if T1 is None:
+            T1 = f.t[-1] - f.intrp_t_amp_max
+        else:
+            if T1 > (f.t[-1] - f.intrp_t_amp_max) :
+                msg = 'Input value of T1=%i extends beyond the end of the waveform. We will stop at the last value of the waveform, not at the requested T1.'%T1
+                warning(msg,'gwylm.ringdown')
+                T1 = f.t[-1] - f.intrp_t_amp_max
+
         # Use its time series to define a mask
-        a = f.intrp_t_amp_max+T0
-        b = f.t[-1]
+        a = f.intrp_t_amp_max + T0
+        b = f.intrp_t_amp_max + T1
         n = abs(float(b-a))/f.dt
         t = linspace(a,b,n)
 
@@ -2046,7 +2123,7 @@ class gwylm:
                 # Create waveform array
                 wfarr = array( [t-f.intrp_t_amp_max,plus,cross] ).T
                 # Create gwf object
-                xlm.append(  gwf(wfarr,l=y.l,m=y.m,kind=y.kind)  )
+                xlm.append(  gwf(wfarr,l=y.l,m=y.m,mf=this.mf,xf=this.xf,kind=y.kind,label=this.label)  )
             #
             return xlm
         #
@@ -2138,6 +2215,55 @@ class gwylm:
 
         return None
 
+    # Los pass filter using romline in basics.py to determine window region
+    def lowpass(this):
+
+        #
+        msg = 'Howdy, partner! This function is experimental and should NOT be used.'
+        error(msg,'lowpass')
+
+        #
+        from numpy import log,ones
+        from matplotlib.pyplot import plot,show,axvline
+
+        #
+        for y in this.ylm:
+            N = 8
+            if y.m>=0:
+                mask = y.f>0
+                lf = log( y.f[ mask  ] )
+                lamp = log( y.fd_amp[ mask  ] )
+                knots,_ = romline(lf,lamp,N,positive=True,verbose=True)
+                a,b = 0,1
+                state = knots[[a,b]]
+                window = ones( y.f.shape )
+                window[ mask ] = maketaper( lf, state )
+            elif y.m<0:
+                mask = y.f<=0
+                lf = log( y.f[ mask  ] )
+                lamp = log( y.fd_amp[ mask  ] )
+                knots,_ = romline(lf,lamp,N,positive=True,verbose=True)
+                a,b = -1,-2
+                state = knots[[a,b]]
+                window = ones( y.f.shape )
+                window[ mask ] = maketaper( lf, state )
+            plot( lf, lamp )
+            plot( lf, log(window[mask])+lamp, 'k', alpha=0.5 )
+            plot( lf[knots], lamp[knots], 'o', mfc='none', ms=12 )
+            axvline(x=lf[knots[a]],color='r')
+            axvline(x=lf[knots[b]],color='r')
+            show()
+            # plot(y.f,y.fd_amp)
+            # show()
+            plot( window )
+            axvline(x=knots[a],color='r')
+            axvline(x=knots[b],color='r')
+            show()
+            y.fdfilter( window )
+
+        #
+        this.__lowpassfiltered__ = True
+
 
 
 # Time Domain LALSimulation Waveform Approximant h_pluss and cross, but using nrutils data conventions
@@ -2225,8 +2351,18 @@ class gwfcharstart:
             msg = 'First imput must be a '+cyan('gwf')+' object. Type %s found instead.' % type(y).__name__
             error(msg,thisfun)
 
+
+        # 1. Find the pre-peak portion of the waveform.
+        val_mask = arange( y.k_amp_max )
+        # 2. Find the peak locations of the plus part.
+        pks,pk_mask = findpeaks( y.cross[ val_mask ] )
+        pk_mask = pk_mask[ pks > y.amp[y.k_amp_max]*5e-4 ]
+
+        # 3. Find the difference between the peaks
+        D = diff(pk_mask)
+
         # If the waveform starts at its peak (e.g. in the case of ringdown)
-        if not y.k_amp_max:
+        if len(D)==0:
 
             #
             this.left_index = 0
@@ -2236,14 +2372,6 @@ class gwfcharstart:
 
         else:
 
-            # 1. Find the pre-peak portion of the waveform.
-            val_mask = arange( y.k_amp_max )
-            # 2. Find the peak locations of the plus part.
-            pks,pk_mask = findpeaks( y.cross[ val_mask ] )
-            pk_mask = pk_mask[ pks > y.amp[y.k_amp_max]*5e-4 ]
-
-            # 3. Find the difference between the peaks
-            D = diff(pk_mask)
             # 4. Find location of the first peak that is separated from its adjacent by greater than the largest value. This location is stored to start_map.
             start_map = find(  D >= max(D)  )[0]
 

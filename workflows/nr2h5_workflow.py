@@ -181,4 +181,4 @@ for a in A:
     # Call nr2h5 to make hdf5 file
     # ------------------------------------------------------- #
     alert('Creating HDF5 files:',this_script )
-    #nr2h5( nr_strain_data, nr_meta_data, output_path=output_path, verbose=True )
+    nr2h5( nr_strain_data, nr_meta_data, output_path=output_path, verbose=True )
