@@ -1300,7 +1300,7 @@ def intrp_wfarr(wfarr,delta=None,domain=None):
 
 
 # Fucntion to pad wfarr with zeros. NOTE that this should only be applied to a time domain waveform that already begins and ends with zeros.
-def pad_wfarr(wfarr,new_length):
+def pad_wfarr(wfarr,new_length,where=None):
 
     #
     from numpy import hstack,zeros,arange
@@ -1308,6 +1308,19 @@ def pad_wfarr(wfarr,new_length):
     # Only pad if size of the array is to increase
     length = len(wfarr[:,0])
     proceed = length < new_length
+
+    #
+    if isinstance(where,str):
+        where = where.lower()
+
+    #
+    if where is None:
+        where = 'sides'
+    elif not isinstance(where,str):
+        error('where must be string: left,right,sides','pad_wfarr')
+    elif where not in ['left','right','sides']:
+        error('where must be in {left,right,sides}','pad_wfarr')
+
 
     # Enforce integer new length
     if new_length != int(new_length):
@@ -1318,6 +1331,7 @@ def pad_wfarr(wfarr,new_length):
     #
     if proceed:
 
+
         # Pre-allocate the new array
         _wfarr = zeros(( new_length, wfarr.shape[1] ))
 
@@ -1325,13 +1339,33 @@ def pad_wfarr(wfarr,new_length):
         dt = wfarr[1,0] - wfarr[0,0]
         _wfarr[:,0] = dt * arange( 0, new_length )
 
-        # Create the pads for the other columns
-        left_pad = zeros( int(new_length-length)/2 )
-        right_pad = zeros( new_length-length-len(left_pad) )
+        if where is 'sides':
 
-        # Pad the remaining columns
-        for k in arange(1,wfarr.shape[1]):
-            _wfarr[:,k] = hstack( [left_pad,wfarr[:,k],right_pad] )
+            # Create the pads for the other columns
+            left_pad = zeros( int(new_length-length)/2 )
+            right_pad = zeros( new_length-length-len(left_pad) )
+
+            # Pad the remaining columns
+            for k in arange(1,wfarr.shape[1]):
+                _wfarr[:,k] = hstack( [left_pad,wfarr[:,k],right_pad] )
+
+        elif where == 'right':
+
+            # Create the pads for the other columns
+            right_pad = zeros( new_length-length )
+
+            # Pad the remaining columns
+            for k in arange(1,wfarr.shape[1]):
+                _wfarr[:,k] = hstack( [wfarr[:,k],right_pad] )
+
+        elif where == 'left':
+
+            # Create the pads for the other columns
+            left_pad = zeros( int(new_length-length) )
+
+            # Pad the remaining columns
+            for k in arange(1,wfarr.shape[1]):
+                _wfarr[:,k] = hstack( [left_pad,wfarr[:,k]] )
 
     else:
 

@@ -895,7 +895,7 @@ class gwf:
         ##########################################################
 
         # Imports
-        from numpy import abs,sign,linspace,exp,arange,angle,diff,ones,isnan
+        from numpy import abs,sign,linspace,exp,arange,angle,diff,ones,isnan,pi
         from numpy import vstack,sqrt,unwrap,arctan,argmax,mod,floor,logical_not
         from scipy.interpolate import InterpolatedUnivariateSpline
         from scipy.fftpack import fft, fftfreq, fftshift, ifft
@@ -915,6 +915,7 @@ class gwf:
         # Frequency domain attributes. NOTE that this will not currently be set by default.
         # Instead, the current approach will be to set these fields once gwf.fft() has been called.
         this.f              = None      # double sided frequency range
+        this.w              = None      # double sided angular frequency range
         this.fd_plus        = None      # fourier transform of time domain plus part
         this.fd_cross       = None      # fourier transform of time domain cross part
         this.fd_y           = None      # both polarisations (i.e. plus + ij*cross)
@@ -990,6 +991,7 @@ class gwf:
 
         # compute the frequency domain
         this.f = fftshift(fftfreq( this.n, this.dt ))
+        this.w = 2*pi*this.f
 
         # compute fourier transform values
         this.fd_plus   = fftshift(fft( this.plus  )) * this.dt                    # fft of plus
@@ -1385,14 +1387,16 @@ class gwf:
         this.setfields(wfarr)
 
     # Pad this waveform object in the time domain with zeros
-    def pad(this,new_length=None):
+    def pad(this,new_length=None,where=None):
 
         # Pad this waveform object to the left and right with zeros
         if new_length is not None:
             # Create the new wfarr
-            wfarr = pad_wfarr( this.wfarr, new_length )
+            wfarr = pad_wfarr( this.wfarr, new_length,where=where )
             # Confer to the current object
             this.setfields(wfarr)
+
+        return this
 
     # Analog of the numpy ndarray conj()
     def conj(this):
