@@ -223,6 +223,9 @@ class scentry:
         # tag this entry with its inferred setname
         this.setname = this.raw_metadata.source_dir[-1].split( this.config.catalog_dir )[-1].split('/')[0]
 
+        # tag this entry with its inferred simname
+        this.simname = this.raw_metadata.source_dir[-1].split('/')[-1] if this.raw_metadata.source_dir[-1][-1]!='/' else this.raw_metadata.source_dir[-1].split('/')[-2]
+
         # tag this entry with the directory location of the metadata file. NOTE that the waveform data must be reference relative to this directory via config.data_file_name_format
         this.relative_simdir = this.raw_metadata.source_dir[-1].split( this.config.catalog_dir )[-1]
 
@@ -580,7 +583,7 @@ def scsearch( catalog = None,           # Manually input list of scentry objects
 
     # Validate the existance of the related config files and simulation directories
     # NOTE that this effectively requires two reconfigure instances and is surely suboptimal
-    if exists is not None:
+    if not ( exists is None ):
         def isondisk(e):
             ans = (e.config).reconfig().config_exists and os.path.isdir(e.simdir())
             if not ans:
@@ -604,7 +607,9 @@ def scsearch( catalog = None,           # Manually input list of scentry objects
         if len(catalog)>0:
             print '## Found %s%s simulations:' % ( bold(str(len(catalog))), output_descriptor )
             for k,entry in enumerate(catalog):
-                print '[%04i][%s] %s: %s' % ( k+1, green(entry.config.config_file_location.split('/')[-1].split('.')[0]), cyan(entry.setname), entry.label )
+                # tag this entry with its inferred simname
+                simname = entry.raw_metadata.source_dir[-1].split('/')[-1] if entry.raw_metadata.source_dir[-1][-1]!='/' else entry.raw_metadata.source_dir[-1].split('/')[-2]
+                print '[%04i][%s] %s: %s\t(%s)' % ( k+1, green(entry.config.config_file_location.split('/')[-1].split('.')[0]), cyan(entry.setname), entry.label, cyan(simname ) )
         else:
             print red('!! Found %s simulations.' % str(len(catalog)))
         print ''
@@ -1363,6 +1368,13 @@ class gwf:
     # Note that after this methed is called, the current object will occupy a different address in memory.
     def reset(this): this.setfields( this.__rawgwfarr__ )
 
+    # return a copy of the current object
+    def copy(this):
+
+        #
+        from copy import deepcopy as copy
+        return copy(this)
+
     # RETURN a clone the current waveform object. NOTE that the copy package may also be used here
     def clone(this): return gwf(this.wfarr).meet(this)
 
@@ -1390,13 +1402,14 @@ class gwf:
     def pad(this,new_length=None,where=None):
 
         # Pad this waveform object to the left and right with zeros
+        ans = this.copy()
         if new_length is not None:
             # Create the new wfarr
             wfarr = pad_wfarr( this.wfarr, new_length,where=where )
             # Confer to the current object
-            this.setfields(wfarr)
+            ans.setfields(wfarr)
 
-        return this
+        return ans
 
     # Analog of the numpy ndarray conj()
     def conj(this):
@@ -1818,11 +1831,6 @@ class gwylm:
         from matplotlib.pyplot import figure
         from numpy import array,diff,pi
 
-        #
-        if fig is None and kind!='both':
-            fig = figure( figsize = 1.1*array([8,7.2]) )
-            fig.set_facecolor("white")
-
         # Handle default kind of waveform to plot
         if kind is None:
             kind = 'both'
@@ -1851,7 +1859,12 @@ class gwylm:
 
             # Plot waveform data
             for y in wflm:
-                ax,_ = y.plot(fig=fig,title='%s: %s' % (this.setname,this.label),domain=domain)
+
+                #
+                fig = figure( figsize = 1.1*array([8,7.2]) )
+                fig.set_facecolor("white")
+
+                ax,_ = y.plot(fig=fig,title='%s: %s, (l,m)=(%i,%i)' % (this.setname,this.label,y.l,y.m),domain=domain)
                 # If there is start characterization, plot some of it
                 if 'starting' in this.__dict__:
                     clr = 0.4*array([1./0.6,1./0.6,1])
