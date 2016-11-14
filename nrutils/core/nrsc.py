@@ -2195,10 +2195,6 @@ class gwylm:
                 Y[k] = sYlm(-2,a.l,a.m,theta,phi)
             # Perform the matrix multiplication and create the output gwf object
             Z = dot( M,Y )[:,0]
-            # Perform the matrix multiplication and create the output gwf object
-            Z = dot( M,Y )[:,0]
-
-
             wfarr = array( [ alm[0].t, Z.real, Z.imag ] ).T
             # return the ouput
             return gwf( wfarr, kind=kind )
