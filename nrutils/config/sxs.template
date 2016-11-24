@@ -6,7 +6,7 @@ institute = sxs
 metadata_id = metadata.asc
 
 # Directory where all smulation folders are stored. The assumtion is that each simulation folder contains a related metadata file with a filname which contains the metadata_id
-catalog_dir = /Users/sebastian/work/mnt/minion_mount/mnt/hogshead/NR_data/SXS
+catalog_dir = /Users/book/GARREG/SXS/
 
 # NOTE standard parameter order for every simulation catalog
 # extraction_parameter, l, m, level
@@ -26,4 +26,4 @@ is_extrapolated = 1
 is_rscaled = 1
 
 #
-handler_location = /Users/sebastian/work/git/nrutils_dev/nrutils/handlers/sxs.py
+handler_location = /Users/book/JOKI/Libs/KOALA/nrutils_dev/nrutils/handlers/sxs.py
