@@ -1,6 +1,6 @@
 
 #
-from nrutils.basics import *
+from nrutils.core.basics import *
 
 
 # Calculate Widger D-Matrix Element
@@ -59,12 +59,12 @@ def wdelement( ll,         # polar index (eigenvalue) of multipole to be rotated
             # total += (-1)**(mp-mm+ss) / ( factorial(ll+mm-ss) * factorial(ss) * factorial(mp-mm+ss) * factorial(ll-mp-ss) ) * cos(beta/2)**(2*ll+mm-mp-2*ss) * sin(beta/2)**(mp-mm+2*ss)
 
     #
-    element = coefficient.*total
+    element = coefficient*total
     return element
 
 # Calculate Widner D Matrix
 def wdmatrix( l,                # polar l
-              mrange = None,    # range of m values
+              mrange,    # range of m values
               alpha,
               beta,
               gamma,
@@ -127,4 +127,4 @@ def mprotate( mpdict,           # dictionary or (l,m): complex__time_series_mult
         D = wdmatrix( l, mrange, alpha, beta, gamma )
 
         # For all time coordinates (the related indeces)
-        tindmap = range( len( mpdict[ mpdict. ] ) )
+        tindmap = range( len( mpdict[ mpdict ] ) )

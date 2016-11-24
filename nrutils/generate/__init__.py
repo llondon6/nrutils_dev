@@ -10,13 +10,12 @@ modules = [ basename(f)[:-3] for f in glob.glob(dirname(__file__)+"/*.py") if no
 # if verbose: print ''
 
 #
-if verbose: print '      .basics*'
 from pn import *
 
-# Make definitions in the pathsfile avaliable to this package. Note that these will be treated as global settings for the nrutils package.
-settings = smart_object( __pathsfile__ )
-
-# Dynamically import all modules within this folder (namespace preserving)
-for module in modules:
-    if verbose: print '      .%s' % module
-    exec 'import %s' % module
+# # Make definitions in the pathsfile avaliable to this package. Note that these will be treated as global settings for the nrutils package.
+# settings = smart_object( __pathsfile__ )
+#
+# # Dynamically import all modules within this folder (namespace preserving)
+# for module in modules:
+#     if verbose: print '      .%s' % module
+#     exec 'import %s' % module
