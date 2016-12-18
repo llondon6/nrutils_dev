@@ -79,3 +79,15 @@ def m1m2q(m1,m2): return float(max([m1,m2]))/min([m1,m2])
 
 # Convert q to eta
 def q2eta(q): return q/((1.0+q)*(1.0+q))
+
+# Convert eta to q
+def eta2q(eta):
+    from numpy import sqrt
+    if eta>0.25:
+        raise ValueError('eta must be less than 0.25, but %f found'%eta)
+    b = 2.0 - 1.0/eta
+    q_plus  = (-b + sqrt( b*b - 4 ))/2 # m1/m2
+    q_minus = (-b - sqrt( b*b - 4 ))/2 # m2/m1
+    if q_plus.imag:
+        warning( 'eta = %1.4f> 0.25, eta must be <= 0.25'%eta )
+    return q_plus

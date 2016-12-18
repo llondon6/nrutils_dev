@@ -399,7 +399,7 @@ def scsearch( catalog = None,           # Manually input list of scentry objects
               spinaligned = None,       # spin-aligned with L AND no in-plane spin INITIALLY
               spinantialigned = None,   # spin-anti-aligned with L AND no in-plane spin INITIALLY
               precessing = None,        # not spin aligned
-              notprecessing = None,     # not precessing
+              nonprecessing = None,     # not precessing
               equalspin = None,         # equal spin magnitudes
               unequalspin = None,       # not equal spin magnitudes
               antialigned = None,       # spin is in opposite direction of L
@@ -412,6 +412,7 @@ def scsearch( catalog = None,           # Manually input list of scentry objects
               unique = None,            # if true, only simulations with unique initial conditions will be used
               plot = None,              # whether or not to show a plot of results
               exists=None,              # Test whether data directory related to scentry and ini file exist (True/False)
+              validate_remnant=False,   # If true, ensure that final mass adn spin are well defined
               verbose = None):          # be verbose
 
     # Print non None inputs to screen
@@ -445,6 +446,12 @@ def scsearch( catalog = None,           # Manually input list of scentry objects
             with open( db , 'rb') as dbf:
                 catalog = catalog + pickle.load( dbf )
 
+    # Determine whether remnant properties are already stored
+    if validate_remnant is True:
+        from numpy import isnan,sum
+        test = lambda k: (sum(isnan( k.xf ))==0) and (isnan(k.mf)==0)
+        catalog = filter( test, catalog )
+
     # mass-ratio
     qtol = 1e-3
     if q is not None:
@@ -474,9 +481,9 @@ def scsearch( catalog = None,           # Manually input list of scentry objects
         test = lambda k: not allclose( abs(dot(k.S1+k.S2,k.L1+k.L2)), norm(k.L1+k.L2)*norm(k.S1+k.S2) , atol = tol )
         catalog = filter( test, catalog )
 
-    # not precessing, same as spinaligned & spin anti aligned
-    if notprecessing is True:
-        test = lambda k: allclose( abs(dot(k.S1+k.S2,k.L1+k.L2))/(norm(k.L1+k.L2)*norm(k.S1+k.S2)), 1.0 , atol = tol )
+    # non-precessing, same as spinaligned & spin anti aligned
+    if nonprecessing is True:
+        test = lambda k: allclose( abs(dot(k.S1+k.S2,k.L1+k.L2)), norm(k.L1+k.L2)*norm(k.S1+k.S2) , atol = tol )
         catalog = filter( test, catalog )
 
     # spins have equal magnitude
@@ -760,13 +767,21 @@ def sclabel( entry,             # scentry object
         if allclose( norm(e.S1) + norm(e.S2) , 0.0 , atol=tol ):
             tag.append('ns')
 
-        # Spin on only 1st BH
-        if allclose( norm(e.S1), 0.0, atol=tol ) and not allclose( norm(e.S2), 0.0, atol=tol ) :
-            tag.append('s1')
+        # Label by spin on BH1 if spinning
+        if not allclose( norm(e.S1), 0.0, atol=tol ) :
+            tag.append( '1chi%1.2f' % ( norm(e.S1)/e.m1**2 ) )
 
-        # Spin on only 2nd BH
-        if allclose( norm(e.S2), 0.0, atol=tol ) and not allclose( norm(e.S1), 0.0, atol=tol ) :
-            tag.append('s2')
+        # Label by spin on BH2 if spinning
+        if not allclose( norm(e.S2), 0.0, atol=tol ) :
+            tag.append( '2chi%1.2f' % ( norm(e.S2)/e.m2**2 ) )
+
+        # # Spin on only 1st BH
+        # if allclose( norm(e.S1), 0.0, atol=tol ) and not allclose( norm(e.S2), 0.0, atol=tol ) :
+        #     tag.append('s1')
+        #
+        # # Spin on only 2nd BH
+        # if allclose( norm(e.S2), 0.0, atol=tol ) and not allclose( norm(e.S1), 0.0, atol=tol ) :
+        #     tag.append('s2')
 
         # Run is spin aligned if net spin is parallel to net L
         if allclose( dot(e.S1,L) , norm(e.S1)*norm(L) , atol=tol ) and allclose( dot(e.S2,L) , norm(e.S2)*norm(L) , atol=tol ) and (not 'ns' in tag):
@@ -821,6 +836,7 @@ class gwf:
                   friend                = None, # gwf object from which to clone fields
                   mf                    = None, # Optional remnant mass input
                   xf                    = None, # Optional remnant spin input
+                  m1=None,m2=None,              # Optional masses
                   label                 = None, # Optional label input (see gwylm)
                   verbose = False ):    # Verbosity toggle
 
@@ -846,12 +862,18 @@ class gwf:
         # use the raw waveform data to define all fields
         this.wfarr = wfarr
 
+        # optional component masses
+        this.m1,this.m2 = m1,m2
+
         # Optional Holders for remnant mass and spin
         this.mf = mf
         this.xf = xf
 
         # Optional label input (see gwylm)
         this.label = label
+
+        #
+        this.ref_scentry = ref_scentry
 
         this.setfields(wfarr=wfarr,dt=dt)
 
@@ -1085,13 +1107,14 @@ class gwf:
         INPUTDTNOTGIVENDT = this.dt is None
         if NONUNIFORMT and (not INPUTDTNOTGIVENDT):
             msg = '(**) Waveform not uniform in time-step. Interpolation will be applied.'
-            print magenta(msg)
+            if verbose: print magenta(msg)
         if NONUNIFORMT and INPUTDTNOTGIVENDT:
             # if dt is not defined and not none, assume smallest dt
             if this.dt is None:
                 this.dt = diff(lim(t))/len(t)
                 msg = '(**) Warning: No dt given to gwf(). We will assume that the input waveform array is in geometric units, and that dt = %g will more than suffice.' % this.dt
-                print magenta(msg)
+                if this.verbose:
+                    print magenta(msg)
             # Interpolate waveform array
             intrp_t = arange( min(t), max(t), this.dt )
             intrp_R = InterpolatedUnivariateSpline( t, this.wfarr[:,1] )( intrp_t )
@@ -1189,6 +1212,8 @@ class gwf:
         #
         plot( this.f[pos_mask], this.fd_amp[pos_mask], color=clr[0] )
         pylim( this.f[pos_mask], this.fd_amp[pos_mask], pad_y=10 )
+        #
+        yl('$|$'+kind+'$|(f)$',fontsize=fs,color=txclr, family=font_family )
 
         # ------------------------------------------------------------------- #
         # Total Phase
@@ -1200,6 +1225,8 @@ class gwf:
         #
         plot( this.f[pos_mask], this.fd_phi[pos_mask], color=1-clr[0] )
         pylim( this.f[pos_mask], this.fd_phi[pos_mask] )
+        #
+        yl(r'$\phi = \mathrm{arg}($'+kind+'$)$',fontsize=fs,color=txclr, family=font_family )
 
         # ------------------------------------------------------------------- #
         # Total Phase Rate
@@ -1210,6 +1237,8 @@ class gwf:
         #
         plot( this.f[pos_mask], this.fd_dphi[pos_mask], color=sqrt(clr[0]) )
         pylim( this.f[pos_mask], this.fd_dphi[pos_mask] )
+        #
+        yl(r'$\mathrm{d}{\phi}/\mathrm{d}f$',fontsize=fs,color=txclr, family=font_family)
 
         # ------------------------------------------------------------------- #
         # Full figure settings
@@ -1536,7 +1565,7 @@ class gwylm:
         this.verbose = verbose
         if verbose is not None:
             for k in dir():
-                if (eval(k) is not None) and not ('this' in k):
+                if (eval(k) is not None) and (eval(k) is not False) and not ('this' in k):
                     msg = 'Found %s (=%r) keyword.' % (textul(k),eval(k))
                     alert( msg, thisfun )
 
@@ -1577,9 +1606,9 @@ class gwylm:
         # Load the waveform data
         if load==True: this.__load__(lmax=lmax,lm=lm,dt=dt)
 
-        # Characterize the waveform's start and store related information to this.starting
-        this.starting = None # In charasterize_start(), the information about the start of the waveform is actually stored to "starting". Here this field is inintialized for visibility.
-        this.characterize_start()
+        # Characterize the waveform's start and store related information to this.preinspiral
+        this.preinspiral = None # In charasterize_start(), the information about the start of the waveform is actually stored to "starting". Here this field is inintialized for visibility.
+        this.characterize_start_end()
 
         # If w22 is input, then use the input value for strain calculation. Otherwise, use the algorithmic estimate.
         if w22 is None:
@@ -1642,6 +1671,49 @@ class gwylm:
             msg = 'First input must be member of scentry class (e.g. as returned from scsearch() ).'
             error(msg,thisfun)
 
+    # Make a list of lm values related to this gwylm object
+    def __make_lmlist__( this, lm, lmax ):
+
+        #
+        from numpy import shape
+
+        #
+        this.__lmlist__ = []
+
+        # If if an lmax value is given.
+        if lmax is not None:
+            # Then load all multipoles within lmax
+            for l in range(2,lmax+1):
+                #
+                for m in range(-l,l+1):
+                    #
+                    this.__lmlist__.append( (l,m) )
+        else: # Else, load the given lis of lm values
+            # If lm is a list of specific multipole indeces
+            if len(shape(lm))==2:
+                #
+                for k in lm:
+                    if len(k)==2:
+                        l,m = k
+                        this.__lmlist__.append( (l,m) )
+                    else:
+                        msg = '(__make_lmlist__) Found list of multipole indeces (e.g. [[2,2],[3,3]]), but length of one of the index values is not two. Please check your lm input.'
+                        error(msg,'gwylm')
+            else: # Else, if lm is a single mode index
+                #
+                l,m = lm
+                this.__lmlist__.append( (l,m) )
+
+        # Always load the m=l=2 waveform
+        if not (  (2,2) in this.__lmlist__  ):
+            msg = '%s The l=m=2 multipole will be loaded in order to determine important characteristice of all modes such as noise floor and junk radiation location.' % ( cyan('__make_lmlist__') )
+            alert(msg,'gwylm')
+            this.__lmlist__.append( (2,2) )
+
+        # Let the people know
+        if this.verbose:
+            alert('The following spherical multipoles will be loaded:%s'%cyan(str(this.__lmlist__)),'gwylm.__make_lmlist__')
+
     # Wrapper for core load function. NOTE that the extraction parameter input is independent of the usage in the class constructor.
     def __load__( this,                      # The current object
                   lmax=None,                 # max l to use
@@ -1654,27 +1726,13 @@ class gwylm:
         #
         from numpy import shape
 
-        # If if an lmax value is given.
-        if lmax is not None:
-            # Then load all multipoles within lmax
-            for l in range(2,lmax+1):
-                #
-                for m in range(-l,l+1):
-                    #
-                    this.load(lm=[l,m],dt=dt,extraction_parameter=extraction_parameter,level=level,verbose=verbose)
-        else: # Else, load the given lis of lm values
-            # If lm is a list of specific multipole indeces
-            if len(shape(lm))==2:
-                #
-                for k in lm:
-                    if len(k)==2:
-                        this.load(lm=k,extraction_parameter=extraction_parameter,level=level,dt=dt)
-                    else:
-                        msg = 'Found list of multipole indeces (e.g. [[2,2],[3,3]]), but length of one of the index values is not two. Please check your lm input.'
-                        error(msg,'gwylm.__load__')
-            else: # Else, if lm is a single mode index
-                #
-                this.load(lm=lm,extraction_parameter=extraction_parameter,level=level,dt=dt)
+        # Make a list of l,m values and store it to the current object as __lmlist__
+        this.__make_lmlist__( lm, lmax )
+
+        # Load all values in __lmlist__
+        for lm in this.__lmlist__:
+            this.load(lm=lm,dt=dt,extraction_parameter=extraction_parameter,level=level,verbose=verbose)
+
 
     #Given an extraction parameter, use the handler's extraction_map to determine extraction radius
     def __r__(this,extraction_parameter):
@@ -1776,6 +1834,12 @@ class gwylm:
                 extraction_radius = this.__r__(extraction_parameter)
                 wfarr[:,1:3] *= extraction_radius
 
+            # #
+            # if abs(1-this.m1+this.m2) > 1e-3:
+            #     warning('Manually imposing relative mass scaling for time (t->t/M) and Psi4 (Psi4->Psi4*M).','gwylm.load')
+            #     wfarr[:,0] /= this.m1+this.m2
+            #     wfarr[:,1:3] *= this.m1+this.m2
+
             # Initiate waveform object and check that sign convetion is in accordance with core settings
             def mkgwf(wfarr_):
                 return gwf( wfarr_,
@@ -1785,8 +1849,10 @@ class gwylm:
                             dt=dt,
                             verbose=this.verbose,
                             mf = this.mf,
+                            m1 = this.m1, m2 = this.m2,
                             xf = this.xf,
                             label = this.label,
+                            ref_scentry = this.__scentry__,
                             kind='$rM\psi_{%i%i}$'%(l,m) )
 
             #
@@ -1810,7 +1876,7 @@ class gwylm:
                 # Let the people know what is happening.
                 msg = yellow('Re-orienting waveform phase')+' to be consistent with internal sign convention for Psi4, where sign(dPhi/dt)=%i*sign(m).' % M_RELATIVE_SIGN_CONVENTION + ' Note that the internal sign convention is defined in ... nrutils/core/__init__.py as "M_RELATIVE_SIGN_CONVENTION". This message has appeared becuase the waveform is determioned to obey and sign convention: sign(dPhi/dt)=%i*sign(m).'%(external_sign_convention)
                 thisfun=inspect.stack()[0][3]
-                alert( msg, thisfun )
+                if verbose: alert( msg, thisfun )
 
             # use array data to construct gwf object with multipolar fields
             if not output:
@@ -1910,7 +1976,7 @@ class gwylm:
         for y in this.ylm:
 
             # Calculate the strain for each part of psi4. NOTE that there is currently NO special sign convention imposed beyond that used for psi4.
-            w0 = w22 * double(y.m)/2.0 # NOTE that wstart is defined in characterize_start() using the l=m=2 Psi4 multipole.
+            w0 = w22 * double(y.m)/2.0 # NOTE that wstart is defined in characterize_start_end() using the l=m=2 Psi4 multipole.
             # Here, m=0 is a special case
             if 0==y.m: w0 = w22
             # Let the people know
@@ -1937,7 +2003,7 @@ class gwylm:
             this.hlm.append( gwf( wfarr, l=y.l, m=y.m, mf=this.mf, xf=this.xf, kind='$rh_{%i%i}/M$'%(y.l,y.m) ) )
 
     # Characterise the start of the waveform using the l=m=2 psi4 multipole
-    def characterize_start(this):
+    def characterize_start_end(this):
 
         # Look for the l=m=2 psi4 multipole
         y22_list = filter( lambda y: y.l==y.m==2, this.ylm )
@@ -1946,15 +2012,27 @@ class gwylm:
             y22 = this.load(lm=[2,2],output=True,dt=this.dt)
         else:
             y22 = y22_list[0]
+
+        #%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&#
+        # Characterize the START of the waveform (pre-inspiral)      #
+        #%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&#
         # Use the l=m=2 psi4 multipole to determine the waveform start
         # store information about the start of the waveform to the current object
-        this.starting = gwfcharstart( y22 )
+        this.preinspiral = gwfcharstart( y22 )
         # store the expected min frequency in the waveform to this object as:
-        this.wstart = this.starting.left_dphi
-        this.startindex = this.starting.left_index
+        this.wstart = this.preinspiral.left_dphi
+        this.startindex = this.preinspiral.left_index
         # Estimate the smallest orbital frequency relevant for this waveform using a PN formula.
         safety_factor = 0.90
         this.wstart_pn = safety_factor*2.0*pnw0(this.m1,this.m2,this.b)
+
+        #%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&#
+        # Characterize the END of the waveform (post-ringdown)       #
+        #%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&#
+        this.postringdown = gwfcharend( y22 )
+        # After endindex, the data is dominated by noise
+        this.noiseindex = this.postringdown.left_index
+        this.endindex = this.postringdown.right_index
 
     # Clean the time domain waveform by removing junk radiation.
     def clean( this, method=None, crop_time=None ):
@@ -1964,15 +2042,33 @@ class gwylm:
             method = 'window'
 
         # ---------------------------------------------------------------------- #
-        # A. Clean the start of the waveform using information from the characterize_start method
+        # A. Clean the start and end of the waveform using information from the
+        #    characterize_start_end method
         # ---------------------------------------------------------------------- #
 
         if not this.__isclean__ :
 
             if method.lower() == 'window':
 
+                # Look for the l=m=2 psi4 multipole
+                y22_list = filter( lambda y: y.l==y.m==2, this.ylm )
+                # If it doesnt exist in this.ylm, then load it
+                if 0==len(y22_list):
+                    y22 = this.load(lm=[2,2],output=True,dt=this.dt)
+                else:
+                    y22 = y22_list[0]
+
                 # Calculate the window to be applied using the starting information. The window nwill be aplied equally to all multipole moments. NOTE: language disambiguation -- a taper is the part of a window that varies from zero to 1 (or 1 to zero); a window may contain many tapers. Also NOTE that the usage of this4[0].ylm[0].t below is an arbitration -- any array of the dame dimentions could be used.
-                window = maketaper( this.ylm[0].t, [this.starting.left_index,this.starting.right_index] )
+                # -- The above is calculated in the gwfcharstart class -- #
+                # Extract the post-ringdown window
+                preinspiral_window = this.preinspiral.window
+
+                # Extract the post-ringdown window (calculated in the gwfcharend class)
+                postringdown_window = this.postringdown.window
+
+                # Construct the combined window
+                window = preinspiral_window * postringdown_window
+
 
                 # Apply this window to both the psi4 and strain multipole moments. The function, taper(), is a method of the gwf class.
                 for y in this.ylm:
@@ -1996,17 +2092,6 @@ class gwylm:
                     y.apply_mask( mask )
                 for h in this.hlm:
                     h.apply_mask( mask )
-
-            # ---------------------------------------------------------------------- #
-            # B. Clean the end of the waveform using information from the characterize_end method.
-            # ---------------------------------------------------------------------- #
-
-            # # TODO: implement this.
-            # window = makewindow( this.t, [this.ending.left_index,this.ending.right_index] )
-            # for y in this.ylm:
-            #     y.taper( window=this.window )
-            # for h in this.hlm:
-            #     h.taper( window=this.window )
 
             #
             this.__isclean__ = True
@@ -2060,7 +2145,7 @@ class gwylm:
             for y in this.ylm:
 
                 # Calculate the strain for each part of psi4. NOTE that there is currently NO special sign convention imposed beyond that used for psi4.
-                w0 = w22 * double(y.m)/2.0 # NOTE that wstart is defined in characterize_start() using the l=m=2 Psi4 multipole.
+                w0 = w22 * double(y.m)/2.0 # NOTE that wstart is defined in characterize_start_end() using the l=m=2 Psi4 multipole.
                 # Here, m=0 is a special case
                 if 0==y.m: w0 = w22
                 # Let the people know
@@ -2081,7 +2166,7 @@ class gwylm:
             else:
 
                 msg = 'flm, the first integral of Psi4, will not be calculated because it has already been calculated for the current object'
-                warning(msg,'gwylm.calcflm')
+                if verbose: warning(msg,'gwylm.calcflm')
 
             # Store the flm list to the current object
             this.flm = flm
@@ -2140,14 +2225,14 @@ class gwylm:
                 # Create waveform array
                 wfarr = array( [t-f.intrp_t_amp_max,plus,cross] ).T
                 # Create gwf object
-                xlm.append(  gwf(wfarr,l=y.l,m=y.m,mf=this.mf,xf=this.xf,kind=y.kind,label=this.label)  )
+                xlm.append(  gwf(wfarr,l=y.l,m=y.m,mf=this.mf,xf=this.xf,kind=y.kind,label=this.label,m1=this.m1,m2=this.m2,ref_scentry = this.__scentry__)  )
             #
             return xlm
         #
         that.ylm = __ringdown__( this.ylm )
         that.flm = __ringdown__( this.flm )
         that.hlm = __ringdown__( this.hlm )
-        that.characterize_start()
+        that.characterize_start_end()
         # Create a dictionary representation of the mutlipoles
         that.lm = {}
         for k,y in enumerate(that.ylm):
@@ -2281,23 +2366,29 @@ class gwylm:
 
 # Time Domain LALSimulation Waveform Approximant h_pluss and cross, but using nrutils data conventions
 def lswfa( apx      ='IMRPhenomPv2',    # Approximant name; must be compatible with lal convenions
-           q        = None,           # mass ratio > 1
-           S1       = None,           # spin1 iterable
-           S2       = None,           # spin2 iterable
+           eta      = None,           # symmetric mass ratio
+           chi1     = None,           # spin1 iterable (Dimensionless)
+           chi2     = None,           # spin2 iterable (Dimensionless)
            fmin_hz  = 30.0,           # phys starting freq in Hz
            verbose  = False ):        # boolean toggle for verbosity
 
     #
     from numpy import array,linspace,double
     import lalsimulation as lalsim
+    from nrutils import eta2q
     import lal
 
     # Standardize input mass ratio and convert to component masses
     M = 70.0
+    q = eta2q(eta)
     q = double(q)
     q = max( [q,1.0/q] )
     m2 = M * 1.0 / (1.0+q)
     m1 = float(q) * m2
+
+    # NOTE IS THIS CORRECT????
+    S1 = array(chi1)
+    S2 = array(chi2)
 
     #
     fmin_phys = fmin_hz
@@ -2340,7 +2431,30 @@ def lswfa( apx      ='IMRPhenomPv2',    # Approximant name; must be compatible w
     return y
 
 
-# Characterize the START of a time domain waveform
+# Characterize END of time domain waveform (POST RINGDOWN)
+class gwfcharend:
+    def __init__(this,ylm):
+        # Import useful things
+        from numpy import log
+        # ROM (Ruduce order model) the post-peak as two lines
+        la = log( ylm.amp[ ylm.k_amp_max: ])
+        tt = ylm.t[ ylm.k_amp_max: ]
+        knots,rl = romline(tt,la,2)
+        # Check for lack of noise floor (in the case of sims stopped before noise floor reached)
+        # NOTE that in this case no effective windowing is applied
+        this.nonoisefloor = knots[-1]+1 == len(tt)
+        if this.nonoisefloor:
+            msg = 'No noise floor found. This simulation may have been stopped before the numerical noise floor was reached.'
+            warning(msg,'gwfcharend')
+        # Define the start and end of the region to be windowed
+        this.left_index = ylm.k_amp_max + knots[-1]
+        this.right_index = ylm.k_amp_max + knots[-1]+(len(tt)-knots[-1])*6/10
+        # Calculate the window and store to the current object
+        this.window_state = [ this.right_index, this.left_index ]
+        this.window = maketaper( ylm.t, this.window_state )
+
+
+# Characterize the START of a time domain waveform (PRE INSPIRAL)
 class gwfcharstart:
 
     #
@@ -2404,6 +2518,10 @@ class gwfcharstart:
             this.center_dphi    = mean(y.dphi[ this.left_index:this.right_index ])  # A moderate estimate for the min frequency within they
                                                                                     # waveform
             this.peak_mask      = pk_mask
+
+        # Construct related window
+        this.window_state = [this.left_index,this.right_index]
+        this.window = maketaper( y.t, this.window_state )
 
 
 # Characterize the END of a time domain waveform: Where is the noise floor?

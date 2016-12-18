@@ -95,8 +95,8 @@ def learn_metadata( metadata_file_location ):
     '''
 
     # Masses
-    x.m1 = getattr(y,'INFO(TwoPunctures):ADMmassforpuncture:m_')
-    x.m2 = getattr(y,'INFO(TwoPunctures):ADMmassforpuncture:m+')
+    x.m1 = getattr(y,'INFO(TwoPunctures):ADMmassforpuncture:m+')
+    x.m2 = getattr(y,'INFO(TwoPunctures):ADMmassforpuncture:m_')
 
     #
     P1 = array( [ getattr(y,'twopunctures::par_P_plus[0]'),
