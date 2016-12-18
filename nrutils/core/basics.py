@@ -76,12 +76,24 @@ def parent(path):
 
 
 # Make "mkdir" function for directories
-def mkdir(dir):
+def mkdir(dir_,rm=False,verbose=False):
+    # Import useful things
+    import os
+    import shutil
+    # Expand user if needed
+    dir_ = os.path.expanduser(dir_)
+    # Delete the directory if desired and if it already exists
+    if os.path.exists(dir_) and (rm is True):
+        if verbose:
+            alert('Directory at "%s" already exists %s.'%(magenta(dir_),red('and will be removed')),'mkdir')
+        shutil.rmtree(dir_,ignore_errors=True)
     # Check for directory existence; make if needed.
-    if not os.path.exists(dir):
-        os.makedirs(dir)
+    if not os.path.exists(dir_):
+        os.makedirs(dir_)
+        if verbose:
+            alert('Directory at "%s" does not yet exist %s.'%(magenta(dir_),green('and will be created')),'mkdir')
     # Return status
-    return os.path.exists(dir)
+    return os.path.exists(dir_)
 
 
 # Function that returns true if for string contains l assignment that is less than l_max
@@ -996,6 +1008,7 @@ def findpeaks( y, min_distance = None ):
 
     #
     from numpy import array,ones,append,arange,inf,isfinite,diff,sign,ndarray,hstack,where,abs
+    import warnings
 
     #
     thisfun = inspect.stack()[0][3]
@@ -1013,7 +1026,9 @@ def findpeaks( y, min_distance = None ):
 
         # keep only the first of any adjacent pairs of equal values (including NaN).
         yFinite = isfinite(yTemp)
-        iNeq = where(  ( abs(yTemp[1:]-yTemp[:-1])>1e-12 )  *  ( yFinite[:-1]+yFinite[1:] )  )
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            iNeq = where(  ( abs(yTemp[1:]-yTemp[:-1])>1e-12 )  *  ( yFinite[:-1]+yFinite[1:] )  )
         iTemp = iTemp[ iNeq ]
 
         # take the sign of the first sample derivative
@@ -1122,17 +1137,23 @@ def maketaper(arr,state):
     twice_hann = hann( 2*true_width )
     if b>a:
         true_hann = twice_hann[ :true_width ]
-    elif a<b:
+    elif b<=a:
         true_hann = twice_hann[ true_width: ]
     else:
         proceed = False
+        print a,b
+        alert('Whatght!@!')
 
     # Proceed (or not) with tapering
     taper = ones( len(arr) )
     if proceed:
         # Make the taper
-        taper[ :min(state) ] = 0*taper[ :min(state) ]
-        taper[ min(state) : max(state) ] = true_hann
+        if b>a:
+            taper[ :min(state) ] = 0*taper[ :min(state) ]
+            taper[ min(state) : max(state) ] = true_hann
+        else:
+            taper[ max(state): ] = 0*taper[ max(state): ]
+            taper[ min(state) : max(state) ] = true_hann
 
     #
     return taper
@@ -1551,12 +1572,71 @@ def align_wfarr_initial_phase(this,that):
     return this_
 
 
-#
+#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#
+# Here are some phenomenological fits used in PhenomD                               #
+#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#
+
+# Formula to predict the final spin. Equation 3.6 arXiv:1508.07250
+# s is defined around Equation 3.6.
+''' Copied from LALSimulation Version '''
+def FinalSpin0815_s(eta,s):
+    eta2 = eta*eta
+    eta3 = eta2*eta
+    eta4 = eta3*eta
+    s2 = s*s
+    s3 = s2*s
+    s4 = s3*s
+    return 3.4641016151377544*eta - 4.399247300629289*eta2 +\
+    9.397292189321194*eta3 - 13.180949901606242*eta4 +\
+    (1 - 0.0850917821418767*eta - 5.837029316602263*eta2)*s +\
+    (0.1014665242971878*eta - 2.0967746996832157*eta2)*s2 +\
+    (-1.3546806617824356*eta + 4.108962025369336*eta2)*s3 +\
+    (-0.8676969352555539*eta + 2.064046835273906*eta2)*s4
+
+#Wrapper function for FinalSpin0815_s.
+''' Copied from LALSimulation Version '''
+def FinalSpin0815(eta,chi1,chi2):
+    from numpy import sqrt
+    # Convention m1 >= m2
+    Seta = sqrt(1.0 - 4.0*eta)
+    m1 = 0.5 * (1.0 + Seta)
+    m2 = 0.5 * (1.0 - Seta)
+    m1s = m1*m1
+    m2s = m2*m2
+    # s defined around Equation 3.6 arXiv:1508.07250
+    s = (m1s * chi1 + m2s * chi2)
+    return FinalSpin0815_s(eta, s)
+
+# Formula to predict the total radiated energy. Equation 3.7 and 3.8 arXiv:1508.07250
+# Input parameter s defined around Equation 3.7 and 3.8.
+def EradRational0815_s(eta,s):
+    eta2 = eta*eta
+    eta3 = eta2*eta
+    eta4 = eta3*eta
+    return ((0.055974469826360077*eta + 0.5809510763115132*eta2 - 0.9606726679372312*eta3 + 3.352411249771192*eta4)*\
+    (1. + (-0.0030302335878845507 - 2.0066110851351073*eta + 7.7050567802399215*eta2)*s))/(1. + (-0.6714403054720589 \
+    - 1.4756929437702908*eta + 7.304676214885011*eta2)*s)
+
+
+# Wrapper function for EradRational0815_s.
+def EradRational0815(eta, chi1, chi2):
+    from numpy import sqrt
+    # Convention m1 >= m2
+    Seta = sqrt(1.0 - 4.0*eta)
+    m1 = 0.5 * (1.0 + Seta)
+    m2 = 0.5 * (1.0 - Seta)
+    m1s = m1*m1
+    m2s = m2*m2
+    # arXiv:1508.07250
+    s = (m1s * chi1 + m2s * chi2) / (m1s + m2s)
+    return EradRational0815_s(eta,s)
 
 
 #%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#
 # Given a 1D array, determine the set of N lines that are optimally representative  #
 #%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#%%#
+
+# Hey, here's a function that approximates any 1d curve as a series of lines
 def romline(  domain,           # Domain of Map
               range_,           # Range of Map
               N,                # Number of Lines to keep for final linear interpolator
@@ -1620,17 +1700,17 @@ def romline(  domain,           # Domain of Map
         min_sigma = inf
         for k in seed_list:
             trial_knots,trial_rom,trial_sigma = positive_romline( d, R, N, seed = k )
-            print trial_sigma
+            # print trial_sigma
             if trial_sigma < min_sigma:
                 knots,rom,min_sigma = trial_knots,trial_rom,trial_sigma
 
     #
-    print min_sigma
+    # print min_sigma
 
     return knots,rom
 
 
-#
+# Hey, here's a function related to romline
 def positive_romline(   domain,           # Domain of Map
                         range_,           # Range of Map
                         N,                # Number of Lines to keep for final linear interpolator
