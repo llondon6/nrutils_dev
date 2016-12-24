@@ -134,8 +134,4 @@ def extraction_map( extraction_parameter ):
     extraction_radius = inf
 
     #
-    msg = 'The current set of SXS data is extrapolated to infinity making the extraction radius inf. Thankfully, this means that you do not need to call this function at all.'
-    error(msg,'sxs.py->extraction_map')
-
-    #
     return extraction_radius

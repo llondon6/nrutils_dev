@@ -127,8 +127,11 @@ def learn_metadata( metadata_file_location ):
 
 
     # Estimate the component angular momenta
-    L1 = cross(R1,P1)
-    L2 = cross(R2,P2)
+    try:
+        L1 = cross(R1,P1)
+        L2 = cross(R2,P2)
+    except:
+        error('There was an insurmountable problem encountered when trying to load initial binary configuration. For example, %s. The guy at the soup shop says "No soup for you!!"'%red('P1 = '+str(P1)))
 
     # Extract and store the initial adm energy
     x.madm = y.initial_ADM_energy
@@ -187,7 +190,7 @@ def learn_metadata( metadata_file_location ):
     else:
         from numpy import nan
         x.Sf = nan*array([0.0,0.0,0.0])
-        x.Xf = x.Sf/(x.mf*x.mf)
+        x.Xf = nan*array([0.0,0.0,0.0])
         x.mf = nan
         x.xf = nan
 
@@ -199,15 +202,10 @@ def learn_metadata( metadata_file_location ):
 # a map can be constructed.
 def extraction_map( this,                   # this may be an nrsc object or an gwylm object (it must have a raw_metadata attribute )
                     extraction_parameter ): # The extraction parameter that will be converted to radius
-
-    # Given an extraction parameter, return an extraction radius
-    # NOTE that the indexing starts at 1 below becuase the first element is expected to be a string valued 'finite-radii'
-    if this.raw_metadata.extraction_radius[0] != 'finite-radii':
-        msg = 'The raw metadata field, "extraction radius" is expected to have "finite-radii" as its first element, but %s was found instead. This may a result of the bbh file\'s formatting. The metadata file is as %s'%(cyan(this.raw_metadata.extraction_radius[0]),cyan(this.raw_metadata.source_file_path))
-        error(msg,'bam.extraction_map')
+    '''Given an extraction parameter, return an extraction radius'''
 
     # NOTE that while some BAM runs have extraction radius information stored in the bbh file in various ways, this does not appear to the case for all simulations. The invariants_modes_r field appears to be more reliable.
-    _map_ = [ int(k) for k in this.raw_metadata.invariants_modes_r ]
+    _map_ = [ float(k) for k in this.raw_metadata.invariants_modes_r ]
 
     #
     extraction_radius = _map_[ extraction_parameter-1 ]
@@ -227,7 +225,9 @@ def infer_default_level_and_extraction_parameter( this ):
     exr,lev = [],[]
     for f in file_list:
         # Split filename string to find level and extraction parameter
-        parts = f.split('.') # e.g. "psi3col.r6.l6.l2.m2.gz"
+        f.replace('//','/')
+        f = f.split('/')[-1]
+        parts = f.split('.') # e.g. "psi3col.r6.l6.l2.m2.gz".split('.')
         exr_,lev_ = int(parts[1][-1]),int(parts[2][-1])
         exr.append(exr_);lev.append(lev_)
     # NOTE that we will connonically use 1 level from the last unless there are only two levels

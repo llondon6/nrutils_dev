@@ -145,7 +145,7 @@ class scentry:
             this.log += ' This entry\'s metadata file is valid.'
 
             # i.e. learn the meta_data_file
-            # this.learn_metadata()
+            # this.learn_metadata(); raise(TypeError,'This line should only be uncommented when debugging.')
             # this.label = sclabel( this )
 
             try:
@@ -243,8 +243,8 @@ class scentry:
         if special_method in handler.__dict__:
             # Let the people know
             if this.verbose:
-                msg = 'The handler is found to have a "%s" method. Rather than the config file, it will be used to determine the default extraction parameter and level.' % green(special_method)
-                alert(msg,'gwylm.load')
+                msg = 'The handler is found to have a "%s" method. Rather than the config file, this method will be used to determine the default extraction parameter and level.' % green(special_method)
+                alert(msg,'scentry.learn_metadata')
             # Estimate a good extraction radius and level for an input scentry object from the BAM catalog
             this.default_extraction_par,this.default_level = handler.__dict__[special_method](this)
         else:
@@ -1624,6 +1624,13 @@ class gwylm:
         # Store the extraction parameter and level
         this.extraction_parameter = extraction_parameter
         this.level = level
+
+        # Store the extraction radius if a map is provided in the handler file
+        special_method,handler = 'extraction_map',scentry_obj.loadhandler()
+        if special_method in handler.__dict__:
+            this.extraction_radius = handler.__dict__[special_method]( scentry_obj, this.extraction_parameter )
+        else:
+            this.extraction_radius = None
 
         # These fields are initiated here for visiility, but they are filled as lists of gwf object in load()
         this.ylm,this.hlm,this.flm = [],[],[] # psi4 (loaded), strain(calculated by default), news(optional non-default)
