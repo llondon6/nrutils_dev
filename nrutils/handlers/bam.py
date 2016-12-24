@@ -3,7 +3,7 @@
 from nrutils.core.basics import *
 from glob import glob as ls
 from os.path import getctime
-from numpy import array,cross,zeros,dot,abs,sqrt
+from numpy import array,cross,zeros,dot,abs,sqrt,sign
 from numpy.linalg import inv, norm
 from numpy import sum as asum
 
@@ -176,14 +176,20 @@ def learn_metadata( metadata_file_location ):
     if mass_status and spin_status:
         Sf = spin_data[-1,1:]
         irrMf = irr_mass_data[-1,1]
-        x.mf = sqrt( irrMf**2 + norm(Sf/irrMf)**2 )
+        x.__irrMf__ = irrMf
+        irrMf_squared = irrMf**2
+        Sf_squared = norm(Sf)**2
+        x.mf = sqrt( irrMf_squared + Sf_squared / (4*irrMf_squared) ) / (x.m1+x.m2)
         #
         x.Sf = Sf
-        x.xf = norm(x.Sf)/(x.mf*x.mf)
+        x.Xf = x.Sf/(x.mf*x.mf)
+        x.xf = sign(x.Sf[-1])*norm(x.Sf)/(x.mf*x.mf)
     else:
-        x.Sf = array([0.0,0.0,0.0])
-        x.mf = 0.0
-        x.xf = array([0.0,0.0,0.0])
+        from numpy import nan
+        x.Sf = nan*array([0.0,0.0,0.0])
+        x.Xf = x.Sf/(x.mf*x.mf)
+        x.mf = nan
+        x.xf = nan
 
     #
     return standard_metadata, raw_metadata
@@ -199,30 +205,34 @@ def extraction_map( this,                   # this may be an nrsc object or an g
     if this.raw_metadata.extraction_radius[0] != 'finite-radii':
         msg = 'The raw metadata field, "extraction radius" is expected to have "finite-radii" as its first element, but %s was found instead. This may a result of the bbh file\'s formatting. The metadata file is as %s'%(cyan(this.raw_metadata.extraction_radius[0]),cyan(this.raw_metadata.source_file_path))
         error(msg,'bam.extraction_map')
-    _map_ = [ int(k) for k in this.raw_metadata.extraction_radius[1:] ]
+
+    # NOTE that while some BAM runs have extraction radius information stored in the bbh file in various ways, this does not appear to the case for all simulations. The invariants_modes_r field appears to be more reliable.
+    _map_ = [ int(k) for k in this.raw_metadata.invariants_modes_r ]
 
     #
     extraction_radius = _map_[ extraction_parameter-1 ]
 
     return extraction_radius
 
-# # Create a file-name string based upon l,m and the extraction parameter(s)
-# # NOTE that the method name and inputs must conform to uniform name and input ordering
-# def make_datafilename( gwylm_object,                    # gwylm object
-#                        l,                               # l spherical index
-#                        m,                               # m index; |m|<=l
-#                        extraction_parameter = None ):   # dictionary of extraction information
-#
-#     # Validate the extraction parameter for BAM simulations
-#     if isinstance( extraction_parameter, list ):
-#
-#     # Validate l and m inputs
-#     if not isinstance(l, (int,float) ):
-#         raise ValueError('l input must be int or float, but %s found' % (type(l).__name__) )
-#     if not isinstance(m, (int,float) ):
-#         raise ValueError('m in input must be int or float, but %s found' % (type(m).__name__) )
-#
-#     # Create the filename string using inputs
-#
-#
-#     # Output the filename string
+# Estimate a good extraction radius and level for an input scentry object from the BAM catalog
+def infer_default_level_and_extraction_parameter( this ):
+    '''Estimate a good extraction radius and level for an input scentry object from the BAM catalog'''
+    # NOTE that input must be scentry object
+    # Import useful things
+    from glob import glob
+    # Find all l=m=2 waveforms
+    search_string = this.simdir() + '/Psi4ModeDecomp/*l2.m2*.gz'
+    file_list = glob( search_string )
+    # For all results
+    exr,lev = [],[]
+    for f in file_list:
+        # Split filename string to find level and extraction parameter
+        parts = f.split('.') # e.g. "psi3col.r6.l6.l2.m2.gz"
+        exr_,lev_ = int(parts[1][-1]),int(parts[2][-1])
+        exr.append(exr_);lev.append(lev_)
+    # NOTE that we will connonically use 1 level from the last unless there are only two levels
+    k = 0 if len(file_list) == 1 else max(1,len(file_list)-2)
+    extraction_parameter,level = exr[k],lev[k]
+
+    # Return answers
+    return extraction_parameter, level

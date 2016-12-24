@@ -572,6 +572,7 @@ class smart_object:
         part[1] = (','.join( [ p for p in part[1].split(' ') if p ] )).replace(',,',',')
 
         if VERB: print( '   ** Trying to learn:\n \t\t[%s]=[%s]' % (attr,part[1]))
+        # if True: print( '   ** Trying to learn:\n \t\t[%s]=[%s]' % (attr,part[1]))
 
         # Correctly formatted lines will be parsed into exactly two parts
         if [2 == len(part)]:
@@ -605,12 +606,14 @@ class smart_object:
                     setattr( this, attr, value )
                 else:
                     # If it's already a list, then append
-                    if isinstance( getattr(this,attr), ndarray ):
-                        setattr(  this, attr, append(getattr(this,attr),value)  )
+                    if isinstance( getattr(this,attr), (list,ndarray) ):
+                        setattr(  this, attr, list(getattr(this,attr))  )
+                        setattr(  this, attr, getattr(this,attr)+[value]  )
                     else:
                         # If it's not already a list, then make it one
                         old_value = getattr(this,attr)
                         setattr( this, attr, [old_value,value] )
+
             else:
                 setattr( this, attr, value )
 
@@ -778,13 +781,13 @@ def pylim( x, y, axis='both', domain=None, symmetric=False, pad_y=0.1 ):
 def lim(x):
 
     # Import useful bit
-    from numpy import array
+    from numpy import array,amin,amax
 
     # Columate input.
     z = x.reshape((x.size,))
 
     # Return min and max as list
-    return array([min(z),max(z)])
+    return array([amin(z),amax(z)])
 
 # Determine whether numpy array is uniformly spaced
 def isunispaced(x,tol=1e-5):

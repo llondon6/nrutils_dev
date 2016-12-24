@@ -122,7 +122,7 @@ class scconfig(smart_object):
 class scentry:
 
     # Create scentry object given location of metadata file
-    def __init__( this, config_obj, metadata_file_location ):
+    def __init__( this, config_obj, metadata_file_location, verbose=False ):
 
         # Keep an internal log for each scentry created
         this.log = '[Log for %s] The file is "%s".' % (this,metadata_file_location)
@@ -133,6 +133,9 @@ class scentry:
 
         # Validate the location of the metadata file: does it contain waveform information? is the file empty? etc
         this.isvalid = this.validate()
+
+        #
+        this.verbose = verbose
 
         # If valid, learn metadata. Note that metadata property are defined as none otherise. Also NOTE that the standard metadata is stored directly to this object's attributes.
         this.raw_metadata = None
@@ -192,8 +195,11 @@ class scentry:
         #
         from numpy import allclose
 
+        # Load the handler for this entry. It will be used multiple times below.
+        handler = this.loadhandler()
+
         # Name the function representation that will be used to load the metadata file, and convert it to raw and standardized metadata
-        learn_institute_metadata = this.loadhandler().learn_metadata
+        learn_institute_metadata = handler.learn_metadata
 
         # Eval and store standard metadata
         [standard_metadata, this.raw_metadata] = learn_institute_metadata( this.metadata_file_location )
@@ -209,7 +215,7 @@ class scentry:
                            'L1', 'L2',      # initial component angular momental (Vectors ~ M)
                            'S1', 'S2',      # initial component spins (Vectors ~ M*M)
                            'mf', 'Sf',      # Final mass (~M) and final dimensionful spin (~M*M)
-                           'xf' ]           # Final dimensionless spin *Magnitude*: xf = |Sf|/(mf*mf)
+                           'Xf', 'xf' ]     # Final dimensionless spin: Vector,Xf, and *Magnitude*: xf = sign(Sf_z)*|Sf|/(mf*mf) (NOTE the definition)
 
         for attr in required_attrs:
             if attr not in standard_metadata.__dict__:
@@ -228,6 +234,23 @@ class scentry:
 
         # tag this entry with the directory location of the metadata file. NOTE that the waveform data must be reference relative to this directory via config.data_file_name_format
         this.relative_simdir = this.raw_metadata.source_dir[-1].split( this.config.catalog_dir )[-1]
+
+        # NOTE that is is here that we may infer the default extraction parameter and related extraction radius
+
+        # Load default values for extraction_parameter and level (e.g. resolution level)
+        # NOTE that the special method defined below must take in an scentry object, and output extraction_parameter and level
+        special_method = 'infer_default_level_and_extraction_parameter'
+        if special_method in handler.__dict__:
+            # Let the people know
+            if this.verbose:
+                msg = 'The handler is found to have a "%s" method. Rather than the config file, it will be used to determine the default extraction parameter and level.' % green(special_method)
+                alert(msg,'gwylm.load')
+            # Estimate a good extraction radius and level for an input scentry object from the BAM catalog
+            this.default_extraction_par,this.default_level = handler.__dict__[special_method](this)
+        else:
+            # NOTE that otherwise, values from the configuration file will be used
+            this.default_extraction_par = this.config.default_par_list[0]
+            this.default_level = this.config.default_par_list[1]
 
         # Basic sanity check for standard attributes. NOTE this section needs to be completed and perhaps externalized to the current function.
 
@@ -360,7 +383,7 @@ def scbuild(keyword=None,save=True):
         for mdfile in mdfile_list:
 
             # Create tempoary scentry object
-            entry = scentry(config,mdfile)
+            entry = scentry(config,mdfile,verbose=True)
 
             # Write to the master log file
             h+=1
@@ -775,14 +798,6 @@ def sclabel( entry,             # scentry object
         if not allclose( norm(e.S2), 0.0, atol=tol ) :
             tag.append( '2chi%1.2f' % ( norm(e.S2)/e.m2**2 ) )
 
-        # # Spin on only 1st BH
-        # if allclose( norm(e.S1), 0.0, atol=tol ) and not allclose( norm(e.S2), 0.0, atol=tol ) :
-        #     tag.append('s1')
-        #
-        # # Spin on only 2nd BH
-        # if allclose( norm(e.S2), 0.0, atol=tol ) and not allclose( norm(e.S1), 0.0, atol=tol ) :
-        #     tag.append('s2')
-
         # Run is spin aligned if net spin is parallel to net L
         if allclose( dot(e.S1,L) , norm(e.S1)*norm(L) , atol=tol ) and allclose( dot(e.S2,L) , norm(e.S2)*norm(L) , atol=tol ) and (not 'ns' in tag):
             tag.append('sa')
@@ -838,6 +853,8 @@ class gwf:
                   xf                    = None, # Optional remnant spin input
                   m1=None,m2=None,              # Optional masses
                   label                 = None, # Optional label input (see gwylm)
+                  preinspiral           = None, # Holder for information about the raw waveform's turn-on
+                  postringdown          = None, # Holder for information about the raw waveform's turn-off
                   verbose = False ):    # Verbosity toggle
 
         #
@@ -871,6 +888,10 @@ class gwf:
 
         # Optional label input (see gwylm)
         this.label = label
+
+        #
+        this.preinspiral = preinspiral
+        this.postringdown = postringdown
 
         #
         this.ref_scentry = ref_scentry
@@ -1585,14 +1606,21 @@ class gwylm:
         # Tag this object with the simulation location of the given scentry_obj. NOTE that the right hand side of this assignment depends on the user's configuration file. Also NOTE that the configuration object is reconfigured to the system's settings within simdir()
         this.simdir = scentry_obj.simdir()
 
-        # Load default values for extraction_parameter and level (e.g. resolution level)
-        default_extraction_par = this.config.default_par_list[0]
-        default_level = this.config.default_par_list[1]
         # If no extraction parameter is given, retrieve default. NOTE that this depends on the current user's configuration.
+        # NOTE that the line below is commented out becuase the line above (i.e. ... simdir() ) has already reconfigured the config object
+        # scentry_obj.config.reconfig() # This line ensures that values from the user's config are taken
         if extraction_parameter is None:
-            extraction_parameter = default_extraction_par
+            extraction_parameter = scentry_obj.default_extraction_par
         if level is None:
-            level = default_level
+            level = scentry_obj.default_level
+
+        #
+        config_extraction_parameter = scentry_obj.config.default_par_list[0]
+        config_level = scentry_obj.config.default_par_list[1]
+        if (config_extraction_parameter,config_level) != (extraction_parameter,level):
+            msg = 'The (%s,%s) is (%s,%s), which differs from the config values of (%s,%s). You have either manually input the non-config values, or the handler has set them by looking at the contents of the simulation directory. '%(magenta('extraction_parameter'),green('level'),magenta(str(extraction_parameter)),green(str(level)),str(config_extraction_parameter),str(config_level))
+            if this.verbose: alert(msg,'gwylm')
+
         # Store the extraction parameter and level
         this.extraction_parameter = extraction_parameter
         this.level = level
@@ -2198,8 +2226,11 @@ class gwylm:
 
         # Handle T1 Input
         if T1 is None:
-            T1 = f.t[-1] - f.intrp_t_amp_max
+            T1 = f.t[this.postringdown.left_index] - f.intrp_t_amp_max
         else:
+            if T1<T0:
+                msg = 'T1=%f which is less than T0=%f. This doesnt make sense: the fitting region cannot end before it begins under the working perspective.'%(T1,T0)
+                error(msg,'gwylm.ringdown')
             if T1 > (f.t[-1] - f.intrp_t_amp_max) :
                 msg = 'Input value of T1=%i extends beyond the end of the waveform. We will stop at the last value of the waveform, not at the requested T1.'%T1
                 warning(msg,'gwylm.ringdown')
@@ -2232,7 +2263,7 @@ class gwylm:
         that.ylm = __ringdown__( this.ylm )
         that.flm = __ringdown__( this.flm )
         that.hlm = __ringdown__( this.hlm )
-        that.characterize_start_end()
+        # that.characterize_start_end()
         # Create a dictionary representation of the mutlipoles
         that.lm = {}
         for k,y in enumerate(that.ylm):

@@ -3,7 +3,7 @@
 from nrutils.core.basics import *
 from glob import glob as ls
 from os.path import getctime
-from numpy import array,cross,zeros,dot,abs,sqrt,inf,nan
+from numpy import array,cross,zeros,dot,abs,sqrt,inf,nan,sign
 from numpy.linalg import inv, norm
 from numpy import sum as asum
 
@@ -182,8 +182,9 @@ def learn_metadata( metadata_file_location ):
     [tf,Mf,xfx,xfy,xfz] = remnant_data
     # Store related final mass and spin data
     x.mf = Mf
-    x.xf = array([xfx,xfy,xfz])
-    x.Sf = Mf*Mf*x.xf
+    x.Sf = Mf*Mf*array([xfx,xfy,xfz])
+    x.Xf = array([xfx,xfy,xfz])
+    x.xf = sign(x.Sf[-1])*norm(x.Sf)/(x.mf*x.mf)
 
     #
     x.valid = True

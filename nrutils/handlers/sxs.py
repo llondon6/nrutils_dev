@@ -2,7 +2,7 @@
 #
 from nrutils.core.basics import smart_object, parent
 from os.path import getctime
-from numpy import array,cross,zeros,dot,abs
+from numpy import array,cross,zeros,dot,abs,sign
 from numpy.linalg import inv, norm
 from numpy import sum as asum
 
@@ -117,7 +117,8 @@ def learn_metadata( metadata_file_location ):
 
     #
     x.Sf = y.remnant_spin
-    x.xf = norm(x.Sf)/(x.mf**2)
+    x.Xf = x.Sf/(x.mf*x.mf)
+    x.xf = sign(x.Sf[-1])*norm(x.Sf)/(x.mf**2)
 
     #
     return standard_metadata, raw_metadata
