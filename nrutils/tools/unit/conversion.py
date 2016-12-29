@@ -22,7 +22,7 @@ __physical_constants__['mass_sun_mpc'] = __physical_constants__['mass_sun_meters
 # Given TIME DOMAIN strain in physical units, convert to Code units
 # --------------------------------------------------------------- #
 def codeh( harr, M, D ):
-
+    '''Given TIME DOMAIN strain in physical units, convert to Code units'''
     # convert time series to physical units
     harr[:,0] = codet( harr[:,0], M )
 
@@ -36,7 +36,7 @@ def codeh( harr, M, D ):
 # Given FREQUENCY DOMAIN strain in physical units, convert to Code units
 # --------------------------------------------------------------- #
 def codehfd( fd_harr, M, D ):
-
+    '''Given FREQUENCY DOMAIN strain in physical units, convert to Code units'''
     # convert time series to physical units
     fd_harr[:,0] = codef( fd_harr[:,0], M )
 
@@ -51,17 +51,23 @@ def codehfd( fd_harr, M, D ):
 # --------------------------------------------------------------- #
 # Convert physical time to code units
 # --------------------------------------------------------------- #
-def codet( t, M ): return t/mass_sec(M)
+def codet( t, M ):
+    '''Convert physical time (sec) to code units'''
+    return t/mass_sec(M)
 
 # --------------------------------------------------------------- #
 # Convert physical frequency series to code units
 # --------------------------------------------------------------- #
-def codef( f, M ): return f*mass_sec(M)
+def codef( f, M ):
+    '''Convert physical frequency series (Hz) to code units'''
+    return f*mass_sec(M)
 
 # --------------------------------------------------------------- #
 # Convert code frequency to physical frequency
 # --------------------------------------------------------------- #
-def physf( f, M ): return f/mass_sec(M)
+def physf( f, M ):
+    '''Convert code frequency to physical frequency (Hz)'''
+    return f/mass_sec(M)
 
 # --------------------------------------------------------------- #
 # Convert mass in code units to seconds

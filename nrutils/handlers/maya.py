@@ -194,10 +194,56 @@ def learn_metadata( metadata_file_location ):
 
 
 # Given an extraction parameter, return an extraction radius
-def extraction_map( extraction_parameter ):
+def extraction_map( this, extraction_parameter ):
 
     # Given an extraction parameter, return an extraction radius
     extraction_radius = extraction_parameter
 
     #
     return extraction_radius
+
+# Estimate a good extraction radius and level for an input scentry object from the BAM catalog
+def infer_default_level_and_extraction_parameter( this,     # An scentry object
+                                                  desired_exraction_radius=None,    # (Optional) The desired extraction radius in M, where M is the initial ADM mass
+                                                  verbose=None ):   # Toggel to let the people know
+    '''Estimate a good extraction radius and level for an input scentry object from the BAM catalog'''
+
+    # NOTE that input must be scentry object
+    # Import useful things
+    from glob import glob
+    from numpy import array,argmin
+
+    # Handle the extraction radius input
+    # NOTE that the default value of X is chosen to ensure that there is always a ringdown
+    desired_exraction_radius = this.config.default_par_list[0] if desired_exraction_radius is None else desired_exraction_radius
+
+    # Find all l=m=2 waveforms
+    search_string = this.simdir() + '*Psi4*l2_m2*0.asc'
+    file_list = glob( search_string )
+
+    # For all results
+    exr,rad = [],[]
+    for f in file_list:
+
+        # Split filename string to find level and extraction parameter
+        f.replace('//','/')
+        f = f.split('/')[-1]
+        parts = f.split('l2_m2_r') # e.g. "mp_WeylScal4::Psi4i_l2_m2_r75.00.asc".split('_')
+        exr_ = float( parts[-1].split('.asc')[0] )
+        # Also get related extraction radius (M)
+        rad_ = extraction_map( this, exr_ )
+        # Append lists
+        exr.append(exr_);rad.append(rad_)
+
+    # NOTE that we will use the extraction radius that is closest to desired_exraction_radius (in units of M)
+    k = argmin( abs( desired_exraction_radius - array(rad) )  )
+    extraction_parameter = exr[k]
+
+    # Also store a dictionary between extraction parameter and extraction radius
+    extraction_radius_map = { exr[n]:r for n,r in enumerate(rad) }
+
+    # Note that maya sims have no level specification
+    level = None
+
+    # Return answers
+    return extraction_parameter,level,extraction_radius_map

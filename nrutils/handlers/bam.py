@@ -205,7 +205,11 @@ def extraction_map( this,                   # this may be an nrsc object or an g
     '''Given an extraction parameter, return an extraction radius'''
 
     # NOTE that while some BAM runs have extraction radius information stored in the bbh file in various ways, this does not appear to the case for all simulations. The invariants_modes_r field appears to be more reliable.
-    _map_ = [ float(k) for k in this.raw_metadata.invariants_modes_r ]
+    if 'invariants_modes_r' in this.raw_metadata.__dict__:
+        _map_ = [ float(k) for k in this.raw_metadata.invariants_modes_r ]
+    elif 'extraction_radius' in this.raw_metadata.__dict__:
+        # We start from 1 not 0 here becuase the first element should be a string "finite-radius"
+        _map_ = [ float(k) for k in this.raw_metadata.extraction_radius[1:] ]
 
     #
     extraction_radius = _map_[ extraction_parameter-1 ]
@@ -213,26 +217,44 @@ def extraction_map( this,                   # this may be an nrsc object or an g
     return extraction_radius
 
 # Estimate a good extraction radius and level for an input scentry object from the BAM catalog
-def infer_default_level_and_extraction_parameter( this ):
+def infer_default_level_and_extraction_parameter( this,     # An scentry object
+                                                  desired_exraction_radius=None,    # (Optional) The desired extraction radius in M, where M is the initial ADM mass
+                                                  verbose=None ):   # Toggel to let the people know
     '''Estimate a good extraction radius and level for an input scentry object from the BAM catalog'''
+
     # NOTE that input must be scentry object
     # Import useful things
     from glob import glob
+    from numpy import array,argmin
+
+    # Handle the extraction radius input
+    # NOTE that the default value of 90 is chosen to ensure that there is always a ringdown
+    desired_exraction_radius = 90 if desired_exraction_radius is None else desired_exraction_radius
+
     # Find all l=m=2 waveforms
     search_string = this.simdir() + '/Psi4ModeDecomp/*l2.m2*.gz'
     file_list = glob( search_string )
+
     # For all results
-    exr,lev = [],[]
+    exr,lev,rad = [],[],[]
     for f in file_list:
+
         # Split filename string to find level and extraction parameter
         f.replace('//','/')
         f = f.split('/')[-1]
         parts = f.split('.') # e.g. "psi3col.r6.l6.l2.m2.gz".split('.')
         exr_,lev_ = int(parts[1][-1]),int(parts[2][-1])
-        exr.append(exr_);lev.append(lev_)
-    # NOTE that we will connonically use 1 level from the last unless there are only two levels
-    k = 0 if len(file_list) == 1 else max(1,len(file_list)-2)
+        # Also get related extraction radius (M)
+        rad_ = extraction_map( this, exr_ )
+        # Append lists
+        exr.append(exr_);lev.append(lev_);rad.append(rad_)
+
+    # NOTE that we will use the extraction radius that is closest to desired_exraction_radius (in units of M)
+    k = argmin( abs(desired_exraction_radius - array(rad)) )
     extraction_parameter,level = exr[k],lev[k]
 
+    # Also store a dictionary between extraction parameter and extraction radius
+    extraction_radius_map = { exr[n]:r for n,r in enumerate(rad) }
+
     # Return answers
-    return extraction_parameter, level
+    return extraction_parameter,level,extraction_radius_map

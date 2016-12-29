@@ -67,6 +67,11 @@ def hlblack(string):
 def textul(string):
     return print_format.underline + string + print_format.end
 
+# Return name of calling function
+def thisfun():
+    import inspect
+    return inspect.stack()[2][3]
+
 #
 def parent(path):
     '''
@@ -907,7 +912,7 @@ def ffintegrate(t,y,w0,n=1):
 def alert(msg,fname=None):
 
     if fname is None:
-        fname = 'note'
+        fname = thisfun()
 
     print '('+cyan(fname)+')>> '+msg
 
@@ -915,7 +920,7 @@ def alert(msg,fname=None):
 def warning(msg,fname=None):
 
     if fname is None:
-        fname = 'warning'
+        fname = thisfun()
 
     print '('+yellow(fname+'!')+')>> '+msg
 
@@ -923,7 +928,7 @@ def warning(msg,fname=None):
 def error(msg,fname=None):
 
     if fname is None:
-        fname = 'error'
+        fname = thisfun()
 
     raise ValueError( '('+red(fname+'!!')+')>> '+msg )
 
@@ -1471,7 +1476,7 @@ def intrp_argmax( y,
 
     #
     from scipy.interpolate import InterpolatedUnivariateSpline as spline
-    from scipy.optimize import fmin
+    from scipy.optimize import minimize
     from numpy import linspace,argmax
 
     #
@@ -1483,10 +1488,11 @@ def intrp_argmax( y,
     # Find the approximate max location in index
     k = argmax( y )
 
-    #
+    # NOTE that we use minimize with bounds as it was found to have better behavior than fmin with no bounding
     x0 = x[k]
     f = lambda X: -yspline(X)
-    xmax = fmin(f,x0,disp=False)
+    q = minimize(f,x0,bounds=[(x0-10,x0+10)])
+    xmax = q.x[0]
 
     #
     ans = xmax
@@ -1583,6 +1589,7 @@ def align_wfarr_initial_phase(this,that):
 # s is defined around Equation 3.6.
 ''' Copied from LALSimulation Version '''
 def FinalSpin0815_s(eta,s):
+    eta = round(eta,8)
     eta2 = eta*eta
     eta3 = eta2*eta
     eta4 = eta3*eta
@@ -1600,8 +1607,11 @@ def FinalSpin0815_s(eta,s):
 ''' Copied from LALSimulation Version '''
 def FinalSpin0815(eta,chi1,chi2):
     from numpy import sqrt
+    eta = round(eta,8)
+    if eta>0.25:
+        error('symmetric mass ratio greater than 0.25 input')
     # Convention m1 >= m2
-    Seta = sqrt(1.0 - 4.0*eta)
+    Seta = sqrt(abs(1.0 - 4.0*float(eta)))
     m1 = 0.5 * (1.0 + Seta)
     m2 = 0.5 * (1.0 - Seta)
     m1s = m1*m1
@@ -1613,6 +1623,7 @@ def FinalSpin0815(eta,chi1,chi2):
 # Formula to predict the total radiated energy. Equation 3.7 and 3.8 arXiv:1508.07250
 # Input parameter s defined around Equation 3.7 and 3.8.
 def EradRational0815_s(eta,s):
+    eta = round(eta,8)
     eta2 = eta*eta
     eta3 = eta2*eta
     eta4 = eta3*eta
@@ -1623,7 +1634,10 @@ def EradRational0815_s(eta,s):
 
 # Wrapper function for EradRational0815_s.
 def EradRational0815(eta, chi1, chi2):
-    from numpy import sqrt
+    from numpy import sqrt,round
+    eta = round(eta,8)
+    if eta>0.25:
+        error('symmetric mass ratio greater than 0.25 input')
     # Convention m1 >= m2
     Seta = sqrt(1.0 - 4.0*eta)
     m1 = 0.5 * (1.0 + Seta)
@@ -1655,7 +1669,7 @@ def romline(  domain,           # Domain of Map
     R = range_
     # Normalize Data
     R0,R1 = mean(R), std(R)
-    r = (R-R0)/R1
+    r = (R-R0)/( R1 if abs(R1)!=0 else 1 )
 
     #
     if not positive:
@@ -1727,6 +1741,13 @@ def positive_romline(   domain,           # Domain of Map
     # Domain and range shorthand
     d = domain
     R = range_
+
+    # Some basic validation
+    if len(d) != len(R):
+        raise(ValueError,'length of domain (of len %i) and range (of len %i) mus be equal'%(len(d),len(R)))
+    if len(d)<3:
+        raise(ValueError,'domain length is less than 3. it must be longer for a romline porcess to apply. domain is %s'%domain)
+
     # Normalize Data
     R0,R1 = mean(R), std(R)
     r = (R-R0)/R1
@@ -1747,6 +1768,7 @@ def positive_romline(   domain,           # Domain of Map
     space = [ seed ]
     domain_space = range(len(d))
     err = lambda x: mean( abs(x) ) # std(x) #
+    min_space = list(space)
     while not done:
         #
         min_sigma = inf
@@ -1776,3 +1798,42 @@ def positive_romline(   domain,           # Domain of Map
     knots = min_space
 
     return knots,rom,min_sigma
+
+
+# Fix nans, nonmonotinicities and jumps in time series waveform array
+def straighten_wfarr( wfarr, verbose=False ):
+    '''
+    Some waveform arrays (e.g. from the BAM code) may have non-monotonic time series
+    (gaps, duplicates, and crazy backwards referencing). This method seeks to identify
+    these instances and reformat the related array. Non finite values will also be
+    removed.
+    '''
+
+    # Import useful things
+    from numpy import arange,sum,array,diff,isfinite,hstack
+    thisfun = 'straighten_wfarr'
+
+    # Remove rows that contain non-finite data
+    finite_mask = isfinite( sum( wfarr, 1 ) )
+    if sum(finite_mask)!=len(finite_mask):
+        if verbose: alert('Non-finite values found in waveform array. Corresponding rows will be removed.',thisfun)
+    wfarr = wfarr[ finite_mask, : ]
+
+    # Sort rows by the time series' values
+    time = array( wfarr[:,0] )
+    space = arange( wfarr.shape[0] )
+    chart = sorted( space, key = lambda k: time[k] )
+    if (space != chart).all():
+        if verbose: alert('The waveform array was found to have nonmonotinicities in its time series. The array will now be straightened.',thisfun)
+    wfarr = wfarr[ chart, : ]
+
+    # Remove rows with duplicate time series values
+    time = array( wfarr[:,0] )
+    diff_mask = hstack( [ True, diff(time).astype(bool) ] )
+    if sum(diff_mask)!=len(diff_mask):
+        if verbose: alert('Repeated time values were found in the array. Offending rows will be removed.',thisfun)
+    wfarr = wfarr[ diff_mask, : ]
+
+    # The wfarr should now be straight
+    # NOTE that the return here is optional as all operations act on the original input
+    return wfarr

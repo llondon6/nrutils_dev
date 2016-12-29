@@ -120,12 +120,30 @@ def learn_metadata( metadata_file_location ):
     x.Xf = x.Sf/(x.mf*x.mf)
     x.xf = sign(x.Sf[-1])*norm(x.Sf)/(x.mf**2)
 
+    # NOTE that I'm not sure about the units of all of these quantities. In particular, there are cases where the initial mass is not scaled to 1. This is inconsistent with nrutils' conventions and we wish to correct that here.
+    # NOTE that the order of the lines below matters significantly.
+
+    M = x.m1+x.m2
+
+    _m1 = x.m1/M
+    _m2 = x.m2/M
+    x.S1 = _m1*_m1*x.S1/(x.m1*x.m1)
+    x.S2 = _m2*_m2*x.S2/(x.m2*x.m2)
+    x.m1,x.m2 = _m1,_m2
+
+    _mf = y.remnant_mass/M
+    x.Sf = _mf*_mf*x.Sf/(x.mf*x.mf)
+    x.mf = _mf
+
+    # QUESTION: Should the momenta and distances also be rescaled?
+
     #
     return standard_metadata, raw_metadata
 
 
 # Given an extraction parameter, return an extraction radius
-def extraction_map( extraction_parameter ):
+def extraction_map( this,
+                    extraction_parameter,  ):
 
     #
     from numpy import inf

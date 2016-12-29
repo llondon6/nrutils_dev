@@ -153,7 +153,7 @@ class scentry:
                 this.label = sclabel( this )
             except:
                 emsg = sys.exc_info()[1].message
-                this.log += '%80s'%' [FATALERROR-1] The metadata failed to be read. There may be an external formatting inconsistency. It is being marked as invalid with None. The system says: %s'%emsg
+                this.log += '%80s'%' [FATALERROR] The metadata failed to be read. There may be an external formatting inconsistency. It is being marked as invalid with None. The system says: %s'%emsg
                 warning( 'The following error message will be logged: '+red(emsg),'scentry')
                 this.isvalid = None # An external program may use this to do something
                 this.label = 'invalid!'
@@ -246,11 +246,14 @@ class scentry:
                 msg = 'The handler is found to have a "%s" method. Rather than the config file, this method will be used to determine the default extraction parameter and level.' % green(special_method)
                 alert(msg,'scentry.learn_metadata')
             # Estimate a good extraction radius and level for an input scentry object from the BAM catalog
-            this.default_extraction_par,this.default_level = handler.__dict__[special_method](this)
+            this.default_extraction_par,this.default_level,this.extraction_radius_map = handler.__dict__[special_method](this)
+            # NOTE that and extraction_radius_map is also defined here, which allows referencing between extraction parameter and extaction radius
         else:
             # NOTE that otherwise, values from the configuration file will be used
             this.default_extraction_par = this.config.default_par_list[0]
             this.default_level = this.config.default_par_list[1]
+            this.extraction_radius_map = None
+            # NOTE that and extraction_radius_map is also defined here, which allows referencing between extraction parameter and extaction radius, the dault value is currently None
 
         # Basic sanity check for standard attributes. NOTE this section needs to be completed and perhaps externalized to the current function.
 
@@ -875,6 +878,9 @@ class gwf:
 
         #
         this.verbose = verbose
+
+        # Fix nans, nonmonotinicities and jumps in time series waveform array
+        wfarr = straighten_wfarr( wfarr, verbose=this.verbose )
 
         # use the raw waveform data to define all fields
         this.wfarr = wfarr
@@ -1564,6 +1570,9 @@ class gwf:
 
 # Class for waveforms: Psi4 multipoles, strain multipoles (both spin weight -2), recomposed waveforms containing h+ and hx. NOTE that detector response waveforms will be left to pycbc to handle
 class gwylm:
+    '''
+    Class to hold spherical multipoles of gravitaiton wave radiation from NR simulations. A simulation catalog entry obejct (of the scentry class) as well as the l and m eigenvalue for the desired multipole (aka mode) is needed.
+    '''
 
     # Class constructor
     def __init__( this,                             # reference for the object to be created
@@ -1573,29 +1582,40 @@ class gwylm:
                                                     # This input is not compatible with the lm tag
                   dt                    = None,     # if given, the waveform array will beinterpolated to
                                                     # this timestep
-                  load                  = True,     # IF true, we will try to load data from the scentry_object
-                  clean                 = False,    # Toggle automatic tapering
+                  load                  = None,     # IF true, we will try to load data from the scentry_object
+                  clean                 = None,     # Toggle automatic tapering
                   extraction_parameter  = None,     # Extraction parameter labeling extraction zone/radius for run
                   level = None,                     # Opional refinement level for simulation. NOTE that not all NR groups use this specifier. In such cases, this input has no effect on loading.
                   w22 = None,                       # Optional input for lowest physical frequency in waveform; by default an wstart value is calculated from the waveform itself and used in place of w22
-                  lowpass=False,                    # Toggle to lowpass filter waveform data upon load using "romline" (in basics.py) routine to define window
+                  lowpass=None,                     # Toggle to lowpass filter waveform data upon load using "romline" (in basics.py) routine to define window
+                  calcstrain = None,                # If True, strain will be calculated upon loading
                   verbose               = None ):   # be verbose
+
+        # NOTE that this method is setup to print the value of each input if verbose is true.
+        # NOTE that default input values are handled just below
 
         # Print non None inputs to screen
         thisfun = this.__class__.__name__
-        this.verbose = verbose
-        if verbose is not None:
+        if not ( verbose in (None,False) ):
             for k in dir():
                 if (eval(k) is not None) and (eval(k) is not False) and not ('this' in k):
                     msg = 'Found %s (=%r) keyword.' % (textul(k),eval(k))
-                    alert( msg, thisfun )
+                    alert( msg, 'gwylm' )
 
-        # validate the lm input
+        # Handle default values
+        load = True if load is None else load
+        clean = False if clean is None else clean
+        calcstrain = True if calcstrain is None else calcstrain
+
+        # Validate the lm input
         this.__valinputs__(thisfun,lm=lm,lmax=lmax,scentry_obj=scentry_obj)
 
         # Confer the scentry_object's attributes to this object for ease of referencing
         for attr in scentry_obj.__dict__.keys():
             setattr( this, attr, scentry_obj.__dict__[attr] )
+
+        # NOTE that we don't want the scentry's verbose property to overwrite the input above, so we definte this.verbose at this point, not before.
+        this.verbose = verbose
 
         # Store the scentry object to optionally access its methods
         this.__scentry__ = scentry_obj
@@ -1619,7 +1639,7 @@ class gwylm:
         config_level = scentry_obj.config.default_par_list[1]
         if (config_extraction_parameter,config_level) != (extraction_parameter,level):
             msg = 'The (%s,%s) is (%s,%s), which differs from the config values of (%s,%s). You have either manually input the non-config values, or the handler has set them by looking at the contents of the simulation directory. '%(magenta('extraction_parameter'),green('level'),magenta(str(extraction_parameter)),green(str(level)),str(config_extraction_parameter),str(config_level))
-            if this.verbose: alert(msg,'gwylm')
+            if this.verbose: alert( msg, 'gwylm' )
 
         # Store the extraction parameter and level
         this.extraction_parameter = extraction_parameter
@@ -1650,12 +1670,12 @@ class gwylm:
             w22 = this.wstart_pn
             if verbose:
                 # msg = 'Using w22 from '+bold(magenta('algorithmic estimate'))+' to calculate strain multipoles.'
-                msg = 'Using w22 from a '+bold(magenta('PN estimate'))+' to calculate strain multipoles [see pnw0 in basics.py, and/or arxiv:1310.1528v4].'
-                alert(msg,thisfun)
+                msg = 'Storing w22 from a '+bold(magenta('PN estimate'))+'[see pnw0 in basics.py, and/or arxiv:1310.1528v4]. This will be the frequency parameter used if strain is to be calculated.'
+                alert( msg, 'gwylm' )
         else:
             if verbose:
-                msg = 'Using w22 from '+bold(magenta('user input'))+' to calculate strain multipoles.'
-                alert(msg,thisfun)
+                msg = 'Storing w22 from '+bold(magenta('user input'))+'.  This will be the frequency parameter used if strain is to be calculated.'
+                alert( msg, 'gwylm' )
 
         # Low-pass filter waveform (Psi4) data using "romline" routine in basics.py to determin windowed region
         this.__lowpassfiltered__ = False
@@ -1663,17 +1683,39 @@ class gwylm:
             this.lowpass()
 
         # Calculate strain
-        this.calchlm(w22=w22)
+        if calcstrain:
+            this.calchlm(w22=w22)
 
         # Clean the waveforms of junk radiation if desired
         this.__isclean__ = False
         if clean:
             this.clean()
 
+        # Set some boolean tags
+        this.__isringdownonly__ = False # will switch to True if, ringdown is cropped. See gwylm.ringdown().
+
         # Create a dictionary representation of the mutlipoles
+        this.__curate__()
+
+
+    # Create a dictionary representation of the mutlipoles
+    def __curate__(this):
+        '''Create a dictionary representation of the mutlipoles'''
+        # NOTE that this method should be called every time psi4, strain and/or news is loaded.
+        # NOTE that the related methods are: __load__, calchlm and calcflm
+        # Initiate the dictionary
         this.lm = {}
-        for k,y in enumerate(this.ylm):
-            this.lm[(y.l,y.m)] = { 'psi4':y, 'strain':this.hlm[k] }
+        for l,m in this.__lmlist__:
+            this.lm[l,m] = {}
+        # Seed the dictionary with psi4 gwf objects
+        for y in this.ylm:
+            this.lm[(y.l,y.m)]['psi4'] = y
+        # Seed the dictionary with strain gwf objects
+        for h in this.hlm:
+            this.lm[(h.l,h.m)]['strain'] = h
+        # Seed the dictionary with strain gwf objects
+        for f in this.flm:
+            this.lm[(f.l,f.m)]['news'] = f
 
     # Validate inputs to constructor
     def __valinputs__(this,thisfun,lm=None,lmax=None,scentry_obj=None):
@@ -1733,7 +1775,7 @@ class gwylm:
                         this.__lmlist__.append( (l,m) )
                     else:
                         msg = '(__make_lmlist__) Found list of multipole indeces (e.g. [[2,2],[3,3]]), but length of one of the index values is not two. Please check your lm input.'
-                        error(msg,'gwylm')
+                        error(msg)
             else: # Else, if lm is a single mode index
                 #
                 l,m = lm
@@ -1741,13 +1783,13 @@ class gwylm:
 
         # Always load the m=l=2 waveform
         if not (  (2,2) in this.__lmlist__  ):
-            msg = '%s The l=m=2 multipole will be loaded in order to determine important characteristice of all modes such as noise floor and junk radiation location.' % ( cyan('__make_lmlist__') )
-            alert(msg,'gwylm')
+            msg = 'The l=m=2 multipole will be loaded in order to determine important characteristice of all modes such as noise floor and junk radiation location.'
+            warning(msg,'gwylm')
             this.__lmlist__.append( (2,2) )
 
         # Let the people know
         if this.verbose:
-            alert('The following spherical multipoles will be loaded:%s'%cyan(str(this.__lmlist__)),'gwylm.__make_lmlist__')
+            alert('The following spherical multipoles will be loaded:%s'%cyan(str(this.__lmlist__)))
 
     # Wrapper for core load function. NOTE that the extraction parameter input is independent of the usage in the class constructor.
     def __load__( this,                      # The current object
@@ -1768,11 +1810,14 @@ class gwylm:
         for lm in this.__lmlist__:
             this.load(lm=lm,dt=dt,extraction_parameter=extraction_parameter,level=level,verbose=verbose)
 
+        # Create a dictionary representation of the mutlipoles
+        this.__curate__()
+
 
     #Given an extraction parameter, use the handler's extraction_map to determine extraction radius
     def __r__(this,extraction_parameter):
         #
-        return this.__scentry__.loadhandler().extraction_map(extraction_parameter)
+        return this.__scentry__.loadhandler().extraction_map(this,extraction_parameter)
 
     # load the waveform data
     def load(this,                  # The current object
@@ -1787,7 +1832,7 @@ class gwylm:
 
         # Import useful things
         from os.path import isfile,basename
-        from numpy import sign,diff,unwrap,angle,max
+        from numpy import sign,diff,unwrap,angle,amax,isnan,amin
         from scipy.stats.mstats import mode
         from scipy.version import version as scipy_version
         thisfun=inspect.stack()[0][3]
@@ -1860,7 +1905,7 @@ class gwylm:
         if proceed:
 
             # load array data from file
-            if this.verbose: alert('Loading: %s' % cyan(basename(file_location)), thisfun )
+            if this.verbose: alert('Loading: %s' % cyan(basename(file_location)) )
             wfarr,_ = smart_load( file_location, verbose=this.verbose )
 
             # Handle extraction radius scaling
@@ -1869,11 +1914,9 @@ class gwylm:
                 extraction_radius = this.__r__(extraction_parameter)
                 wfarr[:,1:3] *= extraction_radius
 
-            # #
-            # if abs(1-this.m1+this.m2) > 1e-3:
-            #     warning('Manually imposing relative mass scaling for time (t->t/M) and Psi4 (Psi4->Psi4*M).','gwylm.load')
-            #     wfarr[:,0] /= this.m1+this.m2
-            #     wfarr[:,1:3] *= this.m1+this.m2
+            # Fix nans, nonmonotinicities and jumps in time series waveform array
+            # NOTE that the line below is applied within the gwf constructor
+            # wfarr = straighten_wfarr( wfarr )
 
             # Initiate waveform object and check that sign convetion is in accordance with core settings
             def mkgwf(wfarr_):
@@ -1896,8 +1939,7 @@ class gwylm:
             # ---------------------------------------------------- #
             # Enforce internal sign convention for Psi4 multipoles
             # ---------------------------------------------------- #
-
-            msk_ = y_.amp > 0.01*max(y_.amp)
+            msk_ = y_.amp > 0.01*amax(y_.amp)
             if int(scipy_version.split('.')[1])<16:
                 # Account for old scipy functionality
                 external_sign_convention = sign(m) * mode( sign( y_.dphi[msk_] ) )[0][0]
@@ -1911,7 +1953,7 @@ class gwylm:
                 # Let the people know what is happening.
                 msg = yellow('Re-orienting waveform phase')+' to be consistent with internal sign convention for Psi4, where sign(dPhi/dt)=%i*sign(m).' % M_RELATIVE_SIGN_CONVENTION + ' Note that the internal sign convention is defined in ... nrutils/core/__init__.py as "M_RELATIVE_SIGN_CONVENTION". This message has appeared becuase the waveform is determioned to obey and sign convention: sign(dPhi/dt)=%i*sign(m).'%(external_sign_convention)
                 thisfun=inspect.stack()[0][3]
-                if verbose: alert( msg, thisfun )
+                if verbose: alert( msg )
 
             # use array data to construct gwf object with multipolar fields
             if not output:
@@ -2016,7 +2058,7 @@ class gwylm:
             if 0==y.m: w0 = w22
             # Let the people know
             if this.verbose:
-                print magenta('* w0(w22) = %f' % w0)+yellow(' (this is the lower frequency used for FFI method [arxiv:1006.1632v3])')
+                alert( magenta('w0(w22) = %f' % w0)+yellow(' (this is the lower frequency used for FFI method [arxiv:1006.1632v3])') )
 
             # Create the core waveform information
             t       =  y.t
@@ -2036,6 +2078,11 @@ class gwylm:
 
             # Add the new strain multipole to this object's list of multipoles
             this.hlm.append( gwf( wfarr, l=y.l, m=y.m, mf=this.mf, xf=this.xf, kind='$rh_{%i%i}/M$'%(y.l,y.m) ) )
+
+        # Create a dictionary representation of the mutlipoles
+        this.__curate__()
+
+        # NOTE that this is the end of the calchlm method
 
     # Characterise the start of the waveform using the l=m=2 psi4 multipole
     def characterize_start_end(this):
@@ -2185,7 +2232,7 @@ class gwylm:
                 if 0==y.m: w0 = w22
                 # Let the people know
                 if this.verbose:
-                    print magenta('* w0(w22) = %f' % w0)+yellow(' (this is the lower frequency used for FFI method [arxiv:1006.1632v3])')
+                    alert( magenta('w0(w22) = %f' % w0)+yellow(' (this is the lower frequency used for FFI method [arxiv:1006.1632v3])') )
 
                 # Create the core waveform information
                 t       =  y.t
@@ -2206,6 +2253,11 @@ class gwylm:
             # Store the flm list to the current object
             this.flm = flm
 
+        # Create a dictionary representation of the mutlipoles
+        this.__curate__()
+
+        # NOTE that this is the end of the calcflm method
+
 
     #--------------------------------------------------------------------------------#
     # Get a gwylm object that only contains ringdown
@@ -2214,7 +2266,7 @@ class gwylm:
                  T0 = 10,           # Starting time relative to peak luminosity of the l=m=2 multipole
                  T1 = None,         # Maximum time
                  df = None,         # Optional df in frequency domain (determines time domain padding)
-                 verbose = True):
+                 verbose = None):
 
         #
         from numpy import linspace,array
@@ -2233,15 +2285,24 @@ class gwylm:
 
         # Handle T1 Input
         if T1 is None:
-            T1 = f.t[this.postringdown.left_index] - f.intrp_t_amp_max
-        else:
-            if T1<T0:
-                msg = 'T1=%f which is less than T0=%f. This doesnt make sense: the fitting region cannot end before it begins under the working perspective.'%(T1,T0)
-                error(msg,'gwylm.ringdown')
-            if T1 > (f.t[-1] - f.intrp_t_amp_max) :
-                msg = 'Input value of T1=%i extends beyond the end of the waveform. We will stop at the last value of the waveform, not at the requested T1.'%T1
-                warning(msg,'gwylm.ringdown')
-                T1 = f.t[-1] - f.intrp_t_amp_max
+            # NOTE that we will set T1 to be *just before* the noise floor estimate
+            T_noise_floor = f.t[this.postringdown.left_index] - f.intrp_t_amp_max
+            # "Just before" means 95% of the way between T0 and T_noise_floor
+            safety_factor = 0.45 # NOTE that this is quite a low safetey factor -- we wish to definitely avoid noise if possible. T1_min is implemented below just in case this is too strong of a safetey factor.
+            T1 = T0 + safety_factor * ( T_noise_floor - T0 )
+            # Make sure that T1 is at least T1_min
+            T1_min = 60
+            T1 = max(T1,T1_min)
+            # NOTE that there is a chance that T1 chould be "too close" to T0
+
+        # Validate T1 Value
+        if T1<T0:
+            msg = 'T1=%f which is less than T0=%f. This doesnt make sense: the fitting region cannot end before it begins under the working perspective.'%(T1,T0)
+            error(msg,'gwylm.ringdown')
+        if T1 > (f.t[-1] - f.intrp_t_amp_max) :
+            msg = 'Input value of T1=%i extends beyond the end of the waveform. We will stop at the last value of the waveform, not at the requested T1.'%T1
+            warning(msg,'gwylm.ringdown')
+            T1 = f.t[-1] - f.intrp_t_amp_max
 
         # Use its time series to define a mask
         a = f.intrp_t_amp_max + T0
@@ -2251,6 +2312,9 @@ class gwylm:
 
         #
         that = this.copy()
+        that.__isringdownonly__ = True
+        that.T0 = T0
+        that.T1 = T1
 
         #
         def __ringdown__(wlm):
@@ -2270,11 +2334,9 @@ class gwylm:
         that.ylm = __ringdown__( this.ylm )
         that.flm = __ringdown__( this.flm )
         that.hlm = __ringdown__( this.hlm )
-        # that.characterize_start_end()
+
         # Create a dictionary representation of the mutlipoles
-        that.lm = {}
-        for k,y in enumerate(that.ylm):
-            that.lm[(y.l,y.m)] = { 'psi4':y, 'strain':that.hlm[k] }
+        that.__curate__()
 
         #
         return that
@@ -2339,7 +2401,7 @@ class gwylm:
     def extrapolate(this,method=None):
 
         msg = 'This method is under development and cannot currently be used.'
-        error(msg,'gwylm.extrapolate')
+        error(msg)
 
         # If the simulation is already extrapolated, then do nothing
         if this.__isextrapolated__:
@@ -2350,6 +2412,71 @@ class gwylm:
             print
 
         return None
+
+
+    # Estimate Remnant BH mass and spin from gwylm object. This is done by "brute" force here (i.e. an actual calculation), but NOTE that values for final mass and spin are Automatically loaded within each scentry; However!, some of these values may be incorrect -- especially for BAM sumulations. Here we make a rough estimate of the remnant mass and spin based on a ringdown fit.
+    def brute_masspin( this,              # IMR gwylm object
+                       T0 = 10,                 # Time relative to peak luminosity to start ringdown
+                       T1 = None,               # Time relative to peak lum where ringdown ends (if None, gwylm.ringdown sets its value to the end of the waveform approx at noise floor)
+                       apply_result = False,    # If true, apply result to input this object
+                       verbose = False ):       # Let the people know
+        '''Estimate Remnant BH mass and spin from gwylm object. This is done by "brute"
+        force here (i.e. an actual calculation), but NOTE that values for final mass
+        and spin are Automatically loaded within each scentry; However!, some of
+        these values may be incorrect -- especially for BAM sumulations. Here we make
+        a rough estimate of the remnant mass and spin based on a ringdown fit.'''
+
+        # Import useful things
+        thisfun='gwylm.brute_masspin'
+        from scipy.optimize import minimize
+        from nrutils import FinalSpin0815,EradRational0815
+        from kerr import qnmfit
+
+        # Validate first input type
+        is_number = isinstance(this,(float,int))
+        is_gwylm = False if is_number else 'gwylm'==this.__class__.__name__
+        if not is_gwylm:
+            msg = 'First input  must be member of gwylm class from nrutils.'
+            error(msg)
+
+        # Get the ringdown part starting from 20M after the peak luminosity
+        g = this.ringdown(T0=T0,T1=T1)
+        # Define a work function
+        def action( Mfxf ):
+            # NOTE that the first psi4 multipole is referenced below.
+            # There was only one loaded here, s it has to be for l=m=2
+            f = qnmfit(g.lm[2,2]['psi4'],Mfxf=Mfxf)
+            # f = qnmfit(g.ylm[0],Mfxf=Mfxf)
+            return f.frmse
+
+        # Use PhenomD fit for guess
+        eta = this.m1*this.m2/((this.m1+this.m2)**2)
+        chi1, chi2 = this.S1[-1]/(this.m1**2), this.S2[-1]/(this.m2**2)
+        guess_xf =   FinalSpin0815(   eta, chi2, chi1 )
+        guess_Mf = 1-EradRational0815(eta, chi2, chi1 )
+        guess = (guess_Mf,guess_xf)
+
+        # perform the minization
+        # NOTE that mass is bound on (0,1) and spin on (-1,1)
+        Q = minimize( action,guess, bounds=[(1-0.999,1),(-0.999,0.999)] )
+
+        # Extract the solution
+        mf,xf = Q.x
+
+        # Apply to the input gwylm object if requested
+        if apply_result:
+            this.mf = mf
+            this.xf = xf
+            this.Xf = this.Sf / (mf*mf)
+            attr = [ 'ylm', 'hlm', 'flm' ]
+            for atr in attr:
+                for y in this.__dict__[atr]:
+                    y.mf, y.xf = mf, xf
+                    if ('Sf' in y.__dict__) and ('Xf' in y.__dict__):
+                        y.Xf = y.Sf / (mf*mf)
+
+        # Return stuff, including the fit object
+        return mf,xf,Q
 
     # Los pass filter using romline in basics.py to determine window region
     def lowpass(this):
