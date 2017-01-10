@@ -2370,12 +2370,17 @@ class gwylm:
             this.calcflm()
 
         # Retrieve the l=m=2 component
-        f = [ a for a in (this.hlm if use_peak_strain else this.flm) if a.l==a.m==2 ][0]
+        ref_gwf = this.lm[2,2][  'strain' if use_peak_strain else 'news'  ]
+        # ref_gwf = [ a for a in (this.hlm if use_peak_strain else this.flm) if a.l==a.m==2 ][0]
+
+        #
+        peak_time = ref_gwf.t[ ref_gwf.k_amp_max ]
+        # peak_time = ref_gwf.intrp_t_amp_max
 
         # Handle T1 Input
         if T1 is None:
             # NOTE that we will set T1 to be *just before* the noise floor estimate
-            T_noise_floor = f.t[this.postringdown.left_index] - f.intrp_t_amp_max
+            T_noise_floor = ref_gwf.t[this.postringdown.left_index] - peak_time
             # "Just before" means 95% of the way between T0 and T_noise_floor
             safety_factor = 0.45 # NOTE that this is quite a low safetey factor -- we wish to definitely avoid noise if possible. T1_min is implemented below just in case this is too strong of a safetey factor.
             T1 = T0 + safety_factor * ( T_noise_floor - T0 )
@@ -2388,15 +2393,15 @@ class gwylm:
         if T1<T0:
             msg = 'T1=%f which is less than T0=%f. This doesnt make sense: the fitting region cannot end before it begins under the working perspective.'%(T1,T0)
             error(msg,'gwylm.ringdown')
-        if T1 > (f.t[-1] - f.intrp_t_amp_max) :
+        if T1 > (ref_gwf.t[-1] - peak_time) :
             msg = 'Input value of T1=%i extends beyond the end of the waveform. We will stop at the last value of the waveform, not at the requested T1.'%T1
             warning(msg,'gwylm.ringdown')
-            T1 = f.t[-1] - f.intrp_t_amp_max
+            T1 = ref_gwf.t[-1] - peak_time
 
         # Use its time series to define a mask
-        a = f.intrp_t_amp_max + T0
-        b = f.intrp_t_amp_max + T1
-        n = abs(float(b-a))/f.dt
+        a = peak_time + T0
+        b = peak_time + T1
+        n = abs(float(b-a))/ref_gwf.dt
         t = linspace(a,b,n)
 
         #
@@ -2414,7 +2419,7 @@ class gwylm:
                 plus  = spline(y.t,y.plus)(t)
                 cross = spline(y.t,y.cross)(t)
                 # Create waveform array
-                wfarr = array( [t-f.intrp_t_amp_max,plus,cross] ).T
+                wfarr = array( [t-peak_time,plus,cross] ).T
                 # Create gwf object
                 xlm.append(  gwf(wfarr,l=y.l,m=y.m,mf=this.mf,xf=this.xf,kind=y.kind,label=this.label,m1=this.m1,m2=this.m2,ref_scentry = this.__scentry__)  )
             #
