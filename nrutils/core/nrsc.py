@@ -508,8 +508,9 @@ def scsearch( catalog = None,           # Manually input list of scentry objects
         catalog = filter( test, catalog )
 
     # non-precessing, same as spinaligned & spin anti aligned
+    nptol = 1e-4
     if nonprecessing is True:
-        test = lambda k: allclose( abs(dot(k.S1+k.S2,k.L1+k.L2)), norm(k.L1+k.L2)*norm(k.S1+k.S2) , atol = tol )
+        test = lambda k: allclose( abs(dot(k.S1+k.S2,k.L1+k.L2)), norm(k.L1+k.L2)*norm(k.S1+k.S2) , atol = nptol )
         catalog = filter( test, catalog )
 
     # spins have equal magnitude
@@ -1168,6 +1169,8 @@ class gwf:
               show=False,
               fig = None,
               title = None,
+              ref_gwf = None,
+              labels = None,
               domain = None):
 
         # Handle which default domain to plot
@@ -1179,9 +1182,9 @@ class gwf:
 
         # Plot selected domain.
         if domain == 'time':
-            ax = this.plottd( show=show,fig=fig,title=title )
+            ax = this.plottd( show=show,fig=fig,title=title, ref_gwf=ref_gwf, labels=labels )
         elif domain == 'freq':
-            ax = this.plotfd( show=show,fig=fig,title=title )
+            ax = this.plotfd( show=show,fig=fig,title=title, ref_gwf=ref_gwf, labels=labels )
 
         #
         from matplotlib.pyplot import gcf
@@ -1194,15 +1197,21 @@ class gwf:
                 show    =   False,
                 fig     =   None,
                 title   =   None,
+                ref_gwf = None,
+                labels = None,
                 verbose =   False ):
 
         #
         from matplotlib.pyplot import plot,subplot,figure,tick_params,subplots_adjust
-        from matplotlib.pyplot import grid,setp,tight_layout,margins,xlabel
+        from matplotlib.pyplot import grid,setp,tight_layout,margins,xlabel,legend
         from matplotlib.pyplot import show as shw
         from matplotlib.pyplot import ylabel as yl
         from matplotlib.pyplot import title as ttl
         from numpy import ones,sqrt,hstack,array
+
+        #
+        if ref_gwf:
+            that = ref_gwf
 
         #
         if fig is None:
@@ -1219,6 +1228,7 @@ class gwf:
         txclr = 'k'
         fs = 18
         font_family = 'serif'
+        gclr = '0.9'
 
         #
         ax = []
@@ -1226,31 +1236,47 @@ class gwf:
 
         #
         pos_mask = this.f>0
+        if ref_gwf:
+            that_pos_mask = that.f>0
+            that_lwid = 4
+            that_alpha = 0.22
+
+        #
+        set_legend = False
+        if not labels:
+            labels = ('','')
+        else:
+            set_legend=True
 
 
         # ------------------------------------------------------------------- #
         # Amplitude
         # ------------------------------------------------------------------- #
         ax.append( subplot(3,1,1) );
-        grid(color='0.95', linestyle='-')
+        grid(color=gclr, linestyle='-')
         setp(ax[-1].get_xticklabels(), visible=False)
         ax[-1].set_xscale('log', nonposx='clip')
         ax[-1].set_yscale('log', nonposy='clip')
         #
-        plot( this.f[pos_mask], this.fd_amp[pos_mask], color=clr[0] )
+        plot( this.f[pos_mask], this.fd_amp[pos_mask], color=clr[0], label=labels[0] )
+        if ref_gwf:
+            plot( that.f[that_pos_mask], that.fd_amp[that_pos_mask], color=clr[0], linewidth=that_lwid, alpha=that_alpha, label=labels[-1] )
         pylim( this.f[pos_mask], this.fd_amp[pos_mask], pad_y=10 )
         #
         yl('$|$'+kind+'$|(f)$',fontsize=fs,color=txclr, family=font_family )
+        if set_legend: legend(frameon=False)
 
         # ------------------------------------------------------------------- #
         # Total Phase
         # ------------------------------------------------------------------- #
         ax.append( subplot(3,1,2, sharex=ax[0]) );
-        grid(color='0.95', linestyle='-')
+        grid(color=gclr, linestyle='-')
         setp(ax[-1].get_xticklabels(), visible=False)
         ax[-1].set_xscale('log', nonposx='clip')
         #
         plot( this.f[pos_mask], this.fd_phi[pos_mask], color=1-clr[0] )
+        if ref_gwf:
+            plot( that.f[that_pos_mask], that.fd_phi[that_pos_mask], color=1-clr[0], linewidth=that_lwid, alpha=that_alpha )
         pylim( this.f[pos_mask], this.fd_phi[pos_mask] )
         #
         yl(r'$\phi = \mathrm{arg}($'+kind+'$)$',fontsize=fs,color=txclr, family=font_family )
@@ -1259,10 +1285,12 @@ class gwf:
         # Total Phase Rate
         # ------------------------------------------------------------------- #
         ax.append( subplot(3,1,3, sharex=ax[0]) );
-        grid(color='0.95', linestyle='-')
+        grid(color=gclr, linestyle='-')
         ax[-1].set_xscale('log', nonposx='clip')
         #
         plot( this.f[pos_mask], this.fd_dphi[pos_mask], color=sqrt(clr[0]) )
+        if ref_gwf:
+            plot( that.f[that_pos_mask], that.fd_dphi[that_pos_mask], color=sqrt(clr[0]), linewidth=that_lwid, alpha=that_alpha )
         pylim( this.f[pos_mask], this.fd_dphi[pos_mask] )
         #
         yl(r'$\mathrm{d}{\phi}/\mathrm{d}f$',fontsize=fs,color=txclr, family=font_family)
@@ -1297,6 +1325,8 @@ class gwf:
     def plottd( this,
               show=False,
               fig = None,
+              ref_gwf = None,
+              labels = None,
               title = None):
 
         #
@@ -1305,7 +1335,7 @@ class gwf:
 
         #
         from matplotlib.pyplot import plot,subplot,figure,tick_params,subplots_adjust
-        from matplotlib.pyplot import grid,setp,tight_layout,margins,xlabel
+        from matplotlib.pyplot import grid,setp,tight_layout,margins,xlabel,legend
         from matplotlib.pyplot import show as shw
         from matplotlib.pyplot import ylabel as yl
         from matplotlib.pyplot import title as ttl
@@ -1323,20 +1353,40 @@ class gwf:
         txclr = 'k'
         fs = 18
         font_family = 'serif'
+        gclr = '0.9'
 
         #
         ax = []
         xlim = lim(this.t) # [-400,this.t[-1]]
 
+        #
+        if ref_gwf:
+            that = ref_gwf
+            that_lwid = 4
+            that_alpha = 0.22
+
+        #
+        set_legend = False
+        if not labels:
+            labels = ('','')
+        else:
+            set_legend=True
+
         # Time domain plus and cross parts
         ax.append( subplot(3,1,1) );
-        grid(color='0.95', linestyle='-')
+        grid(color=gclr, linestyle='-')
         setp(ax[-1].get_xticklabels(), visible=False)
         # actual plotting
         plot( this.t, this.plus,  linewidth=lwid, color=0.8*grey )
         plot( this.t, this.cross, linewidth=lwid, color=0.5*grey )
-        plot( this.t, this.amp,   linewidth=lwid, color=clr[0] )
+        plot( this.t, this.amp,   linewidth=lwid, color=clr[0], label=labels[0] )
         plot( this.t,-this.amp,   linewidth=lwid, color=clr[0] )
+        if ref_gwf:
+            plot( that.t, that.plus,  linewidth=that_lwid, color=0.8*grey, alpha=that_alpha )
+            plot( that.t, that.cross, linewidth=that_lwid, color=0.5*grey, alpha=that_alpha )
+            plot( that.t, that.amp,   linewidth=that_lwid, color=clr[0], alpha=that_alpha, label=labels[-1] )
+            plot( that.t,-that.amp,   linewidth=that_lwid, color=clr[0], alpha=that_alpha )
+        if set_legend: legend(frameon=False)
 
         # Ignore renderer warnings
         with warnings.catch_warnings():
@@ -1351,18 +1401,22 @@ class gwf:
 
         # Time domain phase
         ax.append( subplot(3,1,2, sharex=ax[0]) );
-        grid(color='0.95', linestyle='-')
+        grid(color=gclr, linestyle='-')
         setp(ax[-1].get_xticklabels(), visible=False)
         # actual plotting
         plot( this.t, this.phi, linewidth=lwid, color=1-clr[0] )
+        if ref_gwf:
+            plot( that.t, that.phi, linewidth=that_lwid, color=1-clr[0], alpha=that_alpha )
         pylim( this.t, this.phi, domain=xlim )
         yl( r'$\phi = \mathrm{arg}(%s)$' % kind.replace('$','') ,fontsize=fs,color=txclr, family=font_family)
 
         # Time domain frequency
         ax.append( subplot(3,1,3, sharex=ax[0]) );
-        grid(color='0.95', linestyle='-')
+        grid(color=gclr, linestyle='-')
         # Actual plotting
         plot( this.t, this.dphi, linewidth=lwid, color=sqrt(clr[0]) )
+        if ref_gwf:
+            plot( that.t, that.dphi, linewidth=that_lwid, color=sqrt(clr[0]), alpha=that_alpha )
         pylim( this.t, this.dphi, domain=xlim )
         yl(r'$\mathrm{d}{\phi}/\mathrm{d}t$',fontsize=fs,color=txclr, family=font_family)
 
@@ -1514,7 +1568,7 @@ class gwf:
             this.wfarr = align_wfarr_initial_phase( this.wfarr, that.wfarr )
             this.setfields()
         if 'average-phase' in method:
-            this.wfarr = align_wfarr_average_phase( this.wfarr, that.wfarr, mask=mask)
+            this.wfarr = align_wfarr_average_phase( this.wfarr, that.wfarr, mask=mask, verbose=verbose)
             this.setfields()
 
         #
@@ -1767,7 +1821,7 @@ class gwylm:
                     this.__lmlist__.append( (l,m) )
         else: # Else, load the given lis of lm values
             # If lm is a list of specific multipole indeces
-            if len(shape(lm))==2:
+            if isinstance(lm[0],(list,tuple)):
                 #
                 for k in lm:
                     if len(k)==2:
@@ -1781,6 +1835,8 @@ class gwylm:
                 l,m = lm
                 this.__lmlist__.append( (l,m) )
 
+        # Store the input lm list
+        this.__input_lmlist__ = list(this.__lmlist__)
         # Always load the m=l=2 waveform
         if not (  (2,2) in this.__lmlist__  ):
             msg = 'The l=m=2 multipole will be loaded in order to determine important characteristice of all modes such as noise floor and junk radiation location.'
@@ -1810,8 +1866,31 @@ class gwylm:
         for lm in this.__lmlist__:
             this.load(lm=lm,dt=dt,extraction_parameter=extraction_parameter,level=level,verbose=verbose)
 
+        # Ensuer that all modes are the same length
+        this.__valpsi4multipoles__()
+
         # Create a dictionary representation of the mutlipoles
         this.__curate__()
+
+    # Validate individual multipole against the l=m=2 multipole: e.g. test lengths are same
+    def __valpsi4multipoles__(this):
+        #
+        this.__curate__()
+        #
+        t22 = this.lm[2,2]['psi4'].t
+        n22 = len(t22)
+        #
+        for lm in this.lm:
+            if lm != (2,2):
+                ylm = this.lm[lm]['psi4']
+                if len(ylm.t) != n22:
+                    #
+                    if True: #this.verbose:
+                        warning('[valpsi4multipoles] The (l,m)=(%i,%i) multipole was found to not have the same length as its (2,2) counterpart. The offending waveform will be interpolated on the l=m=2 time series.'%lm,'gwylm')
+                    # Interpolate the mode at t22, and reset fields
+                    wfarr = intrp_wfarr(ylm.wfarr,domain=t22)
+                    # Reset the fields
+                    ylm.setfields(wfarr=wfarr)
 
 
     #Given an extraction parameter, use the handler's extraction_map to determine extraction radius
@@ -2266,6 +2345,7 @@ class gwylm:
                  T0 = 10,           # Starting time relative to peak luminosity of the l=m=2 multipole
                  T1 = None,         # Maximum time
                  df = None,         # Optional df in frequency domain (determines time domain padding)
+                 use_peak_strain = False,   # Toggle to use peak of strain rather than the peak of the luminosity
                  verbose = None):
 
         #
@@ -2277,11 +2357,20 @@ class gwylm:
             msg = 'There must be a l=m=2 multipole prewsent to estimate the waveform\'s ringdown part.'
             error(msg,'gwylm.ringdown')
 
-        # Use the l=m=2 multipole to estimate the luminosity.
-        this.calcflm()
+        # Let the people know (about which peak will be used)
+        if this.verbose or verbose:
+            alert('Time will be listed relative to the peak of %s.'%cyan('strain' if use_peak_strain else 'luminosity'))
+
+        # Use the l=m=2 multipole to estimate the peak location
+        if use_peak_strain:
+            # Only calculate strain if its not there already
+            if (not this.hlm) : this.calchlm()
+        else:
+            # Redundancy checking (see above for strain) is handled within calcflm
+            this.calcflm()
 
         # Retrieve the l=m=2 component
-        f = [ a for a in this.flm if a.l==a.m==2 ][0]
+        f = [ a for a in (this.hlm if use_peak_strain else this.flm) if a.l==a.m==2 ][0]
 
         # Handle T1 Input
         if T1 is None:
@@ -2372,17 +2461,18 @@ class gwylm:
         # Create Matrix of Multipole time series
         def __recomp__(alm,kind=None):
 
-            M = zeros( [ alm[0].n, len(alm) ], dtype=complex )
-            Y = zeros( [ len(alm), 1 ], dtype=complex )
+            M = zeros( [ alm[0].n, len(this.__input_lmlist__) ], dtype=complex )
+            Y = zeros( [ len(this.__input_lmlist__), 1 ], dtype=complex )
             # Seed the matrix as well as the vector of spheroical harmonic values
             for k,a in enumerate(alm):
-                M[:,k] = a.y
-                Y[k] = sYlm(-2,a.l,a.m,theta,phi)
+                if (a.l,a.m) in this.__input_lmlist__:
+                    M[:,k] = a.y
+                    Y[k] = sYlm(-2,a.l,a.m,theta,phi)
             # Perform the matrix multiplication and create the output gwf object
             Z = dot( M,Y )[:,0]
             wfarr = array( [ alm[0].t, Z.real, Z.imag ] ).T
             # return the ouput
-            return gwf( wfarr, kind=kind )
+            return gwf( wfarr, kind=kind, ref_scentry = this.__scentry__ )
 
         #
         if kind=='psi4':

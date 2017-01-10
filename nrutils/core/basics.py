@@ -1164,6 +1164,10 @@ def maketaper(arr,state):
             taper[ min(state) : max(state) ] = true_hann
 
     #
+    if len(taper) != len(arr):
+        error('the taper length is inconsistent with input array')
+
+    #
     return taper
 
 
@@ -1290,11 +1294,11 @@ def intrp_wfarr(wfarr,delta=None,domain=None):
         error(msg,'intrp_wfarr')
 
     # Only interpolate if current delta is not input delta
-    d = wfarr[0,0]-wfarr[1,0]
-    if abs(delta-d)/delta < 1e-6:
-        proceed = False
-    else:
-        proceed = True
+    proceed = True
+    if delta is not None:
+        d = wfarr[0,0]-wfarr[1,0]
+        if abs(delta-d)/delta < 1e-6:
+            proceed = False
 
     # If there is need to interpolate, then interpolate.
     if proceed:
@@ -1524,7 +1528,7 @@ def shift_wfarr_phase(wfarr,dphi):
     return wfarr
 
 # Find the average phase difference and align two wfarr's
-def align_wfarr_average_phase(this,that,mask=None):
+def align_wfarr_average_phase(this,that,mask=None,verbose=False):
     '''
     'this' phase will be aligned to 'that' phase over their domains
     '''
@@ -1548,6 +1552,10 @@ def align_wfarr_average_phase(this,that,mask=None):
     #
     a,b = mean( _a ), mean( _b )
     dphi = -a + b
+
+    #
+    if verbose:
+        alert('The phase shift applied is %s radians.'%magenta('%1.4e'%(dphi)))
 
     #
     this_ = shift_wfarr_phase(this,dphi)
