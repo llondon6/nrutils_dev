@@ -12,14 +12,18 @@ def validate( metadata_file_location, config = None ):
 
     #
     from os.path import isfile as exist
-    from os.path import abspath,join,basename
+    from os.path import abspath,join,basename,getsize
     from os import pardir
 
     #
     run_dir = abspath( join( metadata_file_location, pardir ) )+'/'
 
     # The folder is valid if there is l=m=2 mode data in the following dirs
-    status = len( ls( run_dir + '/Psi4ModeDecomp/psi3col*l2.m2.gz' ) ) > 0
+    min_file_list = ls( run_dir + '/Psi4ModeDecomp/psi3col*l2.m2.gz' )
+    status = len( min_file_list ) > 0
+
+    # Ensuer that data is non-empty
+    status = getsize( min_file_list[0] ) > 25 if status else False
 
     # ignore directories with certain tags in filename
     ignore_tags = ['backup','old']

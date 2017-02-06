@@ -132,7 +132,7 @@ class scentry:
         this.metadata_file_location = metadata_file_location
 
         # Validate the location of the metadata file: does it contain waveform information? is the file empty? etc
-        this.isvalid = this.validate()
+        this.isvalid = this.validate() if config_obj else False
 
         #
         this.verbose = verbose
@@ -159,8 +159,9 @@ class scentry:
                 this.label = 'invalid!'
 
         elif this.isvalid is False:
-            print '## The following is '+red('invalid')+': %s' % cyan(metadata_file_location)
-            this.log += ' This entry\'s metadta file is invalid.'
+            if config_obj:
+                print '## The following is '+red('invalid')+': %s' % cyan(metadata_file_location)
+                this.log += ' This entry\'s metadta file is invalid.'
 
     # Method to load handler module
     def loadhandler(this):
@@ -222,6 +223,11 @@ class scentry:
                 msg = '(!!) Error -- Output of %s does NOT contain required field %s' % ( this.config.handler_location, attr )
                 raise ValueError(msg)
 
+        # Add useful fields: chi1 chi2 and eta
+        standard_metadata.X1 = standard_metadata.S1 / (standard_metadata.m1**2)
+        standard_metadata.X2 = standard_metadata.S2 / (standard_metadata.m2**2)
+        standard_metadata.eta = standard_metadata.m1*standard_metadata.m2 / ( standard_metadata.m1+standard_metadata.m2 )
+
         # Confer the required attributes to this object for ease of referencing
         for attr in standard_metadata.__dict__.keys():
             setattr( this, attr, standard_metadata.__dict__[attr] )
@@ -273,20 +279,27 @@ class scentry:
         if not isinstance( this.m2 , float ) :
             msg = 'm2 must be float but %s found' % type(this.m2).__name__
             raise ValueError(msg)
+
+        #--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--#
         # Enfore m1>m2 convention.
         satisfies_massratio_convetion = lambda e: (not e.m1 > e.m2) and (not allclose(e.m1,e.m2,atol=1e-4))
         if satisfies_massratio_convetion(this):
             this.flip()
+        #--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--#
+
         if satisfies_massratio_convetion(this):
             msg = 'Mass ratio convention m1>m2 must be used. Check scentry.flip(). It should have corrected this! \n>> m1 = %g, m2 = %g' % (this.m1,this.m2)
             raise ValueError(msg)
 
     # Create dynamic function that references the user's current configuration to construct the simulation directory of this run.
     def simdir(this):
-        ans = this.config.reconfig().catalog_dir + this.relative_simdir
-        if not this.config.config_exists:
-            msg = 'The current object has been marked as '+red('non-existent')+', likely by reconfig(). Please verify that the ini file for the related run exists. You may see this message for other (yet unpredicted) reasons.'
-            error(msg,'scentry.simdir()')
+        if this.config:
+            ans = this.config.reconfig().catalog_dir + this.relative_simdir
+            if not this.config.config_exists:
+                msg = 'The current object has been marked as '+red('non-existent')+', likely by reconfig(). Please verify that the ini file for the related run exists. You may see this message for other (yet unpredicted) reasons.'
+                error(msg,'scentry.simdir()')
+        else:
+            ans = '*'
         return ans
 
     # Flip 1->2 associations.
@@ -301,6 +314,7 @@ class scentry:
         P1 = array(this.P2); P2 = array(this.P1);
         L1 = array(this.L2); L2 = array(this.L1);
         S1 = array(this.S2); S2 = array(this.S1);
+        X1 = array(this.X2); X2 = array(this.X1);
 
         # Apply the flip to the current object
         this.R1 = R1; this.R2 = R2
@@ -308,6 +322,7 @@ class scentry:
         this.P1 = P1; this.P2 = P2
         this.L1 = L1; this.L2 = L2
         this.S1 = S1; this.S2 = S2
+        this.X1 = X1; this.X2 = X2
 
     # Compare this scentry object to another using initial parameter fields. Return true false statement
     def compare2( this, that, atol=1e-3 ):
@@ -1133,10 +1148,13 @@ class gwf:
         # if there is a non-uniform timestep, or if the input dt is not None and not equal to the given dt
         NONUNIFORMT = not isunispaced(t)
         INPUTDTNOTGIVENDT = this.dt is None
+        proceed = False
         if NONUNIFORMT and (not INPUTDTNOTGIVENDT):
             msg = '(**) Waveform not uniform in time-step. Interpolation will be applied.'
-            if verbose: print magenta(msg)
-        if NONUNIFORMT and INPUTDTNOTGIVENDT:
+            if this.verbose: print magenta(msg)
+            print 'maxdt = '+str(diff(t).max())
+            # proceed = True
+        if (NONUNIFORMT and INPUTDTNOTGIVENDT) or proceed:
             # if dt is not defined and not none, assume smallest dt
             if this.dt is None:
                 this.dt = diff(lim(t))/len(t)
@@ -1584,14 +1602,14 @@ class gwf:
         if not isinstance(dphi,(float,int)):
             error('input must of float or int real valued','gwf.shift_phase')
 
-        if not fromraw:
+        if fromraw:
             wfarr = this.__rawgwfarr__
         else:
             wfarr = this.wfarr
 
         #
         msg = 'This function could be spead up by manually aligning relevant fields, rather than regenerating all fields which includes taking an FFT.'
-        warning(msg,'gwf.shift_phase')
+        if this.verbose: warning(msg,'gwf.shift_phase')
 
         #
         this.wfarr = shift_wfarr_phase( wfarr, dphi )
@@ -1643,6 +1661,7 @@ class gwylm:
                   w22 = None,                       # Optional input for lowest physical frequency in waveform; by default an wstart value is calculated from the waveform itself and used in place of w22
                   lowpass=None,                     # Toggle to lowpass filter waveform data upon load using "romline" (in basics.py) routine to define window
                   calcstrain = None,                # If True, strain will be calculated upon loading
+                  standardize_orbital_phase = True, # If True, the orbital phase will be adjusted so that the binary effectively starts aligned along the x-axis as defined by the initial position vector in the standard metadata. The initial will also be updated for consitency.
                   verbose               = None ):   # be verbose
 
         # NOTE that this method is setup to print the value of each input if verbose is true.
@@ -1689,22 +1708,24 @@ class gwylm:
             level = scentry_obj.default_level
 
         #
-        config_extraction_parameter = scentry_obj.config.default_par_list[0]
-        config_level = scentry_obj.config.default_par_list[1]
-        if (config_extraction_parameter,config_level) != (extraction_parameter,level):
-            msg = 'The (%s,%s) is (%s,%s), which differs from the config values of (%s,%s). You have either manually input the non-config values, or the handler has set them by looking at the contents of the simulation directory. '%(magenta('extraction_parameter'),green('level'),magenta(str(extraction_parameter)),green(str(level)),str(config_extraction_parameter),str(config_level))
-            if this.verbose: alert( msg, 'gwylm' )
+        if scentry_obj.config:
+            config_extraction_parameter = scentry_obj.config.default_par_list[0]
+            config_level = scentry_obj.config.default_par_list[1]
+            if (config_extraction_parameter,config_level) != (extraction_parameter,level):
+                msg = 'The (%s,%s) is (%s,%s), which differs from the config values of (%s,%s). You have either manually input the non-config values, or the handler has set them by looking at the contents of the simulation directory. '%(magenta('extraction_parameter'),green('level'),magenta(str(extraction_parameter)),green(str(level)),str(config_extraction_parameter),str(config_level))
+                if this.verbose: alert( msg, 'gwylm' )
 
         # Store the extraction parameter and level
         this.extraction_parameter = extraction_parameter
         this.level = level
 
         # Store the extraction radius if a map is provided in the handler file
-        special_method,handler = 'extraction_map',scentry_obj.loadhandler()
-        if special_method in handler.__dict__:
-            this.extraction_radius = handler.__dict__[special_method]( scentry_obj, this.extraction_parameter )
-        else:
-            this.extraction_radius = None
+        if 'loadhandler' in scentry_obj.__dict__:
+            special_method,handler = 'extraction_map',scentry_obj.loadhandler()
+            if special_method in handler.__dict__:
+                this.extraction_radius = handler.__dict__[special_method]( scentry_obj, this.extraction_parameter )
+            else:
+                this.extraction_radius = None
 
         # These fields are initiated here for visiility, but they are filled as lists of gwf object in load()
         this.ylm,this.hlm,this.flm = [],[],[] # psi4 (loaded), strain(calculated by default), news(optional non-default)
@@ -1713,23 +1734,51 @@ class gwylm:
         this.dt = dt
 
         # Load the waveform data
-        if load==True: this.__load__(lmax=lmax,lm=lm,dt=dt)
+        if load==True:
+            this.__load__(lmax=lmax,lm=lm,dt=dt)
+            #--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--#
+            if standardize_orbital_phase:
+            #--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--#
+                if this.verbose: alert('Rotating initial oribital phase to be along x-axis.')
+                from numpy import array,arctan2,sin,cos,dot
+                R = scentry_obj.R1-scentry_obj.R2
+                phi0 = arctan2( R[1], R[0] )
+                print phi0
+                # Apply rotation to multipoles
+                this.rotate( -phi0 )
+                # Apply rotation to position metadata
+                R1_ = array(scentry_obj.R1)
+                R2_ = array(scentry_obj.R2)
+                M = array([[ cos(-phi0), -sin(-phi0), 0 ],
+                           [ sin(-phi0),  cos(-phi0), 0 ],
+                           [          0,           0, 1 ]])
+                R1_ = dot( M, R1_ )
+                R2_ = dot( M, R2_ )
+                print R1_,R2_
+                for k in range(len(R1_)):
+                    scentry_obj.R1[k] = R1_[k]
+                    scentry_obj.R2[k] = R2_[k]
+                if this.R1 is not scentry_obj.R1:
+                    raise ValueError('whaght!? R1 should propagate to all related copies')
 
         # Characterize the waveform's start and store related information to this.preinspiral
         this.preinspiral = None # In charasterize_start(), the information about the start of the waveform is actually stored to "starting". Here this field is inintialized for visibility.
-        this.characterize_start_end()
+        if scentry_obj.config:
+            # Only do this if the scentry object has config information; otheriwse, it was probably created outside of scbuild and will probably break code
+            this.characterize_start_end()
 
         # If w22 is input, then use the input value for strain calculation. Otherwise, use the algorithmic estimate.
-        if w22 is None:
-            w22 = this.wstart_pn
-            if verbose:
-                # msg = 'Using w22 from '+bold(magenta('algorithmic estimate'))+' to calculate strain multipoles.'
-                msg = 'Storing w22 from a '+bold(magenta('PN estimate'))+'[see pnw0 in basics.py, and/or arxiv:1310.1528v4]. This will be the frequency parameter used if strain is to be calculated.'
-                alert( msg, 'gwylm' )
-        else:
-            if verbose:
-                msg = 'Storing w22 from '+bold(magenta('user input'))+'.  This will be the frequency parameter used if strain is to be calculated.'
-                alert( msg, 'gwylm' )
+        if scentry_obj.config:
+            if w22 is None:
+                w22 = this.wstart_pn
+                if verbose:
+                    # msg = 'Using w22 from '+bold(magenta('algorithmic estimate'))+' to calculate strain multipoles.'
+                    msg = 'Storing w22 from a '+bold(magenta('PN estimate'))+'[see pnw0 in basics.py, and/or arxiv:1310.1528v4]. This will be the frequency parameter used if strain is to be calculated.'
+                    alert( msg, 'gwylm' )
+            else:
+                if verbose:
+                    msg = 'Storing w22 from '+bold(magenta('user input'))+'.  This will be the frequency parameter used if strain is to be calculated.'
+                    alert( msg, 'gwylm' )
 
         # Low-pass filter waveform (Psi4) data using "romline" routine in basics.py to determin windowed region
         this.__lowpassfiltered__ = False
@@ -1737,7 +1786,7 @@ class gwylm:
             this.lowpass()
 
         # Calculate strain
-        if calcstrain:
+        if calcstrain and scentry_obj.config:
             this.calchlm(w22=w22)
 
         # Clean the waveforms of junk radiation if desired
@@ -1749,7 +1798,8 @@ class gwylm:
         this.__isringdownonly__ = False # will switch to True if, ringdown is cropped. See gwylm.ringdown().
 
         # Create a dictionary representation of the mutlipoles
-        this.__curate__()
+        if scentry_obj.config:
+            this.__curate__()
 
 
     # Create a dictionary representation of the mutlipoles
@@ -1798,7 +1848,7 @@ class gwylm:
             raise ValueError(msg)
 
         # Make sure that only one scentry in instput (could be updated later)
-        if not isinstance(scentry_obj,scentry):
+        if not (scentry_obj.__class__.__name__ == 'scentry'):
             msg = 'First input must be member of scentry class (e.g. as returned from scsearch() ).'
             error(msg,thisfun)
 
@@ -2342,10 +2392,10 @@ class gwylm:
     # Get a gwylm object that only contains ringdown
     #--------------------------------------------------------------------------------#
     def ringdown(this,              # The current object
-                 T0 = 10,           # Starting time relative to peak luminosity of the l=m=2 multipole
+                 T0 = 20,           # Starting time relative to peak luminosity of the l=m=2 multipole
                  T1 = None,         # Maximum time
                  df = None,         # Optional df in frequency domain (determines time domain padding)
-                 use_peak_strain = False,   # Toggle to use peak of strain rather than the peak of the luminosity
+                 use_peak_strain = True,   # Toggle to use peak of strain rather than the peak of the luminosity
                  verbose = None):
 
         #
@@ -2385,7 +2435,7 @@ class gwylm:
             safety_factor = 0.45 # NOTE that this is quite a low safetey factor -- we wish to definitely avoid noise if possible. T1_min is implemented below just in case this is too strong of a safetey factor.
             T1 = T0 + safety_factor * ( T_noise_floor - T0 )
             # Make sure that T1 is at least T1_min
-            T1_min = 60
+            T1_min = T0+60
             T1 = max(T1,T1_min)
             # NOTE that there is a chance that T1 chould be "too close" to T0
 
@@ -2490,7 +2540,29 @@ class gwylm:
         #
         return y
 
+    # Phase shift each mode according to a rotation of the orbital plane
+    def rotate( this, dphi ):
+        '''Phase shift each mode according to a rotation of the orbital plane'''
+        # Define a function to shift the phase of a single multipole set
+        def rotate_multipole_set( xlm ):
+            for x in xlm:
+                x.shift_phase( x.m * dphi )
+        # For all multipole sets
+        multipole_types = ['ylm','flm','hlm']
+        for k in multipole_types:
+            rotate_multipole_set( this.__dict__[k] )
 
+    # Rotate the orbital phase of the current set to align with a reference gwylm object
+    def align( this, that, reference_kind=None ):
+        '''Rotate the prbital phase of the current set to align with a reference gwylm object'''
+        # Find the phase shift needed to align the l=m=2 mode
+        dphi22 = get_wfarr_relative_phase(this.lm[2,2][ 'psi4' if reference_kind is None else reference_kind ].wfarr,that.lm[2,2][ 'psi4' if reference_kind is None else reference_kind ].wfarr)
+        # Use this to guess the rotation of the oribtal plane needed
+        dphi0_ = dphi22 / 2
+        # There is a pi ambiguity in the value above, so let's also try dphi0_+pi
+        # and take the wone that gives use the best phase agreement
+        from numpy import pi
+        this.rotate( dphi0_ + pi )
 
     # Extrapolate to infinite radius: http://arxiv.org/pdf/1503.00718.pdf
     def extrapolate(this,method=None):
@@ -2511,7 +2583,7 @@ class gwylm:
 
     # Estimate Remnant BH mass and spin from gwylm object. This is done by "brute" force here (i.e. an actual calculation), but NOTE that values for final mass and spin are Automatically loaded within each scentry; However!, some of these values may be incorrect -- especially for BAM sumulations. Here we make a rough estimate of the remnant mass and spin based on a ringdown fit.
     def brute_masspin( this,              # IMR gwylm object
-                       T0 = 10,                 # Time relative to peak luminosity to start ringdown
+                       T0 = 20,                 # Time relative to peak strain to start ringdown
                        T1 = None,               # Time relative to peak lum where ringdown ends (if None, gwylm.ringdown sets its value to the end of the waveform approx at noise floor)
                        apply_result = False,    # If true, apply result to input this object
                        verbose = False ):       # Let the people know
@@ -2524,7 +2596,7 @@ class gwylm:
         # Import useful things
         thisfun='gwylm.brute_masspin'
         from scipy.optimize import minimize
-        from nrutils import FinalSpin0815,EradRational0815
+        from nrutils import jf14067295,Mf14067295
         from kerr import qnmfit
 
         # Validate first input type
@@ -2547,8 +2619,8 @@ class gwylm:
         # Use PhenomD fit for guess
         eta = this.m1*this.m2/((this.m1+this.m2)**2)
         chi1, chi2 = this.S1[-1]/(this.m1**2), this.S2[-1]/(this.m2**2)
-        guess_xf =   FinalSpin0815(   eta, chi2, chi1 )
-        guess_Mf = 1-EradRational0815(eta, chi2, chi1 )
+        guess_xf = jf14067295( this.m1,this.m2,chi1,chi2 )
+        guess_Mf = Mf14067295( this.m1,this.m2,chi1,chi2 )
         guess = (guess_Mf,guess_xf)
 
         # perform the minization

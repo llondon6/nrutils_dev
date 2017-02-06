@@ -1251,7 +1251,7 @@ def sYlm(s,l,m,theta,phi):
 
 
     # Calcualte the "pre-sum" part of sYlm
-    a = (-1.0)**m
+    a = (-1.0)**(m)
     a = a * sqrt( f(l+m)*f(l-m)*(2.0*l+1) )
     a = a / sqrt( 4.0*pi*f(l+s)*f(l-s) )
     a = a * sin( theta/2.0 )**(2.0*l)
@@ -1272,7 +1272,7 @@ def sYlm(s,l,m,theta,phi):
     Y = A*B*exp( 1j*m*phi )
 
     #
-    if abs(Y.imag) == 0:
+    if sum(abs(Y.imag)) == 1e-7:
         Y = Y.real
 
     #
@@ -1563,11 +1563,9 @@ def align_wfarr_average_phase(this,that,mask=None,verbose=False):
     #
     return this_
 
-# Find the average phase difference and align two wfarr's
-def align_wfarr_initial_phase(this,that):
-    '''
-    'this' phase will be aligned to 'that' phase over their domains
-    '''
+
+#
+def get_wfarr_relative_phase(this,that):
 
     #
     from numpy import angle,unwrap,mean
@@ -1580,7 +1578,19 @@ def align_wfarr_initial_phase(this,that):
     _a = unwrap( angle(u) )[0]
     _b = unwrap( angle(v) )[0]
 
+    #
     dphi = -_a + _b
+
+    #
+    return dphi
+
+# Find the average phase difference and align two wfarr's
+def align_wfarr_initial_phase(this,that):
+    '''
+    'this' phase will be aligned to 'that' phase over their domains
+    '''
+
+    dphi = get_wfarr_relative_phase(this,that)
 
     #
     this_ = shift_wfarr_phase(this,dphi)
