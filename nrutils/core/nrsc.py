@@ -37,6 +37,19 @@ class scconfig(smart_object):
             msg = '(!!) scconfig objects cannot be initialted/reconfigured without a defined "config_file_location" location property (i.e. string where the related config file lives)'
             raise ValueError(msg)
 
+        #
+        stale_config_exists = os.path.exists( this.config_file_location )
+        if not stale_config_exists:
+            # Try to refresh the confil location using the user's current path.ini in nrutils' setting folder
+            config_path = gconfig.config_path
+            stale_config_name = this.config_file_location.split('/')[-1]
+            fresh_config_file_location = config_path + '/' + stale_config_name
+            # If the new config path exists, then store it and use it to reconfigure the current object
+            if os.path.exists( fresh_config_file_location ):
+                this.config_file_location = fresh_config_file_location
+            else:
+                error('nrutils noticed that the config object\'s config_location of "%s" does not extist. It then tried to determine the correct location from your paths.ini file (see in package nrutils/setting/paths.ini). This estimate location was determined to be "%s". Sadly, this file was also not found by the OS. So ...¯\_(ツ)_/¯ "%s"'%(magents(this.config_file_location),magents(fresh_config_file_location)) )
+
         # learn the contents of the configuration file
         if os.path.exists( this.config_file_location ):
             this.learn_file( this.config_file_location, comment=[';','#'] )
@@ -1741,7 +1754,7 @@ class gwylm:
             #--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--#
                 if this.verbose: alert('Rotating initial oribital phase to be along x-axis.')
                 from numpy import array,arctan2,sin,cos,dot
-                R = scentry_obj.R1-scentry_obj.R2
+                R = scentry_obj.R2-scentry_obj.R1
                 phi0 = arctan2( R[1], R[0] )
                 print phi0
                 # Apply rotation to multipoles

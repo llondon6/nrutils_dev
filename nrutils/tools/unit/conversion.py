@@ -1,6 +1,8 @@
 
 # Import core basics
 from nrutils.core.basics import *
+# To thine own self be true
+from nrutils.tools.unit.conversion import *
 
 # --------------------------------------------------------------- #
 # Physical Constants
@@ -17,6 +19,32 @@ __physical_constants__['mass_sun_secs'] = __physical_constants__['G']*__physical
 __physical_constants__['mass_sun_meters'] = __physical_constants__['G']*__physical_constants__['mass_sun']/(__physical_constants__['c']*__physical_constants__['c'])
 # mass of the sun in Mpc
 __physical_constants__['mass_sun_mpc'] = __physical_constants__['mass_sun_meters'] * __physical_constants__['meter_to_mpc']
+
+# --------------------------------------------------------------- #
+# Given TIME DOMAIN strain in code units, convert to Physical units
+# --------------------------------------------------------------- #
+def physh( harr, M, D ):
+    '''Given TIME DOMAIN strain (waveform array OR number) in code units, convert to Physical units'''
+    # Calculate unit conversion factor for strain amplitude
+    K = mass_mpc(M)/D
+    # If conversion of a number is desired
+    if isinstance(harr,(float,int,complex)):
+        # Convert strain data to physical units and return
+        return harr*K
+    elif isinstance(harr,list):
+        # Convert strain data to physical units and return
+        return [ K*hj for hj in harr ]
+    else:
+        # Here we will asusme that input is numpy ndarray
+        if 3 == harr.shape[-1]:
+            # Convert the time column to physical units
+            harr[:,0] = physt( harr[:,0], M )
+            # Convert strain data to physical units
+            harr[:,1:] *= K
+            # Return answer
+            return harr
+        elif 1==len(harr.shape):
+            harr *= K
 
 # --------------------------------------------------------------- #
 # Given TIME DOMAIN strain in physical units, convert to Code units
@@ -68,6 +96,13 @@ def codef( f, M ):
 def physf( f, M ):
     '''Convert code frequency to physical frequency (Hz)'''
     return f/mass_sec(M)
+
+# --------------------------------------------------------------- #
+# Convert code time to physical time (sec)
+# --------------------------------------------------------------- #
+def physt( t, M ):
+    '''Convert code time to physical time (sec)'''
+    return t*mass_sec(M)
 
 # --------------------------------------------------------------- #
 # Convert mass in code units to seconds
