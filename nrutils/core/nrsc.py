@@ -2531,6 +2531,8 @@ class gwylm:
     # Phase shift each mode according to a rotation of the orbital plane
     def rotate( this, dphi ):
         '''Phase shift each mode according to a rotation of the orbital plane'''
+        # Import useful things
+        from numpy import array,sin,cos,arctan2,dot
         # Define a function to shift the phase of a single multipole set
         def rotate_multipole_set( xlm ):
             for x in xlm:
@@ -2542,15 +2544,17 @@ class gwylm:
         # Apply rotation to position metadata
         R1_ = array(this.R1)
         R2_ = array(this.R2)
-        M = array([[ cos(-phi0), -sin(-phi0), 0 ],
-                   [ sin(-phi0),  cos(-phi0), 0 ],
-                   [          0,           0, 1 ]])
+        M = array([[ cos(dphi), -sin(dphi), 0 ],
+                   [ sin(dphi),  cos(dphi), 0 ],
+                   [         0,          0, 1 ]])
         R1_ = dot( M, R1_ )
         R2_ = dot( M, R2_ )
-        print R1_,R2_
+        #
         for k in range(len(R1_)):
             this.R1[k] = R1_[k]
             this.R2[k] = R2_[k]
+        #
+        warning('Note that spin vectos are not yet rotated.')
 
     # Rotate the orbital phase of the current set to align with a reference gwylm object
     def align( this, that, reference_kind=None ):
