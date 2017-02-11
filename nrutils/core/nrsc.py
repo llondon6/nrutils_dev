@@ -1674,7 +1674,6 @@ class gwylm:
                   w22 = None,                       # Optional input for lowest physical frequency in waveform; by default an wstart value is calculated from the waveform itself and used in place of w22
                   lowpass=None,                     # Toggle to lowpass filter waveform data upon load using "romline" (in basics.py) routine to define window
                   calcstrain = None,                # If True, strain will be calculated upon loading
-                  standardize_orbital_phase = True, # If True, the orbital phase will be adjusted so that the binary effectively starts aligned along the x-axis as defined by the initial position vector in the standard metadata. The initial will also be updated for consitency.
                   verbose               = None ):   # be verbose
 
         # NOTE that this method is setup to print the value of each input if verbose is true.
@@ -1749,30 +1748,6 @@ class gwylm:
         # Load the waveform data
         if load==True:
             this.__load__(lmax=lmax,lm=lm,dt=dt)
-            #--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--#
-            if standardize_orbital_phase:
-            #--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--#
-                if this.verbose: alert('Rotating initial oribital phase to be along x-axis.')
-                from numpy import array,arctan2,sin,cos,dot
-                R = scentry_obj.R2-scentry_obj.R1
-                phi0 = arctan2( R[1], R[0] )
-                print phi0
-                # Apply rotation to multipoles
-                this.rotate( -phi0 )
-                # Apply rotation to position metadata
-                R1_ = array(scentry_obj.R1)
-                R2_ = array(scentry_obj.R2)
-                M = array([[ cos(-phi0), -sin(-phi0), 0 ],
-                           [ sin(-phi0),  cos(-phi0), 0 ],
-                           [          0,           0, 1 ]])
-                R1_ = dot( M, R1_ )
-                R2_ = dot( M, R2_ )
-                print R1_,R2_
-                for k in range(len(R1_)):
-                    scentry_obj.R1[k] = R1_[k]
-                    scentry_obj.R2[k] = R2_[k]
-                if this.R1 is not scentry_obj.R1:
-                    raise ValueError('whaght!? R1 should propagate to all related copies')
 
         # Characterize the waveform's start and store related information to this.preinspiral
         this.preinspiral = None # In charasterize_start(), the information about the start of the waveform is actually stored to "starting". Here this field is inintialized for visibility.
@@ -2564,6 +2539,18 @@ class gwylm:
         multipole_types = ['ylm','flm','hlm']
         for k in multipole_types:
             rotate_multipole_set( this.__dict__[k] )
+        # Apply rotation to position metadata
+        R1_ = array(this.R1)
+        R2_ = array(this.R2)
+        M = array([[ cos(-phi0), -sin(-phi0), 0 ],
+                   [ sin(-phi0),  cos(-phi0), 0 ],
+                   [          0,           0, 1 ]])
+        R1_ = dot( M, R1_ )
+        R2_ = dot( M, R2_ )
+        print R1_,R2_
+        for k in range(len(R1_)):
+            this.R1[k] = R1_[k]
+            this.R2[k] = R2_[k]
 
     # Rotate the orbital phase of the current set to align with a reference gwylm object
     def align( this, that, reference_kind=None ):
