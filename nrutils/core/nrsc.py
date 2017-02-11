@@ -48,7 +48,7 @@ class scconfig(smart_object):
             if os.path.exists( fresh_config_file_location ):
                 this.config_file_location = fresh_config_file_location
             else:
-                error('nrutils noticed that the config object\'s config_location of "%s" does not extist. It then tried to determine the correct location from your paths.ini file (see in package nrutils/setting/paths.ini). This estimate location was determined to be "%s". Sadly, this file was also not found by the OS. So ..._/¯(>_>)_/¯ "%s"'%(magents(this.config_file_location),magents(fresh_config_file_location)) )
+                error('nrutils noticed that the config objects config_location of "%s" does not extist. It then tried to determine the correct location from your paths.ini file (see in package nrutils/setting/paths.ini). This estimate location was determined to be "%s". Sadly, this file was also not found by the OS. So ...¯\_(ツ)_/¯ "%s"' % ( magents(this.config_file_location),magents(fresh_config_file_location)) )
 
         # learn the contents of the configuration file
         if os.path.exists( this.config_file_location ):
