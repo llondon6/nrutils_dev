@@ -1412,6 +1412,26 @@ def pad_wfarr(wfarr,new_length,where=None):
     # Return padded array
     return _wfarr
 
+# Shift a waveform arra by some "shift" amount in time
+def tshift_wfarr( _wfarr, shift ):
+    '''Shift a waveform arra by some "shift" amount in time'''
+    # Import useful things
+    from numpy import array
+    # Unpack waveform array
+    t,p,c = _wfarr[:,0],_wfarr[:,1],_wfarr[:,2]
+    _y = p + 1j*c
+    # Shift the waveform array data using tshift
+    y = tshift( t,_y,shift )
+    # Repack the input array
+    wfarr = array(_wfarr)
+    wfarr[:,0] = t
+    wfarr[:,1] = y.real
+    wfarr[:,2] = y.imag
+    # Return answer
+    ans = wfarr
+    return ans
+
+
 # Time shift array data, h, using a frequency diomain method
 def tshift( t,      # time sries of data
             h,      # data that will be shifted

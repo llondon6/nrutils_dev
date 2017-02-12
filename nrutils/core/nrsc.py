@@ -1540,13 +1540,27 @@ class gwf:
         this.setfields(wfarr)
 
     # Pad this waveform object in the time domain with zeros
-    def pad(this,new_length=None,where=None):
-
+    def pad(this,new_length=None,where=None,apply=False):
+        #
+        where = 'right' if where is None else where
         # Pad this waveform object to the left and right with zeros
-        ans = this.copy()
+        ans = this.copy() if not apply else this
         if new_length is not None:
             # Create the new wfarr
             wfarr = pad_wfarr( this.wfarr, new_length,where=where )
+            # Confer to the current object
+            ans.setfields(wfarr)
+
+        return ans
+
+    # Shift this waveform object in the time domain
+    def tshift(this,shift=None,apply=False):
+
+        # Pad this waveform object to the left and right with zeros
+        ans = this.copy() if not apply else this
+        if shift is not None:
+            # Create the new wfarr
+            wfarr = tshift_wfarr( this.wfarr, shift )
             # Confer to the current object
             ans.setfields(wfarr)
 
@@ -1609,9 +1623,16 @@ class gwf:
     def shift_phase(this,
                     dphi,
                     fromraw=False,    # If True, rotate the wavefor relative to its default wfarr (i.e. __rawgwfarr__)
+                    apply = True,
                     verbose=False):
 
         #
+        from numpy import ndarray
+        if isinstance(dphi,(list,tuple,ndarray)):
+            if len(dphi)==1:
+                dphi = dphi[0]
+            else:
+                error( 'dphi found to be iterable of length greater than one. the method is not implemented to handle this scenario. Please loop over desired values externally.' )
         if not isinstance(dphi,(float,int)):
             error('input must of float or int real valued','gwf.shift_phase')
 
@@ -1625,8 +1646,13 @@ class gwf:
         if this.verbose: warning(msg,'gwf.shift_phase')
 
         #
-        this.wfarr = shift_wfarr_phase( wfarr, dphi )
-        this.setfields()
+        ans = this if apply else this.copy()
+        wfarr = shift_wfarr_phase( wfarr, dphi )
+        ans.setfields(wfarr)
+        #
+        if not apply:
+            return ans
+
 
     # frequency domain filter the waveform given a window state for the frequency domain
     def fdfilter(this,window):
@@ -1674,6 +1700,7 @@ class gwylm:
                   w22 = None,                       # Optional input for lowest physical frequency in waveform; by default an wstart value is calculated from the waveform itself and used in place of w22
                   lowpass=None,                     # Toggle to lowpass filter waveform data upon load using "romline" (in basics.py) routine to define window
                   calcstrain = None,                # If True, strain will be calculated upon loading
+                  enforce_polarization_convention = None, # If true, polarization will be adjusted according to initial separation vectors
                   verbose               = None ):   # be verbose
 
         # NOTE that this method is setup to print the value of each input if verbose is true.
@@ -1691,6 +1718,7 @@ class gwylm:
         load = True if load is None else load
         clean = False if clean is None else clean
         calcstrain = True if calcstrain is None else calcstrain
+        this.enforce_polarization_convention = False if enforce_polarization_convention is None else enforce_polarization_convention
 
         # Validate the lm input
         this.__valinputs__(thisfun,lm=lm,lmax=lmax,scentry_obj=scentry_obj)
@@ -1748,6 +1776,15 @@ class gwylm:
         # Load the waveform data
         if load==True:
             this.__load__(lmax=lmax,lm=lm,dt=dt)
+
+        #--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--#
+        # Enforce polarization convention based on intial compoenent positions
+        if this.enforce_polarization_convention:
+            from numpy import arctan2,sin,cos,dot
+            R = -this.R2+this.R1
+            dpsi_initial = arctan2( R[1], R[0] )
+            this.rotate( dpsi=dpsi_initial, verbose=False )
+        #--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--#
 
         # Characterize the waveform's start and store related information to this.preinspiral
         this.preinspiral = None # In charasterize_start(), the information about the start of the waveform is actually stored to "starting". Here this field is inintialized for visibility.
@@ -2475,14 +2512,24 @@ class gwylm:
 
 
     # pad each mode to a new_length
-    def pad(this,new_length=None):
-
+    def pad(this,new_length=None, apply=True):
         # Pad each mode
-        for y in this.ylm:
-            y.pad( new_length=new_length )
-        for h in this.hlm:
-            h.pad( new_length=new_length )
+        ans = this if apply else this.copy()
+        for z in this.lm:
+            for k in this.lm[z]:
+                ans.lm[z][k].pad( new_length=new_length, apply=apply )
+        #
+        if not apply: return ans
 
+    # shift the time series
+    def tshift( this, shift=0, apply=True ):
+        # shift each mode
+        ans = this if apply else this.copy()
+        for z in this.lm:
+            for k in this.lm[z]:
+                ans.lm[z][k].tshift( shift=shift, apply=apply )
+        #
+        if not apply: return ans
 
     # Recompose the waveforms at a sky position about the source
     # NOTE that this function returns a gwf object
@@ -2529,44 +2576,178 @@ class gwylm:
         return y
 
     # Phase shift each mode according to a rotation of the orbital plane
-    def rotate( this, dphi ):
+    def rotate( this, dphi=0, apply=True, dpsi=0, verbose=True ):
         '''Phase shift each mode according to a rotation of the orbital plane'''
         # Import useful things
         from numpy import array,sin,cos,arctan2,dot
-        # Define a function to shift the phase of a single multipole set
-        def rotate_multipole_set( xlm ):
-            for x in xlm:
-                x.shift_phase( x.m * dphi )
         # For all multipole sets
-        multipole_types = ['ylm','flm','hlm']
-        for k in multipole_types:
-            rotate_multipole_set( this.__dict__[k] )
+        ans = this if apply else this.copy()
+        for j in ans.lm:
+            for k in ans.lm[j]:
+                ans.lm[j][k].shift_phase( ans.lm[j][k].m * dphi + dpsi, apply=True )
         # Apply rotation to position metadata
-        R1_ = array(this.R1)
-        R2_ = array(this.R2)
-        M = array([[ cos(dphi), -sin(dphi), 0 ],
-                   [ sin(dphi),  cos(dphi), 0 ],
+        R1_ = array(ans.R1)
+        R2_ = array(ans.R2)
+        M = array([[ cos(dpsi), -sin(dpsi), 0 ],
+                   [ sin(dpsi),  cos(dpsi), 0 ],
                    [         0,          0, 1 ]])
         R1_ = dot( M, R1_ )
         R2_ = dot( M, R2_ )
         #
         for k in range(len(R1_)):
-            this.R1[k] = R1_[k]
-            this.R2[k] = R2_[k]
+            ans.R1[k] = R1_[k]
+            ans.R2[k] = R2_[k]
         #
-        warning('Note that spin vectos are not yet rotated.')
+        if verbose: warning('Note that this method only affects waveforms, meaning that rotations are not back propagated to metadata: spins, component positions etc. This is for future work. Call rotate with verbose=False to disable this message.')
+        if not apply: return ans
 
     # Rotate the orbital phase of the current set to align with a reference gwylm object
-    def align( this, that, reference_kind=None ):
-        '''Rotate the prbital phase of the current set to align with a reference gwylm object'''
-        # Find the phase shift needed to align the l=m=2 mode
-        dphi22 = get_wfarr_relative_phase(this.lm[2,2][ 'psi4' if reference_kind is None else reference_kind ].wfarr,that.lm[2,2][ 'psi4' if reference_kind is None else reference_kind ].wfarr)
-        # Use this to guess the rotation of the oribtal plane needed
-        dphi0_ = dphi22 / 2
-        # There is a pi ambiguity in the value above, so let's also try dphi0_+pi
-        # and take the wone that gives use the best phase agreement
-        from numpy import pi
-        this.rotate( dphi0_ + pi )
+    def align( this, that, reference_kind=None, plot=False, apply=True, verbose=True, lm=None ):
+        '''Rotate the orbital phase and polarization of the current set to align with a reference gwylm object'''
+
+        # Import useful things
+        from numpy import array,argmax,pi,linspace,angle
+        from scipy.optimize import minimize
+
+        # Define a shortahnd
+        (a,b) = (this,that) if apply else (this.copy,that.copy)
+
+        # Define data holders and the range of orbital phase to brture force
+        ab_list = []
+        dphi_range = pi*linspace(-1,1,20)
+        # Evaluate the nrmatch over the orbital phase brute force points
+        # and convert result into numpy array
+        if verbose: alert('Performing sky-ageraged match (no noise curve) to estimate optimal shift in orbital phase.')
+        ab_list = [ a.nrmatch(b,dphi,lm=lm) for dphi in dphi_range ]
+        ab = array(ab_list)
+        # Perform numerical optimization
+        if verbose: alert('Obtaining numerical estimate of optimal shift in orbital phase.')
+        action = lambda du: -abs( a.nrmatch(b,du) )
+        guess_dphi = dphi_range[ argmax( abs(ab) ) ]
+        Q = minimize( action, guess_dphi, bounds=[(-pi,pi)] )
+        # Extract optimal orbital phase shift & calculate optimal polzarization shift
+        dphi_opt = Q.x[0]
+        dpsi_opt = -angle( a.nrmatch(b,dphi_opt) )
+        #
+        a.rotate( dphi_opt, dpsi=dpsi_opt, verbose=verbose, apply=True )
+
+        #
+        if verbose: alert('(dphi_opt,dpsi_opt) = (%1.4f,%1.4f)'%(dphi_opt,dpsi_opt))
+
+        #
+        if plot:
+
+            from scipy.interpolate import interp1d as spline
+            # Setup plotting backend
+            import matplotlib as mpl
+            from mpl_toolkits.mplot3d import axes3d
+            mpl.rcParams['lines.linewidth'] = 0.8
+            mpl.rcParams['font.family'] = 'serif'
+            mpl.rcParams['font.size'] = 12
+            mpl.rcParams['axes.labelsize'] = 20
+            mpl.rcParams['axes.titlesize'] = 20
+            from matplotlib.pyplot import plot,axes,xlabel,ylabel,xlim,ylim,figure,title
+
+            dphis = pi*linspace(-1,1,2e2).T
+            M = lambda dphi_: spline(dphi_range,ab.real, kind='cubic')(dphi_) + 1j*spline(dphi_range,ab.imag, kind='cubic')(dphi_)
+            ms = M(dphis)
+
+            fig = figure( figsize=2*array([5,3]) )
+
+            plot( dphi_range, abs(ab), linewidth=4, color='k',alpha=0.1 )
+            plot( dphi_range, ab.real, linewidth=4, color='k',alpha=0.1 )
+            plot( dphi_range, ab.imag, linewidth=4, color='k',alpha=0.1 )
+
+            plot( dphis, abs(ms) )
+            plot( dphis, ms.real, alpha=0.5 )
+            plot( dphis, ms.imag, alpha=0.5 )
+            plot( dphi_opt, abs(M(dphi_opt)), 'or' )
+
+            title(r'($d\phi$,$d\psi$) = (%1.4f,%1.4f)'%(  dphi_opt,dpsi_opt  ) )
+            xlabel(r'$d\phi$')
+            ylabel(r'$\langle GT,BAM \rangle$')
+
+            xlim(lim(dphis))
+
+            #
+            for j in a.lm:
+                b.lm[j]['psi4'].plot( ref_gwf = a.lm[j]['psi4'],labels=('this','that') )
+
+        #
+        if not apply: return a,b
+
+    # Given a reference gwylm, ensure that there is a common dt
+    def dtalign(this,yref,apply=True):
+        '''Given a reference gwylm, ensure that there is a common dt'''
+        (that,zref) = (this,yref) if apply else (this.copy(),yref.copy())
+        dt1 = that.ylm[0].dt
+        dt2 = yref.ylm[0].dt
+        if dt1!=dt2: ( that if dt2<dt1 else zref ).setdt( min([dt1,dt2]) )
+        return that,zref
+
+    # Change the dt of the current gwylm via interpolation
+    def setdt(this,dt,apply=True):
+        '''Change the dt of the current gwylm via interpolation'''
+        ans = this if apply else this.copy()
+        for j in ans.lm:
+            for k in ans.lm[j]:
+                ans.lm[j][k].interpolate( dt=dt )
+        if not apply: return ans
+
+    # Given a reference gwylm, pad the current object and perhaps the reference to the same length
+    def lengthalign(this,yref,apply=True):
+        '''Given a reference gwylm, pad the current object and perhaps the reference to the same length'''
+        that,zref = this.dtalign(yref,apply=apply)
+        l1 = that.ylm[0].n
+        l2 = zref.ylm[0].n
+        if l1!=l2: ( that if l2>l1 else zref ).pad( max([l1,l2]) )
+        return that,zref
+
+    # Given a reference gwylm, align the peak to that of a reference waveform
+    def tpeakalign(this,yref,apply=True):
+        '''Given a reference gwylm, align the peak to that of a reference waveform'''
+        that,zref = this.lengthalign( yref, apply=apply )
+        shift = -that.lm[2,2]['psi4'].intrp_t_amp_max + zref.lm[2,2]['psi4'].intrp_t_amp_max
+        that.tshift( shift=shift )
+        if not apply: return that,zref
+
+    # Compute the simple vector inner-product (sky averaged overlap with no noise curve) between one gwylm  and another
+    def nrmatch(this,     # The current object
+                yref,     # reference gwylm
+                dphi=0,   # rotation of orbital phase to apply to current object
+                dpsi=0,   # rotation of polarization to apply to current object
+                lm = None): # which modes to use
+        '''
+        # Compute the simple vector inner-product (sky averaged overlap with no noise curve) between one gwylm  and another.
+
+        Inputs:
+        ---
+        yref,   # reference gwylm
+        dphi,   # rotation of orbital phase to apply to current object
+        dpsi,   # rotation of polarization to apply to current object
+        lm,     # which multipoles to use for match - useful for investigating degeneracies in dpsi & dphi
+
+        Output:
+        ---
+        x,      # sky avergaed and normalized inner-product
+        '''
+        # Import useful things
+        from numpy import sqrt
+        #
+        that,zref = this.lengthalign(yref,apply=False)
+        # Define a simple inner product
+        def prod(a,b): return sum(a.conj()*b)
+        # Calculate a sky averaged and normalized inner product
+        x,N = 0,len(zref.ylm)
+        that = that.rotate(dphi,apply=False,dpsi=dpsi,verbose=False)
+        for k in range(N):
+            l,m = zref.ylm[k].l,zref.ylm[k].m
+            proceed = True if lm is None else (l,m) in lm
+            u,v = zref.lm[l,m]['psi4'].y, that.lm[l,m]['psi4'].y
+            u_ = u/sqrt(prod(u,u)); v_ = v/sqrt(prod(v,v))
+            x += prod( u_,v_ )/N
+        # Return the answer
+        return x
 
     # Extrapolate to infinite radius: http://arxiv.org/pdf/1503.00718.pdf
     def extrapolate(this,method=None):
@@ -2648,6 +2829,40 @@ class gwylm:
 
         # Return stuff, including the fit object
         return mf,xf,Q
+
+    #
+    def match( this,    # The current object
+               that,    # The referencce qwylm object with which to caculate a match
+               orientation = None, # Orientation of source relative to line of sight
+               noise_curve = None, # Detector noise curve to use (modeled only)
+               domain = None,
+               verbose = False ):
+
+        # Import useful things
+        from numpy import correlate as xcor
+
+        # Handle default options
+        if not isinstance(domain,str): error('domain input must be string')
+        if not isinstance(noise_curve,str): error('noise_curve input must be string')
+        domain = 'time' if domain is None else domain.lower()
+        noise_curve = 'flat' if noise_curve is None else noise_curve.lower()
+
+        # Validate domain input
+        valid_domains = ('time','freq')
+        if not domain in valid_domains:
+            error( 'the domain input must be either "time" or "freq", instead "%s" was found' % magenta(domain) )
+        valid_noise_curves = ('time','freq')
+        if not noise_curve in valid_noise_curves:
+            error( 'the noise_curve input must be in %s, instead "%s" was found' % (list(valid_noise_curves),magenta(domain) ) )
+
+        #
+        if domain == 'time':
+            #
+            error('functionality not yet implemented')
+        else:
+            #
+            error('functionality not yet implemented')
+
 
     # Los pass filter using romline in basics.py to determine window region
     def lowpass(this):

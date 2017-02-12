@@ -1,8 +1,6 @@
 
 # Import core basics
 from nrutils.core.basics import *
-# To thine own self be true
-from nrutils.tools.unit.conversion import *
 
 # --------------------------------------------------------------- #
 # Physical Constants
