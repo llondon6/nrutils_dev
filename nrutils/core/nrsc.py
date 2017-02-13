@@ -2579,24 +2579,26 @@ class gwylm:
     def rotate( this, dphi=0, apply=True, dpsi=0, verbose=True ):
         '''Phase shift each mode according to a rotation of the orbital plane'''
         # Import useful things
-        from numpy import array,sin,cos,arctan2,dot
+        from numpy import array,sin,cos,arctan2,dot,sign
         # For all multipole sets
         ans = this if apply else this.copy()
         for j in ans.lm:
             for k in ans.lm[j]:
-                ans.lm[j][k].shift_phase( ans.lm[j][k].m * dphi + dpsi, apply=True )
+                m = ans.lm[j][k].m
+                ans.lm[j][k].shift_phase( m * dphi + dpsi*sign(m), apply=True )
         # Apply rotation to position metadata
-        R1_ = array(ans.R1)
-        R2_ = array(ans.R2)
-        M = array([[ cos(dpsi), -sin(dpsi), 0 ],
-                   [ sin(dpsi),  cos(dpsi), 0 ],
-                   [         0,          0, 1 ]])
-        R1_ = dot( M, R1_ )
-        R2_ = dot( M, R2_ )
-        #
-        for k in range(len(R1_)):
-            ans.R1[k] = R1_[k]
-            ans.R2[k] = R2_[k]
+        if 'R1' in ans.__dict__:
+            R1_ = array(ans.R1)
+            R2_ = array(ans.R2)
+            M = array([[ cos(dpsi), -sin(dpsi), 0 ],
+                       [ sin(dpsi),  cos(dpsi), 0 ],
+                       [         0,          0, 1 ]])
+            R1_ = dot( M, R1_ )
+            R2_ = dot( M, R2_ )
+            #
+            for k in range(len(R1_)):
+                ans.R1[k] = R1_[k]
+                ans.R2[k] = R2_[k]
         #
         if verbose: warning('Note that this method only affects waveforms, meaning that rotations are not back propagated to metadata: spins, component positions etc. This is for future work. Call rotate with verbose=False to disable this message.')
         if not apply: return ans
@@ -2614,10 +2616,10 @@ class gwylm:
 
         # Define data holders and the range of orbital phase to brture force
         ab_list = []
-        dphi_range = pi*linspace(-1,1,20)
+        dphi_range = pi*linspace(-1,1,60)
         # Evaluate the nrmatch over the orbital phase brute force points
         # and convert result into numpy array
-        if verbose: alert('Performing sky-ageraged match (no noise curve) to estimate optimal shift in orbital phase.')
+        if verbose: alert('Performing sky-averaged match (no noise curve) to estimate optimal shift in orbital phase.')
         ab_list = [ a.nrmatch(b,dphi,lm=lm) for dphi in dphi_range ]
         ab = array(ab_list)
         # Perform numerical optimization
@@ -2663,15 +2665,15 @@ class gwylm:
             plot( dphis, ms.imag, alpha=0.5 )
             plot( dphi_opt, abs(M(dphi_opt)), 'or' )
 
-            title(r'($d\phi$,$d\psi$) = (%1.4f,%1.4f)'%(  dphi_opt,dpsi_opt  ) )
+            title(r'$(d\phi,d\psi,max) = (%1.4f,%1.4f,%1.4f)$'%(  dphi_opt,dpsi_opt, abs(M(dphi_opt))  ) )
             xlabel(r'$d\phi$')
-            ylabel(r'$\langle GT,BAM \rangle$')
+            ylabel(r'$\langle u,v \rangle$')
 
             xlim(lim(dphis))
 
             #
             for j in a.lm:
-                b.lm[j]['psi4'].plot( ref_gwf = a.lm[j]['psi4'],labels=('this','that') )
+                b.lm[j]['psi4'].plot( ref_gwf = a.lm[j]['psi4'],labels=('u','v') )
 
         #
         if not apply: return a,b
@@ -2735,17 +2737,40 @@ class gwylm:
         from numpy import sqrt
         #
         that,zref = this.lengthalign(yref,apply=False)
+        lm  = zref.__lmlist__ if lm is None else lm
         # Define a simple inner product
         def prod(a,b): return sum(a.conj()*b)
         # Calculate a sky averaged and normalized inner product
-        x,N = 0,len(zref.ylm)
+        x,U,V,N = 0,0,0,len(zref.ylm)
         that = that.rotate(dphi,apply=False,dpsi=dpsi,verbose=False)
+
+        #--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--#
+        # The code below normalizes the match for the entire sky average
+        proceedfun = lambda ll,mm: True if lm is None else (ll,mm) in lm
         for k in range(N):
             l,m = zref.ylm[k].l,zref.ylm[k].m
-            proceed = True if lm is None else (l,m) in lm
-            u,v = zref.lm[l,m]['psi4'].y, that.lm[l,m]['psi4'].y
-            u_ = u/sqrt(prod(u,u)); v_ = v/sqrt(prod(v,v))
-            x += prod( u_,v_ )/N
+            proceed = proceedfun(l,m) # True if lm is None else (l,m) in lm
+            if proceed:
+                u,v = zref.lm[l,m]['psi4'].y, that.lm[l,m]['psi4'].y
+                U += prod(u,u); V += prod(v,v)
+        for k in range(N):
+            l,m = zref.ylm[k].l,zref.ylm[k].m
+            proceed = proceedfun(l,m) # True if lm is None else (l,m) in lm
+            if proceed:
+                u,v = zref.lm[l,m]['psi4'].y, that.lm[l,m]['psi4'].y
+                u_ = u/sqrt(U); v_ = v/sqrt(V)
+                x += prod( u_,v_ ) if m>=0 else prod( u_,v_ ).conj()
+        #--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--#
+
+        # # The code below normalizes the match for each mode
+        # for k in range(N):
+        #     l,m = zref.ylm[k].l,zref.ylm[k].m
+        #     proceed = True if lm is None else (l,m) in lm
+        #     if proceed:
+        #         u,v = zref.lm[l,m]['psi4'].y, that.lm[l,m]['psi4'].y
+        #         u_ = u/sqrt(prod(u,u)); v_ = v/sqrt(prod(v,v))
+        #         x += ( prod( u_,v_ ) if m>=0 else prod( u_,v_ ).conj() )/N
+
         # Return the answer
         return x
 
