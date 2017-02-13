@@ -25,7 +25,7 @@ def nr2h5( nr_strain_data, nr_meta_data, output_path=None, verbose=False ):
     from numpy.linalg import norm
     from os.path import expanduser
     from numpy import array, diff
-    import romSpline
+    import romspline
     import h5py
 
     #
@@ -137,8 +137,8 @@ def nr2h5( nr_strain_data, nr_meta_data, output_path=None, verbose=False ):
 
     # Define functoin to create spline and store temporary h5 file
     def write_spline( output_location, domain_data, feature_data ):
-        # Create romSpline object of multipole data
-        spline = romSpline.ReducedOrderSpline( domain_data, feature_data, verbose=False )
+        # Create romspline object of multipole data
+        spline = romspline.ReducedOrderSpline( domain_data, feature_data, verbose=False )
         spline.write( output_location )
 
     # Amplitude and phase roms must be created, stored to temporary files, and then added to the main hdf5 file above. This is a pain.
@@ -154,11 +154,11 @@ def nr2h5( nr_strain_data, nr_meta_data, output_path=None, verbose=False ):
         # Unpack multipole indeces
         l = lm[0]; m = lm[1]
 
-        # Create romSpline object of multipole amplitude data
+        # Create romspline object of multipole amplitude data
         amp_tmp = tmp_dir + 'amp_l%im%i.h5' % lm
         write_spline( amp_tmp, time_data, nr_strain_data[(l,m)]['amp'] )
 
-        # Create romSpline object of multipole phase data
+        # Create romspline object of multipole phase data
         phase_tmp = tmp_dir + 'phase_l%im%i.h5' % lm
         write_spline( phase_tmp, time_data, nr_strain_data[(l,m)]['phase'] )
 
