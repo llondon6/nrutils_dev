@@ -2049,3 +2049,123 @@ def jf14067295(m1, m2, chi1, chi2):
     chif = x[0]
 
     return chif
+
+
+#00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%#
+# Find the polarization and orbital phase shifts that maximize the real part
+# of  gwylm object's (2,2) and (2,1) multipoles at merger (i.e. the sum)
+''' See gwylm.selfalign for higher level Implementation '''
+#00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%#
+
+def vectorize( _gwylmo, dphi, dpsi, k_ref=0 ):
+    from numpy import array
+    vec = []
+    select_modes = [ (2,2), (2,1) ]
+    valid_count = 0
+    gwylmo = _gwylmo.rotate( dphi=dphi, dpsi=dpsi, apply=False, verbose=False, fast=True )
+    for y in gwylmo.ylm:
+        l,m = y.l,y.m
+        if (l,m) in select_modes:
+            vec.append( y.plus[ k_ref ] )
+            valid_count += 1
+    if valid_count != 2:
+        error('input gwylm object must have both the l=m=2 and (l,m)=(2,1) multipoles; only %i of these was found'%valid_count)
+    return array(vec)
+
+def alphamax(_gwylmo,dphi,plt=False,verbose=False,n=13):
+    from scipy.interpolate import interp1d as spline
+    from scipy.optimize import minimize
+    from numpy import pi,linspace,sum,argmax,array
+    action = lambda x: sum( vectorize( _gwylmo, x[0], x[1] ) )
+    dpsi_range = linspace(-1,1,n)*pi
+    dpsis = linspace(-1,1,1e2)*pi
+    a = array( [ action([dphi,dpsi]) for dpsi in dpsi_range ] )
+    aspl = spline( dpsi_range, a, kind='cubic' )(dpsis)
+    dpsi_opt_guess = dpsis[argmax(aspl)]
+    K = minimize( lambda PSI: -action([dphi,PSI]), dpsi_opt_guess )
+    dpsi_opt = K.x[-1]
+    if plt:
+        import matplotlib as mpl
+        from mpl_toolkits.mplot3d import axes3d
+        mpl.rcParams['lines.linewidth'] = 0.8
+        mpl.rcParams['font.family'] = 'serif'
+        mpl.rcParams['font.size'] = 12
+        mpl.rcParams['axes.labelsize'] = 20
+        mpl.rcParams['axes.titlesize'] = 20
+        from matplotlib.pyplot import plot, xlabel
+        plot( dpsi_range, a, linewidth=4, color='k', alpha=0.1 )
+        plot( dpsis, aspl, label=dpsi )
+        plot( dpsis[argmax(aspl)], aspl[argmax(aspl)], 'or', mfc='none' )
+        xlabel(r'$\psi$')
+    if verbose: print dpsi_opt,action([dphi,dpsi_opt])
+    return [ dpsi_opt, action([dphi,dpsi_opt])    ]
+
+def betamax(_gwylmo,n=10,plt=False,opt=True,verbose=False):
+    from scipy.interpolate import interp1d as spline
+    from scipy.optimize import minimize
+    from numpy import pi,linspace,argmax,array
+    dphi_list = pi*linspace(-1,1,n)
+    dpsi,val = [],[]
+    for dphi in dphi_list:
+        [dpsi_,val_] = alphamax(_gwylmo,dphi,plt=False,n=n)
+        dpsi.append( dpsi_ )
+        val.append( val_ )
+
+    dphis = linspace(min(dphi_list),max(dphi_list),1e3)
+    vals = spline( dphi_list, val, kind='cubic' )( dphis )
+    dpsi_s = spline( dphi_list, dpsi, kind='cubic' )( dphis )
+
+    action = lambda x: -sum( vectorize( _gwylmo, x[0], x[1] ) )
+    dphi_opt_guess = dphis[argmax(vals)]
+    dpsi_opt_guess = dpsi_s[argmax(vals)]
+    if opt:
+        K = minimize( action, [dphi_opt_guess,dpsi_opt_guess] )
+        # print K
+        dphi_opt,dpsi_opt = K.x
+        val_max = -K.fun
+    else:
+        dphi_opt = dphi_opt_guess
+        dpsi_opt = dpsi_opt_guess
+        val_max = vals.max()
+
+    if plt:
+        # Setup plotting backend
+        import matplotlib as mpl
+        from mpl_toolkits.mplot3d import axes3d
+        mpl.rcParams['lines.linewidth'] = 0.8
+        mpl.rcParams['font.family'] = 'serif'
+        mpl.rcParams['font.size'] = 12
+        mpl.rcParams['axes.labelsize'] = 20
+        mpl.rcParams['axes.titlesize'] = 20
+        from matplotlib.pyplot import plot,xlabel,title
+        plot( dphi_list, val, linewidth=4, alpha=0.1, color='k' )
+        plot( dphi_opt, val_max, 'or', alpha=0.5 )
+        plot( dphis, vals )
+        xlabel(r'$\phi$')
+        title(val_max)
+
+    if verbose:
+        print 'dphi_opt = ' + str(dphi_opt)
+        print 'dpsi_opt = ' + str(dpsi_opt)
+        print 'val_max = ' + str(val_max)
+
+    return dphi_opt,dpsi_opt
+
+def betamax2(_gwylmo,n=10,plt=False,opt=True,verbose=False):
+    from scipy.interpolate import interp1d as spline
+    from scipy.optimize import minimize
+    from numpy import pi,linspace,argmax,array
+
+    action = lambda x: -sum( vectorize( _gwylmo, x[0], x[1] ) )
+
+    dphi,dpsi,done,k = pi,pi/2,False,0
+    while not done:
+        dpsi_action = lambda _dpsi: action( [dphi,_dpsi] )
+        dpsi = minimize( dpsi_action, dpsi, bounds=[(0,2*pi)] ).x[0]
+        dphi_action = lambda _dphi: action( [_dphi,dpsi] )
+        dphi = minimize( dphi_action, dphi, bounds=[(0,2*pi)] ).x[0]
+        done = k>n
+        print '>> ',dphi,dpsi,action([dphi,dpsi])
+        k+=1
+
+    return dphi,dpsi

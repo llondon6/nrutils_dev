@@ -952,6 +952,7 @@ class gwf:
     # set fields of standard wf object
     def setfields(this,         # The current object
                   wfarr=None,   # The waveform array to apply to the current object
+                  setfd=True,   # Option to toggle freq domain calculations
                   dt=None):     # The time spacing to apply to the current object
 
         # If given dt, then interpolote waveform array accordingly
@@ -1071,22 +1072,22 @@ class gwf:
         # --------------------------------------------------- #
         # Always calculate frequency domain data
         # --------------------------------------------------- #
+        if setfd:
+            # compute the frequency domain
+            this.f = fftshift(fftfreq( this.n, this.dt ))
+            this.w = 2*pi*this.f
 
-        # compute the frequency domain
-        this.f = fftshift(fftfreq( this.n, this.dt ))
-        this.w = 2*pi*this.f
+            # compute fourier transform values
+            this.fd_plus   = fftshift(fft( this.plus  )) * this.dt                    # fft of plus
+            this.fd_cross  = fftshift(fft( this.cross )) * this.dt                    # fft of cross
+            this.fd_y       = this.fd_plus + 1j*this.fd_cross               # full fft
+            this.fd_amp     = abs( this.fd_y )                              # amp of full fft
+            this.fd_phi     = unwrap( angle( this.fd_y ) )                  # phase of full fft
 
-        # compute fourier transform values
-        this.fd_plus   = fftshift(fft( this.plus  )) * this.dt                    # fft of plus
-        this.fd_cross  = fftshift(fft( this.cross )) * this.dt                    # fft of cross
-        this.fd_y       = this.fd_plus + 1j*this.fd_cross               # full fft
-        this.fd_amp     = abs( this.fd_y )                              # amp of full fft
-        this.fd_phi     = unwrap( angle( this.fd_y ) )                  # phase of full fft
+            # this.fd_dphi    = diff( this.fd_phi )/this.df             # phase rate: dphi/df
+            this.fd_dphi    = intrp_diff( this.f, this.fd_phi )             # phase rate: dphi/df
 
-        # this.fd_dphi    = diff( this.fd_phi )/this.df             # phase rate: dphi/df
-        this.fd_dphi    = intrp_diff( this.f, this.fd_phi )             # phase rate: dphi/df
-
-        this.fd_k_amp_max = argmax( this.fd_amp )
+            this.fd_k_amp_max = argmax( this.fd_amp )
 
         # Starting frequency in rad/sec
         this.wstart = None
@@ -1624,6 +1625,7 @@ class gwf:
                     dphi,
                     fromraw=False,    # If True, rotate the wavefor relative to its default wfarr (i.e. __rawgwfarr__)
                     apply = True,
+                    fast = False,
                     verbose=False):
 
         #
@@ -1642,13 +1644,16 @@ class gwf:
             wfarr = this.wfarr
 
         #
-        msg = 'This function could be spead up by manually aligning relevant fields, rather than regenerating all fields which includes taking an FFT.'
+        msg = 'This function could be sped up by manually aligning relevant fields, rather than regenerating all fields which includes taking an FFT.'
         if this.verbose: warning(msg,'gwf.shift_phase')
 
         #
         ans = this if apply else this.copy()
         wfarr = shift_wfarr_phase( wfarr, dphi )
-        ans.setfields(wfarr)
+        if fast:
+            ans.setfields(wfarr,setfd=False)
+        else:
+            ans.setfields(wfarr)
         #
         if not apply:
             return ans
@@ -2576,7 +2581,7 @@ class gwylm:
         return y
 
     # Phase shift each mode according to a rotation of the orbital plane
-    def rotate( this, dphi=0, apply=True, dpsi=0, verbose=True ):
+    def rotate( this, dphi=0, apply=True, dpsi=0, verbose=True, fast=False ):
         '''Phase shift each mode according to a rotation of the orbital plane'''
         # Import useful things
         from numpy import array,sin,cos,arctan2,dot,sign
@@ -2585,7 +2590,7 @@ class gwylm:
         for j in ans.lm:
             for k in ans.lm[j]:
                 m = ans.lm[j][k].m
-                ans.lm[j][k].shift_phase( m * dphi + dpsi*sign(m), apply=True )
+                ans.lm[j][k].shift_phase( m * dphi + dpsi*sign(m), apply=True, fast=fast )
         # Apply rotation to position metadata
         if 'R1' in ans.__dict__:
             R1_ = array(ans.R1)
@@ -2601,10 +2606,54 @@ class gwylm:
                 ans.R2[k] = R2_[k]
         #
         if verbose: warning('Note that this method only affects waveforms, meaning that rotations are not back propagated to metadata: spins, component positions etc. This is for future work. Call rotate with verbose=False to disable this message.')
-        if not apply: return ans
+        if not apply:
+            return ans
+        else:
+            return None
+
+    #
+    def deletelm( this, lm ):
+        # remove an lm node from this object
+
+        return None
+
+    # Find the polarization and orbital phase shifts that maximize the real part
+    # of  gwylm object's (2,2) and (2,1) multipoles at merger (i.e. the sum)
+    def selfalign( this, ref_gwylmo=None, plot=False, apply=True, n=13, verbose=False, v=1 ):
+        '''
+        Find the polarization and orbital phase shifts that maximize the real part
+        of  gwylm object's (2,2) and (2,1) multipoles at merger (i.e. the sum)
+        '''
+
+        # Let the people know
+        if verbose: alert('Appling the polarization and orbital phase shifts that maximize the real part of the gwylm objects (2,2) and (2,1) multipoles at merger (i.e. the sum)')
+        # Choose a region around ringdown to use for teh opimization uness give a reference gwylmo to use instead
+        u = this.ringdown(T0=0,T1=20) if ref_gwylmo is None else ref_gwylmo
+        # Maximize
+        if v == 1:
+            dphi,dpsi = betamax(u,plt=plot,opt=True,n=n, verbose=verbose)
+            print dphi,dpsi
+        else:
+            print '** Using test version betamax2'
+            dphi,dpsi = betamax2(u,plt=plot,opt=True,n=n, verbose=verbose)
+            print dphi,dpsi
+        # Rotate self
+        ans = this.rotate( dphi=dphi, dpsi=dpsi, verbose=verbose, apply=apply )
+
+        # #
+        # from numpy import pi,angle
+        # #
+        # u = this.ringdown(T0=0,T1=20) if ref_gwylmo is None else ref_gwylmo
+        # dphi = -angle(u.lm[2,1]['psi4'].phi[0])
+        # ans = this.rotate( dphi=dphi, dpsi=0, verbose=verbose, apply=apply )
+        # dpsi = -angle(u.lm[2,2]['psi4'].phi[0])
+        # ans = this.rotate( dphi=0, dpsi=dpsi, verbose=verbose, apply=apply )
+
+        #
+        return ans
 
     # Rotate the orbital phase of the current set to align with a reference gwylm object
-    def align( this, that, reference_kind=None, plot=False, apply=True, verbose=True, lm=None ):
+    def align( this, that, plot=False, apply=True, verbose=True, lm=None, return_match=False ):
         '''Rotate the orbital phase and polarization of the current set to align with a reference gwylm object'''
 
         # Import useful things
@@ -2616,7 +2665,7 @@ class gwylm:
 
         # Define data holders and the range of orbital phase to brture force
         ab_list = []
-        dphi_range = pi*linspace(-1,1,60)
+        dphi_range = pi*linspace(-1,1,19)
         # Evaluate the nrmatch over the orbital phase brute force points
         # and convert result into numpy array
         if verbose: alert('Performing sky-averaged match (no noise curve) to estimate optimal shift in orbital phase.')
@@ -2624,12 +2673,12 @@ class gwylm:
         ab = array(ab_list)
         # Perform numerical optimization
         if verbose: alert('Obtaining numerical estimate of optimal shift in orbital phase.')
-        action = lambda du: -abs( a.nrmatch(b,du) )
+        action = lambda du: -abs( a.nrmatch(b,du,lm=lm) )
         guess_dphi = dphi_range[ argmax( abs(ab) ) ]
         Q = minimize( action, guess_dphi, bounds=[(-pi,pi)] )
         # Extract optimal orbital phase shift & calculate optimal polzarization shift
         dphi_opt = Q.x[0]
-        dpsi_opt = -angle( a.nrmatch(b,dphi_opt) )
+        dpsi_opt = -angle( a.nrmatch(b,dphi_opt,lm=lm) )
         #
         a.rotate( dphi_opt, dpsi=dpsi_opt, verbose=verbose, apply=True )
 
@@ -2676,7 +2725,10 @@ class gwylm:
                 b.lm[j]['psi4'].plot( ref_gwf = a.lm[j]['psi4'],labels=('u','v') )
 
         #
-        if not apply: return a,b
+        if return_match:
+            return -Q.fun
+        else:
+            if not apply: return a,b
 
     # Given a reference gwylm, ensure that there is a common dt
     def dtalign(this,yref,apply=True):
@@ -2741,12 +2793,12 @@ class gwylm:
         # Define a simple inner product
         def prod(a,b): return sum(a.conj()*b)
         # Calculate a sky averaged and normalized inner product
-        x,U,V,N = 0,0,0,len(zref.ylm)
+        x,U,V,N = 0,0,0,len(lm)
         that = that.rotate(dphi,apply=False,dpsi=dpsi,verbose=False)
 
         #--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--#
         # The code below normalizes the match for the entire sky average
-        proceedfun = lambda ll,mm: True if lm is None else (ll,mm) in lm
+        proceedfun = lambda ll,mm: True if lm is None else ((ll,mm) in lm)
         for k in range(N):
             l,m = zref.ylm[k].l,zref.ylm[k].m
             proceed = proceedfun(l,m) # True if lm is None else (l,m) in lm
