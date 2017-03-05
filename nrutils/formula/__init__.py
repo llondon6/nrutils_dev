@@ -11,7 +11,7 @@ verbose = True
 
 # Dynamically import all modules within this folder (namespace preserving)
 for module in modules:
-    if verbose: print yellow('kerr##')+' Found formula module "%s"' % green(module)
+    if verbose: print yellow('nrutils.formula##')+' Found formula module "%s"' % green(module)
     exec 'import %s' % module
 
 # Cleanup

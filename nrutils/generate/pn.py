@@ -23,38 +23,53 @@ PLAN:
 # Import the core
 from nrutils.core import *
 
-# A class for the waveform generation workflow
-class pnns:
-
-    # Default options
-    default_options = {
-                        'fref' : 0.001,
-                        'dt'   : 1e-3
-                      }
-
+# Calculate the Frequency domain amplitude of PN hlm Multipoles
+def hf_amp_np( f,eta,X1z,X2z,mode ):
+    '''
+    Notes:
+    * all inputs except mode must be float
+    * mode must be iterable of length 2 containing spherical harmonic la and m
+    '''
+    # Import Useful things
+    from numpy import sqrt,pi
     #
-    def __init__(this,                        # The current object
-                 options = default_options,   # Optional inputs
-                 verbose = False ):           # Let the people know
-        return None
-
-    # ode solver
-    def solve(this):
-        #
-        from scipy.integrate import ode
-
-        #
-        f = []
-
-        # The PN jacobain
-        jac = []
-
-#
-def pnns_t4_dvbydt():
-
+    x = (pi*f)**(2.0/3.0)
+    # 
+    Atime = 8 * eta * x * sqrt(pi/5) * spa_amplitude( x, eta,X1z,X2z,mode )
     #
-    ans = None
-
+    ans = abs( sqrt(pi) * Atime / sqrt( 1.5*sqrt(x)*XdotT4(x,eta,X1z,X2z) ) )
+    #
     return ans
 
-# Separate modules for RHS? Different PN orders?
+#
+def spa_amplitude( x,eta,X1,X2,mode ):
+
+    #
+    from HPN050317 import H
+
+    #
+    Delta   = -sqrt( 1-4*eta )  # NOTE the minus sign!
+    Xa      = 0.5 * ( X1-X2 )
+    Xs      = 0.5 * ( X1+X2 )
+    x       = (pi*f) ** (2/3)   # This is sometimes called v
+
+    #
+    l,m = mode
+    ams = H[l,m]( x,eta,Delta,Xa,Xs,X1,X2 )
+
+    #
+    return None
+
+#
+def XdotT4(x,eta,X1,X2):
+    #
+    from HPN050317 import __XdotT4__
+    from numpy import sqrt
+    #
+    # Asuming m1+m2=M=1 and m2>=m1
+    M=1.0
+    beta = sqrt(1.0-4.0*eta)
+    m1=0.5*( M - beta * M)
+    m2=0.5*( M + beta * M)
+    #
+    return __XdotT4__( x, m1, m2, eta, X1, X2 )
