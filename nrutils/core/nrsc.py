@@ -1705,6 +1705,7 @@ class gwylm:
                   w22 = None,                       # Optional input for lowest physical frequency in waveform; by default an wstart value is calculated from the waveform itself and used in place of w22
                   lowpass=None,                     # Toggle to lowpass filter waveform data upon load using "romline" (in basics.py) routine to define window
                   calcstrain = None,                # If True, strain will be calculated upon loading
+                  calcnews = None,
                   enforce_polarization_convention = None, # If true, polarization will be adjusted according to initial separation vectors
                   verbose               = None ):   # be verbose
 
@@ -1723,6 +1724,7 @@ class gwylm:
         load = True if load is None else load
         clean = False if clean is None else clean
         calcstrain = True if calcstrain is None else calcstrain
+        calcnews = True if calcnews is None else calcnews
         this.enforce_polarization_convention = False if enforce_polarization_convention is None else enforce_polarization_convention
 
         # Validate the lm input
@@ -1814,6 +1816,10 @@ class gwylm:
         this.__lowpassfiltered__ = False
         if lowpass:
             this.lowpass()
+
+        # Calculate news
+        if calcnews and scentry_obj.config:
+            this.calcflm(w22=w22)
 
         # Calculate strain
         if calcstrain and scentry_obj.config:
@@ -2422,14 +2428,14 @@ class gwylm:
     # Get a gwylm object that only contains ringdown
     #--------------------------------------------------------------------------------#
     def ringdown(this,              # The current object
-                 T0 = 20,           # Starting time relative to peak luminosity of the l=m=2 multipole
+                 T0 = None,         # Starting time relative to peak luminosity of the l=m=2 multipole
                  T1 = None,         # Maximum time
                  df = None,         # Optional df in frequency domain (determines time domain padding)
                  use_peak_strain = True,   # Toggle to use peak of strain rather than the peak of the luminosity
                  verbose = None):
 
         #
-        from numpy import linspace,array
+        from numpy import linspace,array,where
         from scipy.interpolate import InterpolatedUnivariateSpline as spline
 
         # Make sure that the l=m=2 multipole exists
@@ -2454,8 +2460,18 @@ class gwylm:
         # ref_gwf = [ a for a in (this.hlm if use_peak_strain else this.flm) if a.l==a.m==2 ][0]
 
         #
-        peak_time = ref_gwf.t[ ref_gwf.k_amp_max ]
-        # peak_time = ref_gwf.intrp_t_amp_max
+        # peak_time = ref_gwf.t[ ref_gwf.k_amp_max ]
+        peak_time = ref_gwf.intrp_t_amp_max
+
+        # Handle T0 input
+        if T0 is None:
+            #
+            this.calcflm()
+            mu = 0.25
+            dE = sum( [ f.amp**2 for f in this.flm ] )
+            T0 = ref_gwf.t[ (dE<(mu*dE.max())) & (ref_gwf.t>peak_time) ][0] - peak_time
+            #
+            if T0 < 0: T0 = 20
 
         # Handle T1 Input
         if T1 is None:
@@ -3059,6 +3075,88 @@ def lswfa( apx      ='IMRPhenomPv2',    # Approximant name; must be compatible w
     return y
 
 
+
+
+# Frequency Domain Domain LALSimulation Waveform Approximant h_pluss and cross, but using nrutils data conventions
+def lswfafd( apx      ='IMRPhenomPv2',    # Approximant name; must be compatible with lal convenions
+           eta      = None,           # symmetric mass ratio
+           chi1     = None,           # spin1 iterable (Dimensionless)
+           chi2     = None,           # spin2 iterable (Dimensionless)
+           fmin_hz  = 30.0,           # phys starting freq in Hz
+           verbose  = False ):        # boolean toggle for verbosity
+
+    #
+    from nrutils.tools.unit.conversion import codef
+    from numpy import array,linspace,double
+    import lalsimulation as lalsim
+    from nrutils import eta2q
+    import lal
+
+    # Standardize input mass ratio and convert to component masses
+    M = 70.0
+    q = eta2q(eta)
+    q = double(q)
+    q = max( [q,1.0/q] )
+    m2 = M * 1.0 / (1.0+q)
+    m1 = float(q) * m2
+
+    #
+    df_code = 0.01
+    fmax_code = 0.5
+
+
+    # NOTE IS THIS CORRECT????
+    S1 = array(chi1)
+    S2 = array(chi2)
+
+    #
+    fmin_phys = fmin_hz
+    M_total_phys = (m1+m2) * lal.MSUN_SI
+
+    #
+    # REAL8 phiRef, REAL8 deltaF, REAL8 m1, REAL8 m2, REAL8 S1x, REAL8 S1y, REAL8 S1z, REAL8 S2x, REAL8 S2y, REAL8 S2z, REAL8 f_min, REAL8 f_max, REAL8 f_ref, REAL8 r, REAL8 z, REAL8 i, REAL8 lambda1, REAL8 lambda2, SimInspiralWaveformFlags waveFlags, SimInspiralTestGRParam nonGRparams, int amplitudeO, int phaseO, Approximant approximant
+
+    #
+    FD_arguments = {'phiRef': 0.0,
+             'deltaF': codef(df_code,M),
+             'f_min': fmin_phys,
+             'm1': m1 * lal.MSUN_SI,
+             'm2' : m2 * lal.MSUN_SI,
+             'S1x' : S1[0],
+             'S1y' : S1[1],
+             'S1z' : S1[2],
+             'S2x' : S2[0],
+             'S2y' : S2[1],
+             'S2z' : S2[2],
+             'f_ref': 100.0,
+             'f_max': 200.0,
+             'r': lal.PC_SI,
+             'z': 0,
+             'i': 0,
+             'lambda1': 0,
+             'lambda2': 0,
+             'waveFlags': None,
+             'nonGRparams': None,
+             'amplitudeO': -1,
+             'phaseO': -1,
+             'approximant': lalsim.SimInspiralGetApproximantFromString(apx)}
+
+    #
+
+    # Use lalsimulation to calculate plus and cross in lslsim dataformat
+    hp, hc  = lalsim.SimInspiralFD(**FD_arguments)
+
+    # Convert the lal datatype to a gwf object
+    D = 1e-6 * FD_arguments['r']/lal.PC_SI
+    #y = lalsim2gwf( hp,hc,m1+m2, D, fd=True )
+    y = (hp,hc)
+
+    #
+    return y
+
+
+
+
 # Characterize END of time domain waveform (POST RINGDOWN)
 class gwfcharend:
     def __init__(this,ylm):
@@ -3159,7 +3257,7 @@ def gwfend():
 
 
 # Function which converts lalsim waveform to gwf object
-def lalsim2gwf( hp,hc,M,D ):
+def lalsim2gwf( hp,hc,M,D, fd=False ):
 
     #
     from numpy import linspace,array,double,sqrt,hstack,zeros
@@ -3170,17 +3268,22 @@ def lalsim2gwf( hp,hc,M,D ):
     h_plus  = hp.data.data/x
     h_cross = hc.data.data/x
 
-    # Create time series data
-    t = linspace( 0.0, (h_plus.size-1.0)*hp.deltaT, int(h_plus.size) )
-
-    # Create waveform
-    harr = array( [t,h_plus,h_cross] ).T
-
-    # Convert to code units, where Mtotal=1
-    harr = codeh( harr,M,D )
-
-    # Create gwf object
-    h = gwf( harr, kind=r'$h^{\mathrm{lal}}_{22}$' )
+    if not fd:
+        # Create time series data
+        t = linspace( 0.0, (h_plus.size-1.0)*hp.deltaT, int(h_plus.size) )
+        # Create waveform
+        harr = array( [t,h_plus,h_cross] ).T
+        # Convert to code units, where Mtotal=1
+        harr = codeh( harr,M,D )
+        # Create gwf object
+        h = gwf( harr, kind=r'$h^{\mathrm{lal}}_{22}$' )
+    else:
+        # Create time series data
+        f = linspace( 0.0, (h_plus.size-1.0)*hp.deltaT, int(h_plus.size) )
+        # Create waveform
+        harr = array( [t,h_plus,h_cross] ).T
+        # Convert to code units, where Mtotal=1
+        harr = codehf( harr,M,D )
 
     #
     return h

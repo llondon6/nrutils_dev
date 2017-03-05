@@ -61,7 +61,7 @@ def codeh( harr, M, D ):
 # --------------------------------------------------------------- #
 # Given FREQUENCY DOMAIN strain in physical units, convert to Code units
 # --------------------------------------------------------------- #
-def codehfd( fd_harr, M, D ):
+def codehf( fd_harr, M, D ):
     '''Given FREQUENCY DOMAIN strain in physical units, convert to Code units'''
     # convert time series to physical units
     fd_harr[:,0] = codef( fd_harr[:,0], M )
