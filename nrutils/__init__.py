@@ -92,6 +92,7 @@ for p in internal_packages:
 from manipulate import nr2h5
 from tools.unit.conversion import *
 from core.nrsc import scsearch,scbuild,gwylm,gwf,lswfa,scentry
+from nrutils.formula import *
 
 #
 if verbose: print ''

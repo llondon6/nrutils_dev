@@ -19,10 +19,6 @@ PLAN:
 
 '''
 
-
-# Import the core
-from nrutils.core import *
-
 # Calculate the Frequency domain amplitude of PN hlm Multipoles
 def hf_amp_np( f,eta,X1z,X2z,mode ):
     '''
@@ -33,37 +29,37 @@ def hf_amp_np( f,eta,X1z,X2z,mode ):
     # Import Useful things
     from numpy import sqrt,pi
     #
-    x = (pi*f)**(2.0/3.0)
-    # 
-    Atime = 8 * eta * x * sqrt(pi/5) * spa_amplitude( x, eta,X1z,X2z,mode )
+    x = (pi*f)**(2.0/3.0)   # This is sometimes called v
+    #
+    Atime = 8 * eta * x * sqrt(pi/5) * spa_intermediate_amplitude( x, eta,X1z,X2z,mode )
     #
     ans = abs( sqrt(pi) * Atime / sqrt( 1.5*sqrt(x)*XdotT4(x,eta,X1z,X2z) ) )
     #
     return ans
 
 #
-def spa_amplitude( x,eta,X1,X2,mode ):
+def spa_intermediate_amplitude( x,eta,X1,X2,mode ):
 
     #
-    from HPN050317 import H
+    from numpy import sqrt,pi
+    from nrutils.formula.HPN050317 import H
 
     #
     Delta   = -sqrt( 1-4*eta )  # NOTE the minus sign!
     Xa      = 0.5 * ( X1-X2 )
     Xs      = 0.5 * ( X1+X2 )
-    x       = (pi*f) ** (2/3)   # This is sometimes called v
 
     #
     l,m = mode
-    ams = H[l,m]( x,eta,Delta,Xa,Xs,X1,X2 )
+    ans = H[l,m]( x,eta,Delta,Xa,Xs,X1,X2 )
 
     #
-    return None
+    return ans
 
 #
 def XdotT4(x,eta,X1,X2):
     #
-    from HPN050317 import __XdotT4__
+    from nrutils.formula.HPN050317 import __XdotT4__
     from numpy import sqrt
     #
     # Asuming m1+m2=M=1 and m2>=m1

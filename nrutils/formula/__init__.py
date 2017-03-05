@@ -1,6 +1,6 @@
 # Import all python files within this folder
 from os.path import dirname, basename, isdir
-from nrutils.basics import *
+from nrutils.core.basics import yellow,green
 import glob, kerr
 
 # list all py files within this directory
@@ -11,8 +11,8 @@ verbose = True
 
 # Dynamically import all modules within this folder (namespace preserving)
 for module in modules:
-    if verbose: print yellow('nrutils.formula##')+' Found formula module "%s"' % green(module)
+    if verbose: print yellow('  nrutils.formula:')+' Found formula module "%s"' % green(module)
     exec 'import %s' % module
 
 # Cleanup
-del dirname, basename, isdir, modules, module, f, glob, kerr
+del dirname, basename, isdir, modules, module, f, glob, yellow
