@@ -1096,7 +1096,7 @@ class gwf:
     def meet(this,friend,init=False,verbose=False):
 
         # If wrong type input, let the people know.
-        if not isinstance(friend,gwf):
+        if friend.__class__.__name__!='gwf':
             msg = '1st input must be of type ' + bold(type(this).__name__)+'.'
             error( msg, fname=inspect.stack()[0][3] )
 
@@ -1114,7 +1114,6 @@ class gwf:
                 setattr( this, attr, friend.__dict__[attr] )
 
         #
-        dir(this)
         return this
 
     # validate whether there is a constant time step
@@ -1488,16 +1487,16 @@ class gwf:
             msg = '(!!) either "state" or "window" keyword arguments must be given and not None.'
             error(msg,'gwf.taper')
 
-        # Set this object's window
-        this.window = this.window * window
-
         #
         wfarr = this.wfarr
-        wfarr[:,1] = this.window * this.wfarr[:,1]
-        wfarr[:,2] = this.window * this.wfarr[:,2]
+        wfarr[:,1] = window * this.wfarr[:,1]
+        wfarr[:,2] = window * this.wfarr[:,2]
 
         # NOTE that objects cannot be redefined within their methods, but their properties can be changed. For this reason, the line below uses setfields() rather than gwf() to apply the taper.
-        this = this.setfields( wfarr=wfarr )
+        this.setfields( wfarr=wfarr )
+
+        # Set this object's window
+        this.window = this.window * window
 
     # Apply mask
     def apply_mask( this, mask=None ):

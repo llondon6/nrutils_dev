@@ -24,7 +24,7 @@ default_par_list = 5,5
 is_extrapolated = 1
 
 # Toggle for whether waveform is scaled by extration radius or not
-is_rscaled = 0
+is_rscaled = 1
 
 #
 handler_location = /Users/book/JOKI/Libs/KOALA/nrutils_dev/nrutils/handlers/bam.py

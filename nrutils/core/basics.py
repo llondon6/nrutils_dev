@@ -1129,39 +1129,70 @@ def find( bool_vec ):
     return where(bool_vec)[0]
 
 # Low level function that takes in numpy 1d array, and index locations of start and end of wind, and then outputs the taper (a hanning taper). This function does not apply the taper to the data.
-def maketaper(arr,state):
+def maketaper(arr,state,window_type='hann',ramp=True):
+    '''
+    Low level function that takes in numpy 1d array, and index locations of start and end of wind, and then outputs the taper (a hanning taper). This function does not apply the taper to the data.
+
+    For all window types allowed, see:
+    https://docs.scipy.org/doc/scipy-0.15.1/reference/generated/scipy.signal.get_window.html
+    '''
 
     # Import useful things
-    from numpy import ones
+    from numpy import ones,zeros
     from numpy import hanning as hann
+    from scipy.signal import get_window
 
     # Parse taper state
     a = state[0]
     b = state[-1]
 
+    #
+    use_nr_window = window_type in ('nr')
+
     # Only proceed if a valid taper is given
     proceed = True
     true_width = abs(b-a)
-    twice_hann = hann( 2*true_width )
-    if b>a:
-        true_hann = twice_hann[ :true_width ]
-    elif b<=a:
-        true_hann = twice_hann[ true_width: ]
+
+    #
+    if ramp:
+
+        if window_type in ('nr'):
+            #
+            twice_ramp = nrwindow(2*true_width)
+        elif window_type in ('exp'):
+            #
+            twice_ramp = expsin_window(2*true_width)
+        else:
+            #
+            twice_ramp = get_window( window_type, 2*true_width )
+
+        if b>a:
+            true_ramp = twice_ramp[ :true_width ]
+        elif b<=a:
+            true_ramp = twice_ramp[ true_width: ]
+        else:
+            proceed = False
+            print a,b
+            alert('Whatght!@!')
     else:
-        proceed = False
-        print a,b
-        alert('Whatght!@!')
+        print 'ramp is false'
+        if window_type in ('nr'):
+            true_ramp = nrwindow(true_width)
+        elif window_type in ('exp'):
+            true_ramp = expsin_window(true_width)
+        else:
+            true_ramp = get_window( window_type,true_width )
 
     # Proceed (or not) with tapering
-    taper = ones( len(arr) )
+    taper = ones( len(arr) ) if ramp else zeros( len(arr) )
     if proceed:
         # Make the taper
         if b>a:
             taper[ :min(state) ] = 0*taper[ :min(state) ]
-            taper[ min(state) : max(state) ] = true_hann
+            taper[ min(state) : max(state) ] = true_ramp
         else:
             taper[ max(state): ] = 0*taper[ max(state): ]
-            taper[ min(state) : max(state) ] = true_hann
+            taper[ min(state) : max(state) ] = true_ramp
 
     #
     if len(taper) != len(arr):
@@ -1464,6 +1495,22 @@ def tshift( t,      # time sries of data
 
     #
     return h_
+
+# Time shift array data, h, using a index shifting method
+def ishift( h, di ):
+
+    #
+    from numpy import mod,arange
+
+    #
+    di = int( mod(di,len(h)) )
+
+    #
+    space = arange( len(h) )
+    new_space = space - di
+    ans = h[ new_space ]
+
+    return ans
 
 #
 def pnw0(m1,m2,D=10.0):
@@ -2169,3 +2216,513 @@ def betamax2(_gwylmo,n=10,plt=False,opt=True,verbose=False):
         k+=1
 
     return dphi,dpsi
+
+# Sinc Intepolation
+# from -- https://gist.github.com/endolith/1297227
+def sinc_interp(x, s, u):
+    """
+    Interpolates x, sampled at "s" instants
+    Output y is sampled at "u" instants ("u" for "upsampled")
+
+    from Matlab:
+    http://phaseportrait.blogspot.com/2008/06/sinc-interpolation-in-matlab.html
+    """
+
+    if len(x) != len(s):
+        raise Exception, 'x and s must be the same length'
+
+    # Find the period
+    T = s[1] - s[0]
+
+    sincM = tile(u, (len(s), 1)) - tile(s[:, newaxis], (1, len(u)))
+    y = dot(x, sinc(sincM/T))
+    return y
+
+#
+def nrwindow( N ):
+    '''
+    The point here is to define a taper to be used for the low frequency part of waveforms from NR data samples.
+    '''
+    #
+    from scipy.interpolate import CubicSpline as spline
+    from numpy import hstack,array,linspace,pi,sin
+    #
+    numerical_data = array([ [0.000235599, 0.164826], [0.000471197, 0.140627],\
+                             [0.000706796, 0.139527], [0.000942394, 0.154408],\
+                             [0.00117799, 0.144668], [0.00141359, 0.0820655],\
+                             [0.00164919, 0.107215], [0.00188479, 0.326988],\
+                             [0.00212039, 0.612349], [0.00235599, 0.928147],\
+                             [0.00259158, 1.25567], [0.00282718, 1.61068],\
+                             [0.00306278, 2.05771], [0.00329838, 2.69093],\
+                             [0.00353398, 3.58197], [0.00376958, 4.74465],\
+                             [0.00400517, 6.14815], [0.00424077, 7.76167],\
+                             [0.00447637, 9.66762], [0.00471197, 12.1948],\
+                             [0.00494757, 16.2907], [0.00518317, 23.0923],\
+                             [0.00541877, 33.2385], [0.00565436, 49.4065],\
+                             [0.00588996, 73.3563], [0.00612556, 101.84],\
+                             [0.00636116, 121.165], ])
+    #
+    a = numerical_data[:,1]/max(numerical_data[:,1])
+    n = len(a)
+    f = linspace(0,1,n)
+    #
+    A = spline(f,a)( linspace(0,1,int(N)/2) )
+    #
+    ans = hstack( [A, A[range(len(A)-1,0,-1)] ] ) if 2*len(A)==N else hstack( [A, A[range(len(A)-1,1,-1)] ] )
+    #
+    return ans
+
+#
+def expsin_window( N ):
+    #
+    from numpy import hstack,array,linspace,exp,log,pi,sin
+    #
+    t =  log(1e16) * (1+ sin( linspace( pi/2, -pi/2, int(N)/2 ) ))*0.5
+    A = exp( -t )
+    A -= min(A)
+    A /= max(A)
+    #
+    ans = hstack( [A, A[range(len(A)-1,0,-1)] ] ) if 2*len(A)==N else hstack( [A, A[range(len(A)-1,1,-1)] ] )
+    #
+    return ans
+
+#
+def phenom2td( fstart, N, dt, model_data, plot=False ):
+    # The idea here is to perform the formatting in a parameterized rather than mimicked way.
+    '''
+    NOTE that the model's phase must be well resolved in order for us to get reasonable results.
+    '''
+
+    # Setup plotting backend
+    __plot__ = True if plot else False
+    if __plot__:
+        import matplotlib as mpl
+        from mpl_toolkits.mplot3d import axes3d
+        mpl.rcParams['lines.linewidth'] = 0.8
+        mpl.rcParams['font.family'] = 'serif'
+        mpl.rcParams['font.size'] = 12
+        mpl.rcParams['axes.labelsize'] = 20
+        mpl.rcParams['axes.titlesize'] = 20
+        from matplotlib.pyplot import plot,xlabel,ylabel,figure,xlim,ylim,axhline
+        from matplotlib.pyplot import yscale,xscale,axvline,axhline,subplot
+        import matplotlib.gridspec as gridspec
+    #
+    from scipy.fftpack import fft,fftshift,ifft,fftfreq,ifftshift
+    from scipy.stats import mode
+    from numpy import array,arange,zeros,ones,unwrap,histogram
+    from numpy import argmax,angle,linspace,exp,diff,pi,floor,convolve
+    from scipy.interpolate import CubicSpline as spline
+
+    ##%% Construct the model on this domain
+
+    # Copy input data
+    model_f   = array( model_data[0] )
+    model_amp = array( model_data[1] )
+    model_pha = array( model_data[2] )
+
+    # NOTE: Using the regular diff here would result in
+    # unpredictable results due to round-pff error
+
+    #-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-#
+    ''' Determine the index location of the desired time shift.
+    The idea here is that the fd phase derivative has units of time
+    and is directly proportional to the map between time and frquency '''
+    #-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-#
+    dmodel_pha = intrp_diff(2*pi*model_f,model_pha)
+    # Define mask over which to consider derivative
+    mask = (abs(model_f)<0.4) & (abs(model_f)>0.01)
+    # NOTE:
+    # * "sum(mask)-1" -- Using the last value places the peak of
+    #   the time domain waveform at the end of the vector
+    # * "argmax( dmodel_pha[ mask ] )" -- Using this value
+    #   places the peak of the time domain waveform just before
+    #   the end of the vector
+    # #%% Use last value
+    # argmax_shift = sum(mask)-1
+    # time_shift = dmodel_pha[ mask ][ argmax_shift ]
+    #%% Use mode // histogram better than mode funcion for continuus sets
+    # This method is likely the most robust
+    hist,edges = histogram( dmodel_pha[mask],50 )
+    time_shift = edges[ 1+argmax( hist ) ]
+    # #%% Use peak of phase derivative
+    # argmax_shift = argmax( dmodel_pha[ mask ] )
+    # time_shift = dmodel_pha[ mask ][ argmax_shift ]
+
+    # #
+    # figure()
+    # plot( model_f[mask], dmodel_pha[ mask ]  )
+    # axhline( time_shift, linestyle='--' )
+    # axhline( max(dmodel_pha[ mask ]), color='r', alpha=0.5 )
+    # # axvline( model_f[kstart], linestyle=':' )
+
+    #
+    ringdown_pad = 600              # Time units not index; TD padding for ringdown
+    td_window_width = 3.0/fstart    # Used for determining the TD window function
+    fmax = 0.5                      # Used for tapering the FD ampliutde
+    fstart_eff = fstart/(pi-2)      # Effective starting frequency for taper generation
+
+
+    #-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-#
+    ''' -- DETERMINE WHETHER THE GIVEN N IS LARGE ENOUGH -- '''
+    ''' The method below works becuase the stationary phase approximation
+    can be applied from the time to frequency domain as well as from the frequency
+    domain to the time domain. '''
+    #-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-#
+    # Estimate the total time needed for the waveform
+    # Here the 4 is a safety factor -- techincally the total
+    # time needed depends on the window that will be applied in the frequency domain
+    # The point is that the total time should be sufficiently long to avoid the waveform
+    # overlapping with itself in the time domain.
+    T = 4*sum( abs( diff(dmodel_pha[(abs(model_f)<0.4) & (abs(model_f)>fstart_eff)]) ) )
+    T += ringdown_pad+td_window_width
+    input_T = N*dt
+    print '>> The total time needed for the waveform is %g'%T
+    print '>> The total time provided for the waveform is %g'%input_T
+    if input_T < T:
+        input_N = N
+        N = int( float(N*T)/input_T )
+        print '>> The number of samples is being changed from %i to %i.'%(input_N,N)
+    ## INPUTS: N, dt (in some form)
+    # Given dt and N (double sided), Create the new frequency domain
+    _f_ = fftfreq( N, dt )
+    t = dt*arange(N)
+    df = 1.0/(N*dt)
+
+    # Apply the time shift
+    model_pha -= 2*pi*(time_shift+ringdown_pad)*model_f
+
+    print '>> shift = %f'%time_shift
+    # figure()
+    # plot( model_f[mask],  intrp_diff(2*pi*model_f,model_pha)[mask] )
+    # axhline(0,color='k',alpha=0.5)
+
+    '''
+    Make the time domain window
+    '''
+    fd_k_start = find( model_f > fstart )[0]
+    t_start = dmodel_pha[ fd_k_start ] - time_shift
+    print 't_start = %f'%t_start
+    # Define the index end of the window; here we take use of the point that
+    # dmodel_pha=0 corresponds to the end of the time vector as to corroborate
+    # with the application of time_shift
+    k_start = find( (t-t[-1]+ringdown_pad)>=(t_start) )[0]-1
+    #
+    b = k_start
+    a = b - int(td_window_width/dt)
+    window = maketaper( t, [a,b] )
+    window *= maketaper( t, [len(t)-1,len(t)-1-int(0.5*ringdown_pad/dt)] )
+
+
+    # 1st try hard windowing around fstart and fend
+
+    ##%% Work on positive side for m>0
+    f_ = _f_[ _f_ > 0 ]
+
+    # Interpolate model over this subdomain
+    amp_ = spline( model_f,model_amp )(f_)
+    pha_ = spline( model_f,model_pha )(f_)
+
+    # figure( figsize=2*array([6,2]) )
+    # subplot(1,2,1)
+    # plot( model_f, model_amp )
+    # plot( f_, amp_, '--k' )
+    # yscale('log'); xscale('log')
+    # subplot(1,2,2)
+    # plot( model_f, model_pha )
+    # plot( f_, pha_, '--k' )
+    # xscale('log')
+
+    ## Work on negative side for m>0
+    _f = _f_[ _f_ < 0 ]
+    # Make zero
+    _amp = zeros( _f.shape )
+    _pha = zeros( _f.shape )
+
+    ## Combine positive and negative sides
+    _amp_ = zeros( _f_.shape )
+    _pha_ = zeros( _f_.shape )
+    _amp_[ _f_<0 ] = _amp; _amp_[ _f_>0 ] = amp_
+    _pha_[ _f_<0 ] = _pha; _pha_[ _f_>0 ] = pha_
+
+    # Switch FFT convention (or not)
+    amp = _amp_
+    pha = _pha_
+    f = _f_
+    # Construct complex waveform
+    hf_raw = amp * exp( -1j*pha )
+
+    hf_raw *= maketaper(f,[ find(f>0)[0], find(f>fstart_eff)[0] ],window_type='exp')
+    # hf_raw *= maketaper(f,[ find(f>0)[0], find(f>fstart/1.2)[0] ],window_type='nr')**2
+    hf_raw *= maketaper(f,[ find(f>fmax)[0], find(f>(fmax-0.1))[0] ],window_type='parzen')
+
+    #
+    fd_window = fft( window )
+
+    # hf = fftshift( convolve(fftshift(fd_window),fftshift(hf_raw),mode='same')/N )
+    hf = hf_raw
+
+    #----------------------------------------------#
+    # Calculate Time Donaim Waveform
+    #----------------------------------------------#
+    ht = ifft( hf ) * df*N
+    # ht *= window
+
+    #----------------------------------------------#
+    # Center waveform in time series and set peak
+    # time to zero.
+    #----------------------------------------------#
+    # ind_shift = -argmax(abs(ht))+len(ht)/2
+    # ht = ishift( ht, ind_shift )
+    print '>> The time domain waveform has a peak at index %i of %i'%(argmax(abs(ht)),len(t))
+    t -= t[ argmax(abs(ht)) ]
+
+    if __plot__:
+
+        figure( figsize=2*array([10,2]) )
+
+        gs = gridspec.GridSpec(1,7)
+        # figure( figsize=2*array([2.2,2]) )
+        # subplot(1,2,1)
+        ax1 = subplot( gs[0,0] )
+        subplot(1,4,1)
+        plot( abs(f), abs(hf) )
+        plot( abs(f), abs(hf_raw), '--' )
+        plot( abs(f), amp, ':m' )
+        plot( abs(f), abs(fd_window),'k',alpha=0.3 )
+        axvline( fstart, color='k', alpha=0.5, linestyle=':' )
+        yscale('log'); xscale('log')
+        xlim( [ fstart/10,fmax*2 ] )
+        # subplot(1,2,2)
+        # plot( abs(f), unwrap(angle(hf)) )
+        # xscale('log')
+
+        # figure( figsize=2*array([6,2]) )
+        ax2 = subplot( gs[0,2:-1] )
+        axhline( 0, color='k', linestyle='-', alpha=0.5 )
+        clr = rgb(3); white = ones( (3,) )
+        plot( t, ht.real, color=0.8*white )
+        plot( t, ht.imag, color=0.4*white )
+        plot( t,abs(ht), color=clr[0] )
+        plot( t,-abs(ht), color=clr[0] )
+        print '..> %g'%t[k_start]
+        axvline( t[k_start], color='k', alpha=0.5, linestyle=':' )
+        plot( t, window*0.9*max(ylim()),':k',alpha=0.5 )
+        xlim(lim(t))
+
+    #
+    return ht,t,time_shift
+
+
+#
+def phenom2td_backup( fstart, N, dt, model_data, plot=False ):
+    # The idea here is to perform the formatting in a parameterized rather than mimicked way.
+    '''
+    NOTE that the model's phase must be well resolved in order for us to get reasonable results.
+    '''
+
+    # Setup plotting backend
+    __plot__ = True if plot else False
+    if __plot__:
+        import matplotlib as mpl
+        from mpl_toolkits.mplot3d import axes3d
+        mpl.rcParams['lines.linewidth'] = 0.8
+        mpl.rcParams['font.family'] = 'serif'
+        mpl.rcParams['font.size'] = 12
+        mpl.rcParams['axes.labelsize'] = 20
+        mpl.rcParams['axes.titlesize'] = 20
+        from matplotlib.pyplot import plot,xlabel,ylabel,figure,xlim,ylim,axhline
+        from matplotlib.pyplot import yscale,xscale,axvline,axhline,subplot
+    #
+    from scipy.fftpack import fft,fftshift,ifft,fftfreq,ifftshift
+    from scipy.stats import mode
+    from numpy import array,arange,zeros,ones,unwrap,histogram
+    from numpy import argmax,angle,linspace,exp,diff,pi,floor
+    from scipy.interpolate import CubicSpline as spline
+
+    ## INPUTS: N, dt (in some form)
+
+    # Given dt and N (double sided), Create the new frequency domain
+    _f_ = fftshift(fftfreq( N, dt ))
+
+    #
+    t = dt*arange(N)
+    df = 1.0/(N*dt)
+
+    ##%% Construct the model on this domain
+
+    # Copy input data
+    model_f   = array( model_data[0] )
+    model_amp = array( model_data[1] )
+    model_pha = array( model_data[2] )
+
+    # NOTE: Using the regular diff here would result in
+    # unpredictable results due to round-pff error
+
+    '''
+    Determine the index location of the desired time shift.
+    The idea here is that the fd phase derivative has units of time
+    and is directly proportional to the map between time and frquency
+    '''
+    dmodel_pha = intrp_diff(2*pi*model_f,model_pha)
+    # Define mask over which to consider derivative
+    mask = (abs(model_f)<0.4) & (abs(model_f)>0.01)
+    # NOTE:
+    # * "sum(mask)-1" -- Using the last value places the peak of
+    #   the time domain waveform at the end of the vector
+    # * "argmax( dmodel_pha[ mask ] )" -- Using this value
+    #   places the peak of the time domain waveform just before
+    #   the end of the vector
+    # #%% Use last value
+    # argmax_shift = sum(mask)-1
+    # time_shift = dmodel_pha[ mask ][ argmax_shift ]
+    #%% Use mode // histogram better than mode funcion for continuus sets
+    # This method is likely the most robust
+    hist,edges = histogram( dmodel_pha[mask],50 )
+    time_shift = edges[ 1+argmax( hist ) ]
+    # #%% Use peak of phase derivative
+    # argmax_shift = argmax( dmodel_pha[ mask ] )
+    # time_shift = dmodel_pha[ mask ][ argmax_shift ]
+
+    #
+    figure()
+    plot( model_f[mask], dmodel_pha[ mask ]  )
+    axhline( time_shift, linestyle='--' )
+    axhline( max(dmodel_pha[ mask ]), color='r', alpha=0.5 )
+    # axvline( model_f[kstart], linestyle=':' )
+
+    #
+    ringdown_pad = 600
+
+    # Apply the time shift
+    model_pha -= 2*pi*(time_shift+ringdown_pad)*model_f
+
+    print '>> shift = %f'%time_shift
+    figure()
+    plot( model_f[mask],  intrp_diff(2*pi*model_f,model_pha)[mask] )
+    axhline(0,color='k',alpha=0.5)
+
+    '''
+    Make the time domain window
+    '''
+    fd_k_start = find( model_f > fstart )[0]
+    t_start = dmodel_pha[ fd_k_start ] - time_shift
+    print 't_start = %f'%t_start
+    # Define the index end of the window; here we take use of the point that
+    # dmodel_pha=0 corresponds to the end of the time vector as to corroborate
+    # with the application of time_shift
+    k_start = find( (t-t[-1]+ringdown_pad)>=(t_start) )[0]-1
+    #
+    b = k_start
+    a = b - int((1.0/fstart)/dt)
+    window = maketaper( t, [a,b] )
+    #
+    fd_window = fftshift( window )
+
+
+    # 1st try hard windowing around fstart and fend
+
+    ''' Work on positive side for m>0 '''
+    f_ = _f_[ _f_ > 0 ]
+
+    # Interpolate model over this subdomain
+    #- Pre-allocate the amp and phase
+    amp_ = zeros( f_.shape )
+    pha_ = zeros( f_.shape )
+
+    #- Interpolate the model over the region where the waveform is to be non-zero
+    wave_mask = f_>fstart
+    f_wave_ = f_[ wave_mask ]
+    amp_wave_ = spline( model_f,model_amp )(f_wave_)
+    pha_wave_ = spline( model_f,model_pha )(f_)
+
+    # amp_wave_ = spline( model_f,model_amp )(f_)
+    # pha_wave_ = spline( model_f,model_pha )(f_)
+
+    #- Add the interpolated data to the pre-allocated arrays
+
+    amp_[ wave_mask ] = amp_wave_
+    pha_ = pha_wave_
+    # amp_ = amp_wave_
+    # pha_ = pha_wave_
+
+    #- Replace zero regions with smooth windows
+    mask_left = f_ <=fstart # NOTE that this has to be consistent with the lines above
+    N_left = sum( mask_left )
+    #
+    taper = maketaper( range(N_left) , [ 0, N_left-1 ], window_type='nr' )
+    # taper = maketaper( range(N_left) , [ 0, N_left-1 ], window_type='parzen' )**4
+
+    # ref_pha = pha_[mask_left][-1]
+    # hf_left_ = amp_[mask_left]*exp(1j*pha_[mask_left])*taper
+    # amp_left_ = abs(hf_left_)
+    # amp_[mask_left] = amp_left_
+    # pha_left_ = unwrap( angle(hf_left_) )
+    # pha_[mask_left] = pha_left_ - pha_left_[-1] + ref_pha
+
+    amp_left_ = amp_wave_[0]*taper
+    amp_[mask_left] = amp_left_
+
+    figure( figsize=2*array([6,2]) )
+    subplot(1,2,1)
+    plot( model_f, model_amp )
+    plot( f_, amp_ )
+    yscale('log'); xscale('log')
+
+    ## Work on negative side for m>0
+    _f = _f_[ _f_ < 0 ]
+    # Make zero
+    _amp = zeros( _f.shape )
+    _pha = zeros( _f.shape )
+
+    ## Combine positive and negative sides
+    _amp_ = zeros( _f_.shape )
+    _pha_ = zeros( _f_.shape )
+    _amp_[ _f_<0 ] = _amp; _amp_[ _f_>0 ] = amp_
+    _pha_[ _f_<0 ] = _pha; _pha_[ _f_>0 ] = pha_
+
+    ## Switch FFT convention and then IFFT
+    amp = fftshift( _amp_ )
+    pha = fftshift( _pha_ )
+    f = fftshift( _f_ )
+
+    hf = amp * exp( -1j*pha )
+
+    # hf = fftshift(hf)
+    # figure( figsize=2*array([6,2]) )
+    # subplot(1,2,1)
+    # plot( _f_, abs(hf) )
+    # yscale('log'); xscale('log')
+    # subplot(1,2,2)
+    # plot( _f_, unwrap(angle(hf)) )
+    # xscale('log')
+    # hf = fftshift(hf).conj()
+
+    #----------------------------------------------#
+    # Calculate Time Donaim Waveform
+    #----------------------------------------------#
+    ht = ifft( hf ) * df*N
+
+    #----------------------------------------------#
+    # Center waveform in time series and set peak
+    # time to zero.
+    #----------------------------------------------#
+    # ind_shift = -argmax(abs(ht))+len(ht)/2
+    # ht = ishift( ht, ind_shift )
+    print '>> The time domain waveform has a peak at index %i of %i'%(argmax(abs(ht)),len(t))
+    t -= t[ argmax(abs(ht)) ]
+
+    if __plot__:
+        figure( figsize=2*array([6,2]) )
+        axhline( 0, color='k', linestyle=':' )
+        clr = rgb(3); white = ones( (3,) )
+        plot( t, ht.real, color=0.8*white )
+        plot( t, ht.imag, color=0.4*white )
+        plot( t,abs(ht), color=clr[0] )
+        plot( t,-abs(ht), color=clr[0] )
+        print '..> %g'%t[k_start]
+        axvline( t[k_start] )
+        plot( t, window*0.05 )
+        xlim(lim(t))
+
+    #
+    return ht,t,time_shift

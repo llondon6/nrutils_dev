@@ -8,7 +8,7 @@ from nrutils.core.basics import *
 __physical_constants__ = {  'mass_sun'          : 1.98892e30,		# kg
                             'G'                 : 6.67428e-11,		# m^3/(kg s^2)
                             'c'                 : 2.99792458e8,		# m/s
-                            'meter_to_mpc'      : 3.24077649e-23}	# meter to mpc conversion
+                            'meter_to_mpc'      : 3.24077649e-23}	# meter to Mpc conversion
 
 
 # mass of the sun in secs
@@ -17,6 +17,42 @@ __physical_constants__['mass_sun_secs'] = __physical_constants__['G']*__physical
 __physical_constants__['mass_sun_meters'] = __physical_constants__['G']*__physical_constants__['mass_sun']/(__physical_constants__['c']*__physical_constants__['c'])
 # mass of the sun in Mpc
 __physical_constants__['mass_sun_mpc'] = __physical_constants__['mass_sun_meters'] * __physical_constants__['meter_to_mpc']
+
+
+# --------------------------------------------------------------- #
+# Given FREQUENCY DOMAIN strain in code units, convert to Physical units
+# --------------------------------------------------------------- #
+def physhf( harr, M, D ):
+    '''Given FREQUENCY DOMAIN strain in code units, convert to Physical units'''
+    # Import useful things
+    from numpy import ndarray
+    # Calculate unit conversion factor for strain amplitude
+    K =  mass_mpc(M)/D  # Scale according to total mass and distance
+    K *= mass_sec(M)    # Scale the fourier transform's dt to physical units
+    # If conversion of a number is desired
+    if isinstance(harr,(float,int,complex,ndarray)):
+        # Convert strain data to physical units and return
+        return harr*K
+    elif isinstance(harr,list):
+        # Convert strain data to physical units and return
+        return [ K*hj for hj in harr ]
+    elif harr.__class__.__name__=='gwf':
+        # Convert gwf to physical units
+        y = harr.copy()
+        phys_wfarr = physh( y.wfarr, M, D )
+        from nrutils import gwf
+        return gwf( phys_wfarr ) 
+    else:
+        # Here we will asusme that input is numpy ndarray
+        if 3 == harr.shape[-1]:
+            # Convert the time column to physical units
+            harr[:,0] = physf( harr[:,0], M )
+            # Convert strain data to physical units
+            harr[:,1:] *= K
+            # Return answer
+            return harr
+        elif 1==len(harr.shape):
+            harr *= K
 
 # --------------------------------------------------------------- #
 # Given TIME DOMAIN strain in code units, convert to Physical units
@@ -93,7 +129,11 @@ def codef( f, M ):
 # --------------------------------------------------------------- #
 def physf( f, M ):
     '''Convert code frequency to physical frequency (Hz)'''
-    return f/mass_sec(M)
+    from numpy import ndarray
+    if isinstance(f,(tuple,list) ):
+        return [ ff/mass_sec(M) for ff in f ] if isinstance(f,list) else ( ff/mass_sec(M) for ff in f )
+    else:
+        return f/mass_sec(M)
 
 # --------------------------------------------------------------- #
 # Convert code time to physical time (sec)
