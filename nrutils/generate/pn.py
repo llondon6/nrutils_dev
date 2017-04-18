@@ -19,6 +19,32 @@ PLAN:
 
 '''
 
+# Calculate the Frequency domain PN hlm Multipoles
+def hfspa( f,eta,X1z,X2z,mode, leading_in_f=False ):
+    '''
+    Notes:
+    * all inputs except mode must be float
+    * mode must be iterable of length 2 containing spherical harmonic la and m
+    '''
+    # Import Useful things
+    from numpy import sqrt,pi
+
+    #
+    if leading_in_f:
+        error('option not implemented')
+
+    #
+    x = (pi*f)**(2.0/3.0)   # This is sometimes called v
+
+    # eq 6.4 of https://arxiv.org/pdf/1204.1043.pdf
+    Atime = 8 * eta * x * sqrt(pi/5) * spa_intermediate_amplitude( x, eta,X1z,X2z,mode )
+
+    #
+    ans = sqrt(pi) * Atime / sqrt( 1.5*sqrt(x)*XdotT4(x,eta,X1z,X2z) )
+
+    #
+    return ans
+
 # Calculate the Frequency domain amplitude of PN hlm Multipoles
 def hf_amp_np( f,eta,X1z,X2z,mode ):
     '''
@@ -36,7 +62,7 @@ def hf_amp_np( f,eta,X1z,X2z,mode ):
 
     #
     ans = abs( sqrt(pi) * Atime / sqrt( 1.5*sqrt(x)*XdotT4(x,eta,X1z,X2z) ) )
-    
+
     #
     return ans
 

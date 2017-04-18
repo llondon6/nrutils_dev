@@ -41,11 +41,11 @@ def physhf( harr, M, D ):
         y = harr.copy()
         phys_wfarr = physh( y.wfarr, M, D )
         from nrutils import gwf
-        return gwf( phys_wfarr ) 
+        return gwf( phys_wfarr )
     else:
         # Here we will asusme that input is numpy ndarray
         if 3 == harr.shape[-1]:
-            # Convert the time column to physical units
+            # Convert the frequency column to physical units
             harr[:,0] = physf( harr[:,0], M )
             # Convert strain data to physical units
             harr[:,1:] *= K
@@ -99,13 +99,16 @@ def codeh( harr, M, D ):
 # --------------------------------------------------------------- #
 def codehf( fd_harr, M, D ):
     '''Given FREQUENCY DOMAIN strain in physical units, convert to Code units'''
-    # convert time series to physical units
-    fd_harr[:,0] = codef( fd_harr[:,0], M )
-
-    # scale wave amplitude for mass and distance
-    fd_harr[:,1:] =  fd_harr[:,1:] / (mass_mpc( M )/D)
-    # convert the integration factor, dt, to code units
-    fd_harr[:,1:] =  fd_harr[:,1:] / mass_sec(M)
+    #
+    K  = D/mass_mpc( M )    # scale wave amplitude for mass and distance
+    K /= mass_sec(M)        # convert the differential dt to M
+    if fd_harr.shape[-1] == 3 :
+        # convert freq series to physical units
+        fd_harr[:,0] = codef( fd_harr[:,0], M )
+        # scale wave amplitude for mass and distance and convert the differential dt to M
+        fd_harr[:,1:] =  fd_harr[:,1:] * K
+    elif len(fd_harr.shape)==1:
+        fd_harr *= K
 
     #
     return fd_harr
