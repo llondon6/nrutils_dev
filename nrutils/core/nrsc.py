@@ -2668,7 +2668,7 @@ class gwylm:
         return ans
 
     # Rotate the orbital phase of the current set to align with a reference gwylm object
-    def align( this, that, plot=False, apply=True, verbose=True, lm=None, return_match=False ):
+    def align( this, that, plot=False, apply=True, verbose=True, lm=None, return_match=False, plot_labels=None ):
         '''Rotate the orbital phase and polarization of the current set to align with a reference gwylm object'''
 
         # Import useful things
@@ -2737,7 +2737,7 @@ class gwylm:
 
             #
             for j in a.lm:
-                b.lm[j]['psi4'].plot( ref_gwf = a.lm[j]['psi4'],labels=('u','v') )
+                b.lm[j]['psi4'].plot( ref_gwf = a.lm[j]['psi4'],labels= ('u','v') if plot_labels is None else plot_labels )
 
         #
         if return_match:
