@@ -3,7 +3,7 @@
 # Table of Contents
 1. [Installation](#installation)
 2. [Working with Numerical Relativity simulation catalogs](#working-with-numerical-relativity-simulation-catalogs)
-3. [Third Example](#examples)
+3. [Usage Examples](#examples)
 
 # Installation
 ### Use pip:
