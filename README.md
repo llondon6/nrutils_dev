@@ -1,5 +1,7 @@
 ![nrutils](https://github.com/llondon6/nrutils_dev/blob/master/media/nrutils_banner.png?raw=true)
 
+**nrutils** is a low-level suite for working with Numerical Relativity data (i.e. gravitational waveforms) from binary black hole mergers.
+
 # Table of Contents
 1. [Installation](#installation)
 2. [Working with Numerical Relativity simulation catalogs](#working-with-numerical-relativity-simulation-catalogs)
