@@ -9,7 +9,7 @@ Modules for Numerical Relativity Simulation Catalog:
 '''
 
 #
-from nrutils.core import settings as gconfig
+from nrutils.core import gconfig
 from nrutils.core.basics import *
 from nrutils.core import M_RELATIVE_SIGN_CONVENTION
 import warnings,sys
@@ -29,7 +29,7 @@ class scconfig(smart_object):
         this.config_file_location = config_file_location
         this.reconfig()
 
-    # The actual constructor: this will be called within utility functions so that scentry objects are configured with local settings.
+    # The actual constructor: this will be called within utility functions so that scentry objects are configured with local settings (i.e. gconfig).
     def reconfig(this):
 
         #
@@ -40,7 +40,7 @@ class scconfig(smart_object):
         #
         stale_config_exists = os.path.exists( this.config_file_location )
         if not stale_config_exists:
-            # Try to refresh the config location using the user's current settings (see __init__.py in nrutils/core)
+            # Try to refresh the config location using the user's current settings (i.e. gconfig) (see __init__.py in nrutils/core)
             config_path = gconfig.config_path
             stale_config_name = this.config_file_location.split('/')[-1]
             fresh_config_file_location = config_path + '/' + stale_config_name
@@ -444,6 +444,35 @@ def scbuild(keyword=None,save=True):
         alert(msg,'scbuild')
 
 
+# Reconfigure a database file to the user's current nrutils configuration
+def screconf( database_path, verbose=True, make_backup=True ):
+    '''
+    Reconfigure a database file to the user's current nrutils configuration. This function is to be used to assist users ability to apply third party catalog files to their nrutils installations
+    '''
+    # Import useful things
+    from os import rename as fmove
+    from shutil import copyfile as fcopy
+    # Determine the database file name and parent directory
+    if verbose: alert('Determining the database file name and parent directory')
+    dbname = database_path.split('/')[-1]
+    dbdir = '/'.join(database_path.split('/')[:-1])+'/'
+    backup_database_path = dbdir+dbname.split('.')[0]+'.backup_db'
+    # Make a backup of the database file
+    if make_backup:
+        if verbose: alert('Make a backup of the database file: %s'%cyan(backup_database_path))
+        fcopy(database_path,backup_database_path)
+    # Open the original file, and store contents
+    if verbose: alert('Opening the original file ...')
+    with open( database_path , 'rb') as dbf:
+        catalog = pickle.load( dbf )
+    if verbose: alert('Applying the granular reconfigure operation to the file\'s contents ...')
+    # Apply the granular reconfigure operation to the file's contents
+    for e in catalog:
+        e.config.reconfig()
+    # Save the reconfigured contents to the file, overwriting the original
+    if verbose: alert('Saving the reconfigured contents to %s'%cyan(database_path))
+    with open(database_path, 'wb') as dbf:
+        pickle.dump( catalog , dbf, pickle.HIGHEST_PROTOCOL )
 
 
 # Function for searching through catalog files.
@@ -3247,12 +3276,6 @@ class gwfcharstart:
         # Construct related window
         this.window_state = [this.left_index,this.right_index]
         this.window = maketaper( y.t, this.window_state )
-
-
-# Characterize the END of a time domain waveform: Where is the noise floor?
-def gwfend():
-    #
-    return None
 
 
 # Function which converts lalsim waveform to gwf object

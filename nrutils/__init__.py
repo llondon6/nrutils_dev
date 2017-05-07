@@ -96,7 +96,7 @@ for p in internal_packages:
 # Import select modules for high level access
 from manipulate import nr2h5
 from tools.unit.conversion import *
-from core.nrsc import scsearch,scbuild,gwylm,gwf,lswfa,scentry
+from core.nrsc import scsearch,scbuild,gwylm,gwf,lswfa,scentry,screconf
 from nrutils.formula import *
 
 #
