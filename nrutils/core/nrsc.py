@@ -34,13 +34,13 @@ class scconfig(smart_object):
 
         #
         if this.config_file_location is None:
-            msg = '(!!) scconfig objects cannot be initialted/reconfigured without a defined "config_file_location" location property (i.e. string where the related config file lives)'
+            msg = '(!!) scconfig objects cannot be initialted/reconfigured without a defined "config_file_location" location property (i.e. string where the related config file lives); you may be recieving this message if youve created an instance outside of the core routines'
             raise ValueError(msg)
 
         #
         stale_config_exists = os.path.exists( this.config_file_location )
         if not stale_config_exists:
-            # Try to refresh the confil location using the user's current path.ini in nrutils' setting folder
+            # Try to refresh the config location using the user's current settings (see __init__.py in nrutils/core)
             config_path = gconfig.config_path
             stale_config_name = this.config_file_location.split('/')[-1]
             fresh_config_file_location = config_path + '/' + stale_config_name

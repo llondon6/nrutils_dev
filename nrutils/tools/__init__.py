@@ -1,7 +1,7 @@
 # Import all python files within this folder
 from os.path import dirname, basename, isdir, realpath
 from commands import getstatusoutput as bash
-from nrutils import verbose,__pathsfile__
+from nrutils import verbose
 import glob
 
 # # list all py files within this directory

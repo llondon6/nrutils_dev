@@ -60,7 +60,12 @@ if len(internal_packages) == 0:
     raise ValueError(msg)
 
 # Store package settings (useful directories etc) to a settings field
-__pathsfile__ = [dirname(realpath(__file__))+'/settings/paths.ini']
+# NOTE that the __pathsfile__ variable is no longer used in favor of automatic directory assignments based in install location
+# __pathsfile__ = [dirname(realpath(__file__))+'/settings/paths.ini']
+
+# The instal path will be stored, but not used here. NOTE that the paths.ini file is technically not
+# needed as path *could* be defined automatically, relative to the
+__installpath__ = dirname(realpath(__file__))
 
 #
 __all__ = internal_packages

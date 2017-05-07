@@ -1,6 +1,6 @@
 # Import all python files within this folder
 from os.path import dirname, basename, isdir
-from nrutils import verbose,__pathsfile__
+from nrutils import verbose
 import glob
 
 # list all py files within this directory
