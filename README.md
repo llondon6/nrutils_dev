@@ -1,5 +1,10 @@
 ![nrutils](https://github.com/llondon6/nrutils_dev/blob/master/media/nrutils_banner.png?raw=true)
 
+# Table of Contents
+1. [Installation](#installation)
+2. [Working with Numerical Relativity simulation catalogs](#working-with-numerical-relativity-simulation-catalogs)
+3. [Third Example](#examples)
+
 # Installation
 ### Use pip:
 ```bash
@@ -41,3 +46,8 @@ The related example ipython notebook is:
 ## Using a stock catalog or one shared by a friend
 The related example ipython notebook is:
 * [reconfigure_catalog_example.ipynb](https://github.com/llondon6/nrutils_dev/blob/master/examples/reconfigure_catalog_example.ipynb)
+
+# Examples
+
+The best way to learn what's in nrutils is to brows through the package contents and skim over the comments. The second best way to figure out what's going on is to skim though the example ipython notbooks located in the examples folder:
+* [examples](https://github.com/llondon6/nrutils_dev/blob/master/examples)
