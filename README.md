@@ -18,17 +18,26 @@ pip install -e .
 
 # Working with Numerical Relativity simulation catalogs
 
-**nrutils** uses a class based system where the simulation (i.e. its related metadat) is encapsulated a "simulation catalog entry" or "scentry" class. General purpose waveforms are encapsulated by the `gwf` (graviational waveform) class, but the user will most likey be interested in the `gwylm` class, which loads desired spherical harmonic multipoles, and then (semi-automatically) performs low level processing of data (e.g. strain calculation, ffts, windowing, plotting). In the context of the gwylm class, individual multipoles are `gwf` objects.
+**nrutils** uses a class based system where the simulation (i.e. its related metadata) is encapsulated a "simulation catalog entry" or "scentry" class. General purpose waveforms are encapsulated by the `gwf` (graviational waveform) class, but the user will most likey be interested in the `gwylm` class, which loads desired spherical harmonic multipoles, and then (semi-automatically) performs low level processing of data (e.g. strain calculation, ffts, windowing, plotting). In the context of the gwylm class, individual multipoles are `gwf` objects.
 
-## 2. Setup .ini files
+To get a sense of how these concepts work togerther please see the core usage example. **NOTE** that you will need to configure or build catalog files before trying to run this example. Please see sections below for how to do this.
+* [core_ipython_example.ipynb](https://github.com/llondon6/nrutils_dev/blob/master/examples/core_ipython_example.ipynb)
+
+## Working with catalog files
 If you installed `nrutils` in editable mode then you should edit the files in the cloned
-repository otherwise you should edit the files installed in you python environment.
+repository otherwise you should edit the files installed in your python environment.
 
 * nrutils/config/bam.template -> nrutils/config/bam.ini
 * nrutils/config/sxs.template -> nrutils/config/sxs.ini
 * nrutils/config/bam_gw150914_followup.template -> nrutils/config/bam_gw150914_followup.ini
 
-## 3. (Optional) Building a catalogue
+## Building your own catalog
 
-This is done using the command ```scbuild()``` to create a database of the NR simulations.
-```to be expanded on soon```
+This is done using the command ```scbuild()``` to create a database of the NR simulations. (Documentaion incomplete) 
+
+The related example ipython notebook is:
+* [core_ipython_example.ipynb](https://github.com/llondon6/nrutils_dev/blob/master/examples/core_ipython_example.ipynb)
+
+## Using a stock catalog or one shared by a friend
+The related example ipython notebook is:
+* [reconfigure_catalog_example.ipynb](https://github.com/llondon6/nrutils_dev/blob/master/examples/reconfigure_catalog_example.ipynb)
