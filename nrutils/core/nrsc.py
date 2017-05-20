@@ -2367,6 +2367,14 @@ class gwylm:
                 # Construct the combined window
                 window = preinspiral_window * postringdown_window
 
+                # Apply WINDOW to children
+                for y in this.ylm:
+                    y.apply_window( window=window )
+                for h in this.hlm:
+                    h.apply_window( window=window )
+                for f in this.flm:
+                    f.apply_window( window=window )
+
             elif method.lower() == 'crop':
 
                 # Crop such that the waveform daya starts abruptly
@@ -2379,13 +2387,13 @@ class gwylm:
                     # Otherwise, use an input starting time
                     mask = this.ylm[0].t > crop_time
 
-            # Apply mask to children
-            for y in this.ylm:
-                y.apply_mask( mask )
-            for h in this.hlm:
-                h.apply_mask( mask )
-            for f in this.flm:
-                f.apply_window( window=window )
+                # Apply MASK to children
+                for y in this.ylm:
+                    y.apply_mask( mask )
+                for h in this.hlm:
+                    h.apply_mask( mask )
+                for f in this.flm:
+                    f.apply_mask( mask )
 
             # Tag this object as clean
             this.__isclean__ = True
