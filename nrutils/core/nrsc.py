@@ -107,9 +107,19 @@ class scconfig(smart_object):
             msg = '(!!)  Error in %s: data_file_name_format must be comma separated list.' %  magenta(this.config_file_location)
 
         # Make sure that catalog_dir is string
-        if not isinstance( this.catalog_dir, str ):
-            msg = 'catalog_dir values must be string'
+        if not isinstance( this.catalog_dir, (list,str) ):
+            msg = 'catalog_dir values must be string or list'
             error(red(msg),thisfun)
+
+        # If catalog_dir is list of dirs, then select the first one that exists
+        if isinstance( this.catalog_dir, list ):
+            warning('Multiple catalog directories found. We will scan through the related list, and then store first the catalog_dir that the OS can find.')
+            for d in this.catalog_dir:
+                from os.path import isdir
+                if isdir(d):
+                    this.catalog_dir = d
+                    warning('Selecting "%s"'%cyan(d))
+                    break
 
 
         if 2 != len(this.default_par_list):
@@ -495,7 +505,8 @@ def scsearch( catalog = None,           # Manually input list of scentry objects
               unique = None,            # if true, only simulations with unique initial conditions will be used
               plot = None,              # whether or not to show a plot of results
               exists=None,              # Test whether data directory related to scentry and ini file exist (True/False)
-              validate_remnant=False,   # If true, ensure that final mass adn spin are well defined
+              validate_remnant=None,   # If true, ensure that final mass adn spin are well defined
+              apply_remnant_fit=None,   # Toggle to apply model fit mapping initial to remnant params
               verbose = None):          # be verbose
 
     # Print non None inputs to screen
@@ -503,7 +514,7 @@ def scsearch( catalog = None,           # Manually input list of scentry objects
     if verbose is not None:
         for k in dir():
             if (eval(k) is not None) and (k != 'thisfun'):
-                print '[%s]>> Found %s (=%r) keyword.' % (thisfun,textul(k),eval(k))
+                alert('Found %s (=%r) keyword.' % (textul(k),eval(k)) )
 
     '''
     Handle individual cases in serial
@@ -595,8 +606,8 @@ def scsearch( catalog = None,           # Manually input list of scentry objects
             test = lambda k: k.setname.lower() in setname
             catalog = filter( test, catalog )
         else:
-            msg = '[%s]>> setname input must be nonempty string or list.' % thisfun
-            raise ValueError(msg)
+            msg = 'setname input must be nonempty string or list.'
+            error(msg)
 
     # Compare not setname strings
     if notsetname is not None:
@@ -608,8 +619,8 @@ def scsearch( catalog = None,           # Manually input list of scentry objects
             test = lambda k: not ( k.setname.lower() in notsetname )
             catalog = filter( test, catalog )
         else:
-            msg = '[%s]>> notsetname input must be nonempty string or list.' % thisfun
-            raise ValueError(msg)
+            msg = 'notsetname input must be nonempty string or list.'
+            error(msg)
 
     # Compare institute strings
     if institute is not None:
@@ -621,8 +632,8 @@ def scsearch( catalog = None,           # Manually input list of scentry objects
             test = lambda k: k.config.institute.lower() in institute
             catalog = filter( test, catalog )
         else:
-            msg = '[%s]>> institute input must be nonempty string or list.' % thisfun
-            raise ValueError(msg)
+            msg = 'institute input must be nonempty string or list.'
+            error(msg)
 
     # Compare keyword
     if keyword is not None:
@@ -637,12 +648,12 @@ def scsearch( catalog = None,           # Manually input list of scentry objects
             allkeys = True
             if verbose:
                 msg = 'List of keywords or string keyword found: '+cyan('ALL scentry objects matching will be passed.')+' To pass ANY entries matching the keywords, input the keywords using an iterable of not of type list.'
-                alert(msg,'scsearch')
+                alert(msg)
         else:
             allkeys = False # NOTE that this means: ANY keys will be passed
             if verbose:
                 msg = 'List of keywords found: '+cyan('ANY scentry objects matching will be passed.')+' To pass ALL entries matching the keywords, input the kwywords using a list object.'
-                alert(msg,'scsearch')
+                alert(msg)
 
         # Always lower
         keyword = [ k.lower() for k in keyword ]
@@ -679,7 +690,7 @@ def scsearch( catalog = None,           # Manually input list of scentry objects
             ans = (e.config).reconfig().config_exists and os.path.isdir(e.simdir())
             if not ans:
                 msg = 'Ignoring entry at %s becuase its config file cannot be found and/or its simulation directory cannot be found.' % cyan(e.simdir())
-                warning(msg,'scsearch')
+                warning(msg)
             return ans
         if catalog is not None:
             catalog = filter( isondisk , catalog )
@@ -694,6 +705,18 @@ def scsearch( catalog = None,           # Manually input list of scentry objects
     catalog = sorted( catalog, key = lambda e: e.date_number, reverse = True )
 
     #
+    if apply_remnant_fit:
+        #
+        from numpy import array
+        # Let the people know
+        if verbose:
+            warning('Applying remant fit to scentry objects. This should be done if the final mass and spin meta data are not trustworth. '+magenta('The fit being used only works for non-precessing systems.'))
+        #
+        for e in catalog:
+            e.mf,e.xf = Mf14067295(e.m1,e.m2,e.X1[-1],e.X2[-1]),jf14067295(e.m1,e.m2,e.X1[-1],e.X2[-1])
+            e.Sf = e.mf*e.mf*array([0,0,e.xf])
+
+    #
     if verbose:
         if len(catalog)>0:
             print '## Found %s%s simulations:' % ( bold(str(len(catalog))), output_descriptor )
@@ -702,7 +725,7 @@ def scsearch( catalog = None,           # Manually input list of scentry objects
                 simname = entry.raw_metadata.source_dir[-1].split('/')[-1] if entry.raw_metadata.source_dir[-1][-1]!='/' else entry.raw_metadata.source_dir[-1].split('/')[-2]
                 print '[%04i][%s] %s: %s\t(%s)' % ( k+1, green(entry.config.config_file_location.split('/')[-1].split('.')[0]), cyan(entry.setname), entry.label, cyan(simname ) )
         else:
-            print red('!! Found %s simulations.' % str(len(catalog)))
+            warning('!! Found %s simulations.' % str(len(catalog)))
         print ''
 
     #
