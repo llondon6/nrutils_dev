@@ -1779,12 +1779,14 @@ class gwylm:
         # scentry_obj.config.reconfig() # This line ensures that values from the user's config are taken
         if extraction_parameter is None:
             extraction_parameter = scentry_obj.default_extraction_par
+            print("scentry_obj.default_extraction_par = ", scentry_obj.default_extraction_par)
         if level is None:
             level = scentry_obj.default_level
 
         #
         if scentry_obj.config:
             config_extraction_parameter = scentry_obj.config.default_par_list[0]
+            print("scentry_obj.config.default_par_list = ", scentry_obj.config.default_par_list)
             config_level = scentry_obj.config.default_par_list[1]
             if (config_extraction_parameter,config_level) != (extraction_parameter,level):
                 msg = 'The (%s,%s) is (%s,%s), which differs from the config values of (%s,%s). You have either manually input the non-config values, or the handler has set them by looking at the contents of the simulation directory. '%(magenta('extraction_parameter'),green('level'),magenta(str(extraction_parameter)),green(str(level)),str(config_extraction_parameter),str(config_level))
@@ -2356,12 +2358,12 @@ class gwylm:
                 # Crop such that the waveform daya starts abruptly
                 from numpy import arange,double
 
-                if not (crop_time is None):
+                if (crop_time is None):
                     # If there is no crop time given, then use the low frequency value given by the nrutils start characterization time
                     mask = arange( this.startindex, this.ylm[0].n )
                 elif isinstance(crop_time,(double,int,float)):
                     # Otherwise, use an input starting time
-                    mask = this.ylm[0].raw[:,0] > crop_time
+                    mask = this.ylm[0].t > crop_time
 
                 for y in this.ylm:
                     y.apply_mask( mask )
