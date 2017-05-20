@@ -2356,12 +2356,12 @@ class gwylm:
                 # Crop such that the waveform daya starts abruptly
                 from numpy import arange,double
 
-                if not (crop_time is None):
+                if (crop_time is None):
                     # If there is no crop time given, then use the low frequency value given by the nrutils start characterization time
                     mask = arange( this.startindex, this.ylm[0].n )
                 elif isinstance(crop_time,(double,int,float)):
                     # Otherwise, use an input starting time
-                    mask = this.ylm[0].raw[:,0] > crop_time
+                    mask = this.ylm[0].t > crop_time
 
                 for y in this.ylm:
                     y.apply_mask( mask )
