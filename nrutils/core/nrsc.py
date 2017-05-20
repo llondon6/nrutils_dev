@@ -265,17 +265,18 @@ class scentry:
                 msg = 'The handler is found to have a "%s" method. Rather than the config file, this method will be used to determine the default extraction parameter and level.' % green(special_method)
                 alert(msg,'scentry.learn_metadata')
             # Estimate a good extraction radius and level for an input scentry object from the BAM catalog
-            this.default_extraction_par, this.default_level, this.extraction_map = handler.__dict__[special_method](this)
-            # NOTE: this.extraction_map is a dictionary that contains two maps. extraction_map['radius_map'] and extraction_map['level_map']
-            # extraction_map['radius_map'] maps the extraction radius number to the extraction radius in units of M
-            # extraction_map['level_map'] maps the extraction radius number to appropriate level number. This one only applies to BAM.
+            this.default_extraction_par, this.default_level, this.extraction_map_dict = handler.__dict__[special_method](this)
+            # NOTE: this.extraction_map_dict is a dictionary that contains two maps. extraction_map_dict['radius_map'] and extraction_map_dict['level_map']
+            # extraction_map_dict['radius_map'] maps the extraction radius number to the extraction radius in units of M
+            # extraction_map_dict['level_map'] maps the extraction radius number to appropriate level number. This one only applies to BAM.
         else:
             # NOTE that otherwise, values from the configuration file will be used
             this.default_extraction_par = this.config.default_par_list[0]
             this.default_level = this.config.default_par_list[1]
-            this.extraction_map['radius_map'] = None
-            this.extraction_map['level_map'] = None
-            # NOTE: this.extraction_map is a dictionary that contains two maps. extraction_map['radius_map'] and extraction_map['level_map']
+            this.extraction_map_dict = {}
+            this.extraction_map_dict['radius_map'] = None
+            this.extraction_map_dict['level_map'] = None
+            # NOTE: this.extraction_map_dict is a dictionary that contains two maps. extraction_map_dict['radius_map'] and extraction_map_dict['level_map']
             # The default values are to set these to None.
 
         # Basic sanity check for standard attributes. NOTE this section needs to be completed and perhaps externalized to the current function.

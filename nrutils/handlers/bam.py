@@ -259,9 +259,9 @@ def infer_default_level_and_extraction_parameter( this,     # An scentry object
 
     # Also store a dictionary between extraction parameter and extraction radius
     # And a dictionary between the level parameter and extraction radius
-    extraction_map = {}
-    extraction_map['radius_map'] = { exr[n]:r for n,r in enumerate(rad) }
-    extraction_map['level_map'] = { exr[n]:l for n,l in enumerate(lev) }
+    extraction_map_dict = {}
+    extraction_map_dict['radius_map'] = { exr[n]:r for n,r in enumerate(rad) }
+    extraction_map_dict['level_map'] = { exr[n]:l for n,l in enumerate(lev) }
 
     # Return answers
-    return extraction_parameter,level,extraction_map
+    return extraction_parameter,level,extraction_map_dict

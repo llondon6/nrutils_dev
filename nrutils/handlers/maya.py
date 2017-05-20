@@ -242,12 +242,12 @@ def infer_default_level_and_extraction_parameter( this,     # An scentry object
     # Also store a dictionary between extraction parameter and extraction radius
     # And a dictionary between the level parameter and extraction radius.
     # For Maya this is not used and so it's set to None. BAM uses it though.
-    extraction_map = {}
-    extraction_map['radius_map'] = { exr[n]:r for n,r in enumerate(rad) }
-    extraction_map['level_map'] = None
+    extraction_map_dict = {}
+    extraction_map_dict['radius_map'] = { exr[n]:r for n,r in enumerate(rad) }
+    extraction_map_dict['level_map'] = None
 
     # Note that maya sims have no level specification
     level = None
 
     # Return answers
-    return extraction_parameter,level,extraction_map
+    return extraction_parameter,level,extraction_map_dict
