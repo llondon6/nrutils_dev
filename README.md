@@ -1,11 +1,13 @@
 ![nrutils](https://github.com/llondon6/nrutils_dev/blob/master/media/nrutils_banner.png?raw=true)
 
+**nrutils** is a low-level suite for working with Numerical Relativity data (i.e. gravitational waveforms) from binary black hole mergers.
+
 # Table of Contents
 1. [Installation](#installation)
 2. [Working with Numerical Relativity simulation catalogs](#working-with-numerical-relativity-simulation-catalogs)
 3. [Usage Examples](#examples)
 
-# Installation
+# Installation (OSX+Linux)
 ### Use pip:
 ```bash
 pip install git+https://github.com/llondon6/nrutils_dev.git
@@ -50,4 +52,4 @@ The related example ipython notebook is:
 # Examples
 
 The best way to learn what's in nrutils is to brows through the package contents and skim over the comments. The second best way to figure out what's going on is to skim though the example ipython notbooks located in the examples folder:
-* [examples](https://github.com/llondon6/nrutils_dev/blob/master/examples)
+* [Usage Examples](https://github.com/llondon6/nrutils_dev/blob/master/examples)
