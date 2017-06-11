@@ -236,6 +236,73 @@ def align_wfarr_average_phase(this,that,mask=None,verbose=False):
     #
     return this_
 
+# Given a dictionary of multipoles and wafarrs, recompose at a desired theta and phi
+def recompose_wfarrs( wfarr_dict, theta, phi ):
+    '''
+    Given a dictionary of spin -2 spherical harmonic multipoles, recompose at a desired theta and phi:
+
+        recomposed_wfarr = recompose_wfarr( wfarr_dict, theta, phi )
+
+    ---
+
+    Inputs:
+
+     * wfarr_dict: dictionary with keys being (l,m), and values being the related wfarrs (time or frequency domain)
+     * theta,phi: the polar and azximuthal angles desired for recomposition
+
+    '''
+
+    # Import useful things
+    from numpy import ndarray,zeros,dot,array
+
+    #-%-%-%-%-%-%-%-%-%-%-%-#
+    # Validate wfarr_dict   #
+    #-%-%-%-%-%-%-%-%-%-%-%-#
+    for k in wfarr_dict:
+        # keys must be length 2
+        if len( k ) != 2:
+            error( 'keys must be length 2, and compised of spherical harmonic l and m (e.g. (2,1) )' )
+        # elements within key must be integers
+        for v in k:
+            if not isinstance(v,int):
+                error( 'invalid multipole eigenvalue found: %s'%[v] )
+        # key values must be ndarray
+        if not isinstance(wfarr_dict[k],ndarray):
+            error('key values must be ndarray')
+
+    # Number of samples
+    n_samples = wfarr_dict[k].shape[0]
+    # Number of multipoles given
+    n_multipoles = len( wfarr_dict )
+
+    #
+    def __recomp__( column_index ):
+        # Create matrices to hold spherical harmonic and waveform array data
+        M = zeros( [ n_samples, n_multipoles ], dtype=complex )
+        Y = zeros( [ n_multipoles, 1 ], dtype=complex )
+        # Seed the matrix as well as the vector of spherical harmonic values
+        for k,(l,m) in enumerate(wfarr_dict.keys()):
+            wfarr = wfarr_dict[l,m]
+            M[:,k] = wfarr[:,column_index]
+            Y[k] = sYlm(-2,l,m,theta,phi)
+        # Perform the matrix multiplication and create the output gwf object
+        Z = dot( M,Y )[:,0]
+        #
+        ans = Z
+        return Z
+
+    # Extract time/frequency domain for output
+    domain = wfarr_dict[ wfarr_dict.keys()[0] ][:,0]
+    # Recompose plus and cross columns separately
+    recomposed_plus = __recomp__(1)
+    recomposed_cross = __recomp__(2)
+
+    # Construct recomposed wfarr
+    recomposed_wfarr = array( [ domain, recomposed_plus, recomposed_cross ] ).T
+
+    # Output answer
+    ans = recomposed_wfarr
+    return ans
 
 #
 def get_wfarr_relative_phase(this,that):
@@ -256,6 +323,7 @@ def get_wfarr_relative_phase(this,that):
 
     #
     return dphi
+
 
 # Find the average phase difference and align two wfarr's
 def align_wfarr_initial_phase(this,that):

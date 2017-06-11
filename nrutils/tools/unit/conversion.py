@@ -23,7 +23,12 @@ __physical_constants__['mass_sun_mpc'] = __physical_constants__['mass_sun_meters
 # Given FREQUENCY DOMAIN strain in code units, convert to Physical units
 # --------------------------------------------------------------- #
 def physhf( harr, M, D ):
-    '''Given FREQUENCY DOMAIN strain in code units, convert to Physical units'''
+    '''
+    Given FREQUENCY DOMAIN strain in code units, convert to Physical units
+
+    code_hf_array = physhf( geometric_hf_array, M_solar, D_Mpc )
+
+    '''
     # Import useful things
     from numpy import ndarray
     # Calculate unit conversion factor for strain amplitude

@@ -1,11 +1,13 @@
+# Import useful things
+from nurtils.core.basics import *
 
 #
 class match:
 
     #
     def __init__( this,                       # The current object
-                  wfarrs = None,              # 1x2 iterable of waveform arrays in the format of [ f + x ]
-                                              # wfarrs = (tempalte_wfarr,signal_wfarr)
+                  template_wfarr = None,      # column format [ f + x ]
+                  signal_wfarr = None,        # column format [ f + x ]
                   psd_name = None,            # determines which psd to use; default is advLigo
                   fmin = None,
                   fmax = None,
@@ -14,25 +16,33 @@ class match:
                   verbose = True ):
 
         # Unpack and Validate inputs
-        this.__parse_inputs__(wfars,fmin,fmax,signal_polarization,verbose)
+        this.__parse_inputs__(template_wfarr,signal_wfarr,fmin,fmax,signal_polarization,verbose)
 
-        #
-        this.__set_signal_fields__()
+        # Calculate PSD at desired frequencies; store to current object
+        this.__set_psd__(psd_name)
 
-        #
-        ans = optimal_match
-        return ans
+        # Calculate and store relevant information about the tempalte and signal waveforms
+        this.__set_waveform_fields__()
 
     # Precalculate items related to the signals
-    def __set_signal_fields__(this):
+    def __set_waveform_fields__(this):
+
         # Import useful things
         from numpy import sqrt
         # Calculate the combination of SIGNAL + and x as determined by the signal_polarization
         this.signal['response'] = this.calc_detector_response( this.signal_polarization, this.signal['+'], this.signal['x'] )
+        # Calculate the combination of TEMPLATE + and x as determined by the signal_polarization
+        this.template['response'] = this.calc_detector_response( this.signal_polarization, this.template['+'], this.template['x'] )
         # Calculate the signal's optimal snr
         this.signal['norm'] = this.calc_norm( this.signal['response'] )
+        # Store Optimal SNRs
+        this.signal['optimal_snr'] = this.signal['norm']
+        this.template['optimal_snr'] = this.calc_norm( this.template['response'] )
         # Calculate the normed signal with respect to the overlap
         this.signal['normalized_response'] = this.signal['response'] / this.signal['norm']
+        # Calculate the normed template with respect to the overlap
+        this.template['normalized_response'] = this.template['response'] / this.template['norm']
+
         return None
 
     # Calculate overlap optimized over template polarization
@@ -104,7 +114,7 @@ class match:
         ans = overlap
         return ans
 
-    #
+    # Combine singal component polarizations using a given effective polarization angle (NOTE that this is not the same polarization angle used in a specific antenna response, but some effective representation of it)
     def calc_detector_response(this,psi,h_plus,h_cross):
         '''Here we interpret PSI to be an effective polarization angle that
         encompasses the effect of sky location, antenna pattern, and wave-frame
@@ -112,6 +122,9 @@ class match:
         # Import useful things
         from numpy import cos,sin
         s = cos(2*psi)*h_plus + sin(2*psi)*h_cross
+        # Return the answer
+        ans = s
+        return ans
 
     # Set the psd to be used with the current object
     def __set_psd__(this,psd_name):
@@ -168,7 +181,7 @@ class match:
         return None
 
     # Unpack and Validate inputs
-    def __parse_inputs__(this,wfars,fmin,fmax,signal_polarization,verbose):
+    def __parse_inputs__(this,template_arr,signal_arr,fmin,fmax,signal_polarization,verbose):
 
         # Import useful things
         from numpy import allclose
@@ -185,8 +198,9 @@ class match:
         if this.verbose:
             alert('Verbose mode on.','match')
 
-        # Check for equal array domain
-        signal_arr,template_arr = wfarrs
+        #-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-#
+        # Check for equal array domain     #
+        #-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-#
         signal_f,temaplte_f = signal_arr[:,0],template_arr[:,0]
         signal_df,template_df = diff(signal_f[:2])[0],diff(template_f[:2])[0]
         if len(signal_f) is not len(template_f):
@@ -204,9 +218,6 @@ class match:
         this.signal['x'] = signal_arr[mask,2]
         this.template['+'] = template_arr[mask,1]
         this.template['x'] = template_arr[mask,2]
-
-        # Calculate PSD at desired frequencies
-        this.__set_psd__(psd_name)
 
         '''
         The core functions of this class will operate on this.f, this.signal and this.template

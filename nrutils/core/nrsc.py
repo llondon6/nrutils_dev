@@ -1145,6 +1145,7 @@ class gwf:
             this.fd_dphi    = intrp_diff( this.f, this.fd_phi )             # phase rate: dphi/df
 
             this.fd_k_amp_max = argmax( this.fd_amp )
+            this.fd_wfarr = vstack( [this.f,this.fd_plus,this.fd_cross] ).T
 
         # Starting frequency in rad/sec
         this.wstart = None
