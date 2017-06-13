@@ -2619,6 +2619,7 @@ class gwylm:
                    theta,        # The polar angle
                    phi,          # The anzimuthal angle
                    kind=None,
+                   select_lm=None,
                    verbose=False ):
 
         #
@@ -2630,6 +2631,9 @@ class gwylm:
             warning( msg, 'gwylm.recompose' )
             kind = 'strain'
 
+        #
+        select_lm = this.__input_lmlist__ if select_lm is None else select_lm
+
         # Create Matrix of Multipole time series
         def __recomp__(alm,kind=None):
 
@@ -2637,7 +2641,8 @@ class gwylm:
             Y = zeros( [ len(this.__input_lmlist__), 1 ], dtype=complex )
             # Seed the matrix as well as the vector of spheroical harmonic values
             for k,a in enumerate(alm):
-                if (a.l,a.m) in this.__input_lmlist__:
+                lm = (a.l,a.m)
+                if (lm in this.__input_lmlist__) and (lm in select_lm):
                     M[:,k] = a.y
                     Y[k] = sYlm(-2,a.l,a.m,theta,phi)
             # Perform the matrix multiplication and create the output gwf object

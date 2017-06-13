@@ -1,6 +1,32 @@
 #
 from positive import *
 
+#00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%#
+''' Methods/Class for modeled PSDs '''
+#00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%#
+def iligo(freq,version=1):
+    '''
+    Modeled iLIGO noise curves from arxiv:0901.4936 (version=2) and arxiv:0901.1628 (version=1)
+    '''
+    #
+    f0 = 150
+    xx = freq/f0
+    #
+    if version in (2,'0901.4936'):
+        # analytic formula from Ajith and Bose: arxiv: 0901.4936 eq 3.1 strain^2 / Hz
+        Sn = 9e-46*( (4.49*xx)**(-56) + 0.16*xx**(-4.52) + 0.52 + 0.32*xx**2 )
+    else:
+        # This is Eq. 9 of https://arxiv.org/pdf/0901.1628.pdf
+        Sn = 3.136e-46 * ( (4.449*xx)**-56 + \
+                          0.16*xx**-4.52 + \
+                          xx*xx + 0.52 )
+    # Return answer
+    ans = Sn
+    return ans
+
+#00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%#
+''' Methods for low-level waveform manipulation '''
+#00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%#
 
 # Function that returns true if for string contains l assignment that is less than l_max
 def l_test(string,l_max):
