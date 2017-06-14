@@ -25,14 +25,16 @@ class match:
                    fmax = fmax,
                    signal_polarization = signal_polarization,
                    template_polarization = template_polarization,
-                   psd_name = psd_name,
+                   psd_name = 'aligo' if psd_name is None else psd_name,
                    verbose = verbose)
 
 
     # Plot template and signal against psd
     def plot(this):
+
         # Import useful things
         from numpy import array,sqrt
+
         # Setup plotting backend
         import matplotlib as mpl
         from mpl_toolkits.mplot3d import axes3d
@@ -43,17 +45,21 @@ class match:
         mpl.rcParams['axes.titlesize'] = 16
         from matplotlib.pyplot import plot,show,xlabel,ylabel,title,\
                                       legend,xscale,yscale,xlim,ylim,figure
+
         # Setup Figure
-        figure( figsize=1.8*array([4.5,4]) )
+        figure( figsize=1.8*array([4,4]) )
+
         # Plot
-        plot( this.f, this.psd, '-k', label=this.psd_name )
         plot( this.f, 2*sqrt(this.f)*abs(this.signal['response']), label=r'Signal, $\rho_{\mathrm{opt}} = %1.2f$'%this.signal['optimal_snr'] )
-        print this.signal['optimal_snr']
-        plot( this.f, 2*sqrt(this.f)*abs(this.template['response']), label='Template' )
+        #
+        plot( this.f, 2*sqrt(this.f)*abs(this.template['response']), label=r'Template, $\rho_{\mathrm{opt}} = %1.2f$'%this.template['optimal_snr'] )
+        #
+        plot( this.f, sqrt(this.psd), '-k', label=r'$\sqrt{S_n(f)}$ for '+this.psd_name )
+
         #
         xscale('log'); yscale('log')
         xlim(lim(this.f))
-        ylim( [ min(this.psd)/10 , max(ylim()) ] )
+        ylim( [ sqrt(min(this.psd))/10 , max(ylim()) ] )
         xlabel( r'$f$ (Hz)' )
         ylabel( r'$\sqrt{S_n(f)}$  and  $2|\tilde{h}(f)|\sqrt{f}$' )
         legend( frameon=False )
@@ -144,7 +150,8 @@ class match:
         from numpy import sqrt
         # See Maggiori, p. 345 -- a factor of 2 comes from the definition of the psd,
         # and another from the double sidedness of the spectrum
-        optsnr = 4 * sqrt( this.calc_overlap(a,method='trapz') )
+        # ALSO see Eqs 1-2 of https://arxiv.org/pdf/0901.1628.pdf
+        optsnr = sqrt( 4 * this.calc_overlap(a,method='trapz') )
         return optsnr
 
     # Calculate noise curve weighted norm (aka Optimal SNR)
@@ -225,7 +232,7 @@ class match:
         import nrutils
         from scipy.interpolate import InterpolatedUnivariateSpline as spline
         #
-        psd_names_for_tabulated_data = ['aligo','150914']
+        psd_names_for_tabulated_data = ['aligo','gw150914']
         not_valid_msg = 'unknown psd name found'
         # If psd_name is a string
         psd_name = this.psd_name
@@ -233,19 +240,25 @@ class match:
 
             # If psd_name is a standard psd name
             if psd_name.lower() in psd_names_for_tabulated_data:
+
                 # Load the corresponding data
                 psd_name = psd_name.lower()
                 if 'al' in psd_name:
                     data_path = nrutils.__path__[0]+'/data/ZERO_DET_high_P.dat'
+                    psd_arr = loadtxt( data_path )
+                    # Validate and unpack the psd array
+                    if psd_arr.shape[-1] is 2:
+                        psd_f,psd_vals = psd_arr[:,0],psd_arr[:,1]*psd_arr[:,1]
+                    else:
+                        error('Improperly formatted psd array given. Instead of having two columns, it has %i'%psd_arry.shape[-1])
                 elif '091' in psd_name:
                     data_path = nrutils.__path__[0]+'/data/H1L1-AVERAGE_PSD-1127271617-1027800.txt'
-                #
-                psd_arr = loadtxt( data_path )
-                # Validate and unpack the psd array
-                if psd_arr.shape[-1] is 2:
-                    psd_f,psd_vals = psd_arr[:,0],psd_arr[:,1]
-                else:
-                    error('Improperly formatted psd array given. Instead of having two columns, it has %i'%psd_arry.shape[-1])
+                    psd_arr = loadtxt( data_path )
+                    # Validate and unpack the psd array
+                    if psd_arr.shape[-1] is 2:
+                        psd_f,psd_vals = psd_arr[:,0],psd_arr[:,1]
+                    else:
+                        error('Improperly formatted psd array given. Instead of having two columns, it has %i'%psd_arry.shape[-1])
 
                 # Create an interpolation of the PSD data
                 # NOTE that this function is stored to the current object
@@ -254,7 +267,11 @@ class match:
             elif psd_name.lower() in ('iligo'):
 
                 # use the modeled PSD from nrutils (via Eq. 9 of https://arxiv.org/pdf/0901.1628.pdf)
-                psd_fun = lambda f: sqrt( iligo(f,version=2) )
+                psd_fun = lambda f: iligo(f,version=2)
+
+            else:
+
+                error('unknown PSD name: %s'%psd_name)
 
 
         elif isinstance(psd_name,ndarray):
@@ -286,6 +303,9 @@ class match:
 
         #
         this.__set_waveform_fields__()
+
+        #
+        return this
 
 
     # Unpack and Validate inputs
@@ -330,7 +350,7 @@ class match:
             this.template['x'] = template_wfarr[mask,2]
 
         # Store the psd name input
-        this.psd_name = psd_name
+        this.psd_name = psd_name if psd_name is not None else this.psd_name
 
         # Group pluss and cross into dictionaries
         this.signal['polarization'] = signal_polarization if signal_polarization is not None else 0
