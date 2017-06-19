@@ -15,5 +15,5 @@ setup(name='nrutils',
       package_dir={'nrutils': 'nrutils'},
       url='https://github.com/llondon6/nrutils',
       download_url='https://github.com/llondon6/nrutils/archive/master.zip',
-      install_requires=['h5py','numpy','scipy','matplotlib'],
+      install_requires=['h5py','numpy','scipy','matplotlib','positive'],
      )
