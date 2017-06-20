@@ -312,7 +312,7 @@ def recompose_wfarrs( wfarr_dict, theta, phi ):
             M[:,k] = wfarr[:,column_index]
             Y[k] = sYlm(-2,l,m,theta,phi)
         # Perform the matrix multiplication and create the output gwf object
-        Z = dot( M,Y )[:,0]
+        Z = dot( M,Y )[:,0] # NOTE that the "[:,0]" is to enforce a shape of (N,1) rather than (N,)
         #
         ans = Z
         return Z

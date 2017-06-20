@@ -944,6 +944,7 @@ class gwf:
                   label                 = None, # Optional label input (see gwylm)
                   preinspiral           = None, # Holder for information about the raw waveform's turn-on
                   postringdown          = None, # Holder for information about the raw waveform's turn-off
+                  fftfactor             = None,
                   verbose = False ):    # Verbosity toggle
 
         #
@@ -977,6 +978,9 @@ class gwf:
         # Optional Holders for remnant mass and spin
         this.mf = mf
         this.xf = xf
+
+        #
+        this.fftfactor = fftfactor
 
         # Optional label input (see gwylm)
         this.label = label
@@ -1036,7 +1040,7 @@ class gwf:
         ##########################################################
 
         # Imports
-        from numpy import abs,sign,linspace,exp,arange,angle,diff,ones,isnan,pi
+        from numpy import abs,sign,linspace,exp,arange,angle,diff,ones,isnan,pi,log
         from numpy import vstack,sqrt,unwrap,arctan,argmax,mod,floor,logical_not
         from scipy.interpolate import InterpolatedUnivariateSpline
         from scipy.fftpack import fft, fftfreq, fftshift, ifft
@@ -1124,24 +1128,25 @@ class gwf:
         this.n      = len(this.t)                                   # Number of time samples
         this.window = ones( this.n )                                # initial state of time domain window
         this.fs     = 1.0/this.dt                                   # Sampling rate
-        this.df     = this.fs/this.n                                # freq resolution
 
         # --------------------------------------------------- #
         # Always calculate frequency domain data
         # --------------------------------------------------- #
         if setfd:
             # compute the frequency domain
-            this.f = fftshift(fftfreq( this.n, this.dt ))
+            fftlen = this.n if this.fftfactor is None else int( 2 ** ( int(log( this.n )/log(2)) + 1.0 + this.fftfactor ) )-1
+            this.f = fftshift(fftfreq( fftlen, this.dt ))
             this.w = 2*pi*this.f
+            this.df     = this.f[1]-this.f[0]                                # freq resolution
 
             # compute fourier transform values
-            this.fd_plus   = fftshift(fft( this.plus  )) * this.dt                    # fft of plus
-            this.fd_cross  = fftshift(fft( this.cross )) * this.dt                    # fft of cross
+            this.fd_plus   = fftshift(fft( this.plus, n=fftlen  )) * this.dt                    # fft of plus
+            this.fd_cross  = fftshift(fft( this.cross, n=fftlen )) * this.dt                    # fft of cross
             this.fd_y       = this.fd_plus + 1j*this.fd_cross               # full fft
             this.fd_amp     = abs( this.fd_y )                              # amp of full fft
             this.fd_phi     = unwrap( angle( this.fd_y ) )                  # phase of full fft
 
-            # this.fd_dphi    = diff( this.fd_phi )/this.df             # phase rate: dphi/df
+            # use a length preserving derivative
             this.fd_dphi    = intrp_diff( this.f, this.fd_phi )             # phase rate: dphi/df
 
             this.fd_k_amp_max = argmax( this.fd_amp )
@@ -1764,6 +1769,7 @@ class gwylm:
                   calcstrain = None,                # If True, strain will be calculated upon loading
                   calcnews = None,
                   enforce_polarization_convention = None, # If true, polarization will be adjusted according to initial separation vectors
+                  fftfactor=None,
                   verbose               = None ):   # be verbose
 
         # NOTE that this method is setup to print the value of each input if verbose is true.
@@ -1793,6 +1799,9 @@ class gwylm:
 
         # NOTE that we don't want the scentry's verbose property to overwrite the input above, so we definte this.verbose at this point, not before.
         this.verbose = verbose
+
+        #
+        this.fftfactor = fftfactor
 
         # Store the scentry object to optionally access its methods
         this.__scentry__ = scentry_obj
@@ -2152,6 +2161,7 @@ class gwylm:
                             m1 = this.m1, m2 = this.m2,
                             xf = this.xf,
                             label = this.label,
+                            fftfactor=this.fftfactor,
                             ref_scentry = this.__scentry__,
                             kind='$rM\psi_{%i%i}$'%(l,m) )
 
@@ -2299,7 +2309,7 @@ class gwylm:
             wfarr = array( [ t, h_plus, h_cross ] ).T
 
             # Add the new strain multipole to this object's list of multipoles
-            this.hlm.append( gwf( wfarr, l=y.l, m=y.m, mf=this.mf, xf=this.xf, kind='$rh_{%i%i}/M$'%(y.l,y.m) ) )
+            this.hlm.append( gwf( wfarr, l=y.l, m=y.m, mf=this.mf, xf=this.xf, kind='$rh_{%i%i}/M$'%(y.l,y.m), fftfactor=this.fftfactor ) )
 
         # Create a dictionary representation of the mutlipoles
         this.__curate__()
@@ -2469,7 +2479,7 @@ class gwylm:
                 wfarr = array( [ t, l_plus, l_cross ] ).T
 
                 # Add the news multipole to this object's list of multipoles
-                flm.append( gwf( wfarr, l=y.l, m=y.m, kind='$r\dot{h}_{%i%i}$'%(y.l,y.m) ) )
+                flm.append( gwf( wfarr, l=y.l, m=y.m, fftfactor=this.fftfactor, kind='$r\dot{h}_{%i%i}$'%(y.l,y.m) ) )
 
             else:
 
@@ -2649,7 +2659,7 @@ class gwylm:
             Z = dot( M,Y )[:,0]
             wfarr = array( [ alm[0].t, Z.real, Z.imag ] ).T
             # return the ouput
-            return gwf( wfarr, kind=kind, ref_scentry = this.__scentry__ )
+            return gwf( wfarr, kind=kind, ref_scentry = this.__scentry__, fftfactor=this.fftfactor )
 
         #
         if kind=='psi4':
