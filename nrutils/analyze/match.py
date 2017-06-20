@@ -14,7 +14,7 @@ class match:
                   signal_polarization = 0,
                   template_polarization = 0,  # Not used by all types of match calculations
                   input_units = None,
-                  verbose = True ):
+                  verbose = False ):
 
         '''
         The work of the constructor is delegated to a method so that object attributes can be changed on the fly via this.apply(...)
@@ -29,11 +29,60 @@ class match:
                    verbose = verbose)
 
 
+    #
+    def calc_template_phi_optimized_match( this,
+                                           template_wfarr_fun, # takes in template orbital phase, outputs waveform array
+                                           N_template_phi = 15,# number of orbital phase values to use for exploration
+                                           verbose = False ):
+
+        # Import useful things
+        from numpy import linspace,pi,array
+        from copy import deepcopy as copy
+        import matplotlib.pyplot as pp
+        that = copy(this)
+
+        #
+        if verbose: alert( 'Processing %s over list a phi_template values .'%(cyan('match.calc_template_pol_optimized_match()')), )
+
+        # Define helper function for high level match
+        def match_helper(phi_template):
+            #
+            if verbose: print '.',
+            # Get the waveform array at the desired template oribtal phase
+            current_template_wfarr = template_wfarr_fun( phi_template )
+            # Create the related match object
+            that.apply( template_wfarr = current_template_wfarr )
+            # Calculate the match
+            match = that.calc_template_pol_optimized_match()
+            # Return answer
+            return match
+
+        # ~--~--~--~--~--~--~--~--~--~--~--~--~--~--~--~--~--~--~-- #
+        # Estimate optimal match with respect to phi orb of template
+        # ~--~--~--~--~--~--~--~--~--~--~--~--~--~--~--~--~--~--~-- #
+
+        # Map template orbital phase values to match
+        phi_template_range = linspace(0,2*pi,N_template_phi)
+        match_list = array( map( match_helper, phi_template_range ) )
+
+        # Interpolate match over phi_template to estimate maximum
+        # intrp_max lives in the "positive" repository
+        optimal_phi_template = intrp_argmax(match_list,phi_template_range)
+        match = match_helper( optimal_phi_template )
+
+        pp.figure()
+        pp.plot( phi_template_range, match_list, '-ok', mfc='none', mec = 'k', alpha=0.5 )
+
+        # Return answer
+        ans = match
+        return ans
+
+
     # Plot template and signal against psd
     def plot(this):
 
         # Import useful things
-        from numpy import array,sqrt
+        from numpy import array,sqrt,log,sign
 
         # Setup plotting backend
         import matplotlib as mpl
@@ -49,20 +98,26 @@ class match:
         # Setup Figure
         figure( figsize=1.8*array([4,4]) )
 
-        # Plot
-        plot( this.f, 2*sqrt(this.f)*abs(this.signal['response']), label=r'Signal, $\rho_{\mathrm{opt}} = %1.2f$'%this.signal['optimal_snr'] )
         #
-        plot( this.f, 2*sqrt(this.f)*abs(this.template['response']), label=r'Template, $\rho_{\mathrm{opt}} = %1.2f$'%this.template['optimal_snr'] )
+        def slog(x):
+            from numpy import sign,log
+            return log(abs(x))*sign(x)
+
+        # Plot
+        plot( this.f, 2*sqrt(abs(this.f))*abs(this.signal['response']), label=r'Signal (Response), $\rho_{\mathrm{opt}} = %1.2f$'%this.signal['optimal_snr'] )
+        #
+        plot( this.f, 2*sqrt(abs(this.f))*abs(this.template['response']), label=r'Template (Response), $\rho_{\mathrm{opt}} = %1.2f$'%this.template['optimal_snr'] )
         #
         plot( this.f, sqrt(this.psd), '-k', label=r'$\sqrt{S_n(f)}$ for '+this.psd_name )
 
         #
-        xscale('log'); yscale('log')
+        # xscale('log')
+        yscale('log')
         xlim(lim(this.f))
-        ylim( [ sqrt(min(this.psd))/10 , max(ylim()) ] )
+        # ylim( [ sqrt(min(this.psd))/10 , max(ylim()) ] )
         xlabel( r'$f$ (Hz)' )
         ylabel( r'$\sqrt{S_n(f)}$  and  $2|\tilde{h}(f)|\sqrt{f}$' )
-        legend( frameon=False )
+        legend( frameon=False, loc=3 )
 
 
     # Precalculate items related to the signals
@@ -74,10 +129,10 @@ class match:
         from numpy import sqrt
 
         # Calculate the combination of SIGNAL + and x as determined by the signal_polarization
-        this.signal['response'] = this.calc_detector_response( this.signal['polarization'], this.signal['+'], this.signal['x'] )
+        this.signal['response'] = this.calc_eff_detector_response( this.signal['polarization'], this.signal['+'], this.signal['x'] )
 
         # Calculate the combination of TEMPLATE + and x as determined by the signal['polarization']
-        this.template['response'] = this.calc_detector_response( this.template['polarization'], this.template['+'], this.template['x'] )
+        this.template['response'] = this.calc_eff_detector_response( this.template['polarization'], this.template['+'], this.template['x'] )
 
         # Calculate the normalizatino constant to be used for DFT related matches
         # NOTE that inconsistencies here in the method used can affect consistency of match
@@ -98,20 +153,26 @@ class match:
 
 
     # Calculate overlap optimized over template polarization
-    def calc_template_pol_optimized_match( this, **kwargs ):
+    def calc_template_pol_optimized_match( this, signal_polarization = None ):
 
         # Import useful things
         from numpy import sqrt,dot,real,log,diff
         from numpy.fft import ifft
 
         # Handle signal polarization input; use constructor value as default
-        this.apply( **kwargs )
+        if signal_polarization is not None:
+            this.signal['polarization']=signal_polarization
+            this.__set_waveform_fields__()
 
         #
         this.template['+norm'] = this.calc_norm( this.template['+'] )
         this.template['xnorm'] = this.calc_norm( this.template['x'] )
         #
         if (this.template['+norm']==0) or (this.template['xnorm']==0) :
+            print sum(abs(this.template['+']))
+            print sum(abs(this.template['x']))
+            print 'template +norma = %f'%this.template['+norm']
+            print 'template xnorma = %f'%this.template['xnorm']
             error('Neither + nor x of template can be zero for all frequencies.')
         #
         normalized_template_plus  = this.template['+']/this.template['+norm']
@@ -134,25 +195,31 @@ class match:
         numerator = rho_p2 - 2.0*IPC*gamma + rho_c2 + sqrt_part
         denominator = 1.0 - IPC**2
         #
-        # from matplotlib import pyplot as pp
-        # pp.plot( numerator/ (denominator*2.0) )
-        # print sqrt( numerator.max() / (denominator*2.0) )
-        # print this.signal['norm']
         template_pol_optimized_match = sqrt( numerator.max() / (denominator*2.0) ) / (this.signal['norm'] if this.signal['norm'] != 0 else 1)
+
+        # Calculate optimal template polarization angle ?
 
         #
         ans = template_pol_optimized_match
         return ans
 
+
+    # Calculate precessing match
+    def calc_precessing_match( this, **kwargs ):
+        return None
+
+
     # Claculate optimal snr
     def calc_optsnr(this,a):
         #
         from numpy import sqrt
-        # See Maggiori, p. 345 -- a factor of 2 comes from the definition of the psd,
-        # and another from the double sidedness of the spectrum
+        # See Maggiori, p. 345 -- a factor of 2 comes from the definition of the psd
+        # One will often see yet another factor of two (making the net factor 4);
+        # note that when both m>0 and m<0 multipoles are considered, this cannot be used
         # ALSO see Eqs 1-2 of https://arxiv.org/pdf/0901.1628.pdf
-        optsnr = sqrt( 4 * this.calc_overlap(a,method='trapz') )
+        optsnr = sqrt( 2 * this.calc_overlap(a,method='trapz') )
         return optsnr
+
 
     # Calculate noise curve weighted norm (aka Optimal SNR)
     def calc_norm(this,a,method=None):
@@ -175,6 +242,7 @@ class match:
         b = a if b is None else b
         #
         if (this.psd.shape[0] != b.shape[0]) or (this.psd.shape[0] != a.shape[0]):
+            print this.psd.shape, a.shape, b.shape
             error('vector shapes not compatible with this objects psd shape')
         #
         integrand = ( abs(a)**2 if b is a else a.conj()*b ) / this.psd
@@ -201,7 +269,7 @@ class match:
 
 
     # Combine singal component polarizations using a given effective polarization angle (NOTE that this is not the same polarization angle used in a specific antenna response, but some effective representation of it)
-    def calc_detector_response(this,psi,h_plus,h_cross):
+    def calc_eff_detector_response(this,psi,h_plus,h_cross):
         '''Here we interpret PSI to be an effective polarization angle that
         encompasses the effect of sky location, antenna pattern, and wave-frame
         signal polarization. The factor of two is not really necessary?'''
@@ -216,10 +284,11 @@ class match:
     # Set the psd to be used with the current object
     def __set_psd__(this):
         this.__set_psd_fun__()
-        this.psd = this.__psd_fun__(this.f)
+        # NOTE that we input the absolute value of frequencies per the definition of Sn
+        this.psd = this.__psd_fun__( abs(this.f) )
 
 
-    # Evlaute a desired psd
+    # Define a function for evaluating the PSD
     def __set_psd_fun__(this):
         '''
         In an if-else sense, the psd_name will be interpreterd as:
@@ -287,7 +356,7 @@ class match:
         this.__psd_fun__ = psd_fun
 
 
-    #
+    # Apply select properties to the current object
     def apply(this,template_wfarr=None, signal_wfarr=None, fmin=None, fmax=None, signal_polarization=None, template_polarization=None, psd_name=None, verbose=None):
         '''
         Apply select attributes to the current object.
@@ -312,7 +381,7 @@ class match:
     def __parse_inputs__(this, template_wfarr, signal_wfarr, fmin, fmax, signal_polarization, template_polarization, psd_name, verbose):
 
         # Import useful things
-        from numpy import allclose,diff
+        from numpy import allclose,diff,array,ones
 
         # Store the verbose input to the current object
         this.verbose = verbose
@@ -321,33 +390,36 @@ class match:
         if this.verbose:
             alert('Verbose mode on.','match')
 
-        #
+        # Store input arrays; this should only been done upon initial construction
+        tag = '__input_signal_wfarr__'
+        if not ( tag in this.__dict__ ): this.__dict__[tag] = signal_wfarr
+        tag = '__input_template_wfarr__'
+        if not ( tag in this.__dict__ ): this.__dict__[tag] = template_wfarr
+
+        # Handle optinal inputs; whith previously stored values being defaults in most cases
         this.fmin = fmin if fmin is not None else this.fmin
         this.fmax = fmax if fmax is not None else this.fmax
+        # Handle None waveforms arrays
+        signal_is_None = signal_wfarr is None
+        template_is_None = template_wfarr is None
+        if signal_is_None:
+            # set signal_wfarr to previously stored value
+            signal_wfarr = this.__input_signal_wfarr__
+        if template_is_None:
+            # set template_wfarr to previously stored value
+            template_wfarr = this.__input_template_wfarr__
 
-        #-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-#
-        # Check for equal array domain     #
-        #-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-%%-#
-        if (signal_wfarr is not None) and (template_wfarr is not None):
-            signal_f,template_f = signal_wfarr[:,0],template_wfarr[:,0]
-            signal_df,template_df = diff(signal_f[:2])[0],diff(template_f[:2])[0]
-            if len(signal_f) != len(template_f):
-                print len(signal_f),len(template_f)
-                error( 'Frequency columns of waveform arrays are not equal in length. You may wish to interpolate to ensure a common frequency domain space.' )
-            if not allclose(signal_f,template_f):
-                error("Values in the tempate frequncy column are not all close to values in the signal frequency column. This should not be the case.")
+        # Validate arrays
+        this.__validate_wfarrs__(signal_wfarr,template_wfarr)
 
-            # Crop arrays between fmin and fmax, and then store to the current object
-            f = signal_f
-            mask = (f>=fmin) & (f<=fmax)
-            this.f = f[mask].real # NOTE The signal_wfarr is complex typed; for the frequency column the imag parts are zero; here we explicitely cast frequencies as real to avoid numpy type errors when evaluating the psd
+        # Upack waveform arrays into dictionaries
+        this.signal = this.__unpack_wfarr__(signal_wfarr)
+        this.template = this.__unpack_wfarr__(template_wfarr)
 
-            # Group plus and cross into dictionaries
-            this.signal,this.template = {},{}
-            this.signal['+'] = signal_wfarr[mask,1]
-            this.signal['x'] = signal_wfarr[mask,2]
-            this.template['+'] = template_wfarr[mask,1]
-            this.template['x'] = template_wfarr[mask,2]
+        # Make common frequncy easily accessible; note that the 'f' key in
+        # signal and template has been tested to be all close at this point;
+        # these frequencies have also been masked according to fmin and fmax
+        this.f = this.signal['f']
 
         # Store the psd name input
         this.psd_name = psd_name if psd_name is not None else this.psd_name
@@ -362,3 +434,54 @@ class match:
 
         #
         return None
+
+
+    # Store masked wfarr data into dictionary
+    def __unpack_wfarr__(this,wfarr):
+
+        #
+        f = wfarr[:,0]
+        mask = this.__getfmask__( f, this.fmin, this.fmax )
+
+        #
+        d = {}
+        #
+        d['f'] = wfarr[mask,0]
+        d['+'] = wfarr[mask,1]
+        d['x'] = wfarr[mask,2]
+
+        #
+        return d
+
+
+    # determine mask to be applied to array from fmin and fmax
+    def __getfmask__(this,f,fmin,fmax):
+        #
+        abs_f = abs(f)
+        mask = (abs_f>=fmin) & (abs_f<=fmax) & (f!=0)
+        #
+        return mask
+
+
+    # Validate the signal_wfarr against template_wfarr
+    def __validate_wfarrs__(this,signal_wfarr,template_wfarr):
+
+        # Import useful things
+        from numpy import allclose,diff,array,ones
+
+        # arrays should be the same shape
+        if signal_wfarr.shape != template_wfarr.shape:
+            error('waveform array shapes must be identical')
+
+        # Extract frequencies for comparison
+        template_f = template_wfarr[:,0]
+        signal_f = signal_wfarr[:,0]
+
+        # Freqs must have same length
+        if len(signal_f) != len(template_f):
+            print len(signal_f),len(template_f)
+            error( 'Frequency columns of waveform arrays are not equal in length. You may wish to interpolate to ensure a common frequency domain space. Please make sure that masking is handled consistently between inputs and possible outputs of recompoase functions (if relevant).' )
+
+        # Freqs must have same values
+        if not allclose(signal_f,template_f):
+            error("Values in the template frequncy column are not all close to values in the signal frequency column. This should not be the case. Please make sure that masking is handled consistently between inputs and possible outputs of recompoase functions (if relevant).")
