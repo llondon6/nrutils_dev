@@ -183,6 +183,7 @@ def pad_wfarr(wfarr,new_length,where=None):
     # Return padded array
     return _wfarr
 
+
 # Shift a waveform arra by some "shift" amount in time
 def tshift_wfarr( _wfarr, shift ):
     '''Shift a waveform arra by some "shift" amount in time'''
@@ -226,6 +227,7 @@ def shift_wfarr_phase(wfarr,dphi):
     #
     return wfarr
 
+
 # Find the average phase difference and align two wfarr's
 def align_wfarr_average_phase(this,that,mask=None,verbose=False):
     '''
@@ -261,6 +263,7 @@ def align_wfarr_average_phase(this,that,mask=None,verbose=False):
 
     #
     return this_
+
 
 # Given a dictionary of multipoles and wafarrs, recompose at a desired theta and phi
 def recompose_wfarrs( wfarr_dict, theta, phi ):
@@ -330,6 +333,7 @@ def recompose_wfarrs( wfarr_dict, theta, phi ):
     ans = recomposed_wfarr
     return ans
 
+
 #
 def get_wfarr_relative_phase(this,that):
 
@@ -364,7 +368,6 @@ def align_wfarr_initial_phase(this,that):
 
     #
     return this_
-
 
 
 # Fix nans, nonmonotinicities and jumps in time series waveform array

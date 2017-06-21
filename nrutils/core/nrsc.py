@@ -322,7 +322,7 @@ class scentry:
     # Create dynamic function that references the user's current configuration to construct the simulation directory of this run.
     def simdir(this):
         if this.config:
-            ans = this.config.reconfig().catalog_dir + this.relative_simdir
+            ans = ''.join([this.config.reconfig().catalog_dir,this.relative_simdir])
             if not this.config.config_exists:
                 msg = 'The current object has been marked as '+red('non-existent')+', likely by reconfig(). Please verify that the ini file for the related run exists. You may see this message for other (yet unpredicted) reasons.'
                 error(msg,'scentry.simdir()')
@@ -2623,23 +2623,75 @@ class gwylm:
         #
         if not apply: return ans
 
+
+    # Recompose the waveforms at a sky position about the source
+    def recompose( this,
+                   theta,
+                   phi,
+                   kind = None,
+                   domain = None,       # only useful if output_array = True
+                   select_lm = None,
+                   output_array = None, # Faster as the gwf constructor is not called (e.g. related ffts are not taken)
+                   verbose = None):
+
+        # Validate the inputs
+        if kind is None:
+            msg = 'no kind specified for recompose calculation. We will proceed assuming that you desire recomposed strain. Please specify the desired kind (e.g. strain, psi4 or news) you wish to be output as a keyword (e.g. kind="news")'
+            warning( msg, 'gwylm.recompose' )
+            kind = 'strain'
+        if domain is None:
+            msg = 'no domain specified for recompose calculation. We will proceed assuming that you desire recomposed time domain data. Please specify the desired domain (e.g. time or freq) you wish to be output as a keyword (e.g. kind="freq")'
+            warning( msg, 'gwylm.recompose' )
+            domain = 'time'
+
+        # if it is desired to work with arrays
+        if output_array:
+            #
+            ans = this.__recompose_array__( theta, phi, kind=kind, select_lm=select_lm, verbose=verbose )
+        else: # if it desired to work with gwf objects (this is time domain recomposition followed by gwf construction)
+            #
+            ans = this.__recompose_gwf__( theta, phi, kind=kind, select_lm=select_lm, verbose=verbose )
+
+        # Return the answer
+        return ans
+
+
+
+    # recompose individual arrays for a select data type (psi4, strain or news)
+    def __recompose_array__( this,theta,phi,kind=None,select_lm=None ):
+        '''
+        Recompose individual arrays for a select data type (psi4, strain or news)
+        '''
+
+        # Set default for select_lm
+        select_lm = this.lm.keys() if select_lm is None else select_lm
+
+        # Construct functions which handle options
+        fd_wfarr_dict_fun = lambda k: { lm:this.lm[lm][k].fd_wfarr[lm] for lm in select_lm }
+        td_wfarr_dict_fun = lambda k: { lm:this.lm[lm][k].wfarr[lm] for lm in select_lm }
+        wfarr_dict_fun    = lambda d,k: td_wfarr_dict_fun(k) if d in ('fd','freq','fequency','f') else fd_wfarr_dict_fun(k)
+        #  Get desired waveform array
+        wfarr_dict = wfarr_dict_fun(domain,kind)
+
+        # Recompose using low level function in basics.py
+        recomposed_wfarr = recompose_wfarrs( wfarr_dict, theta, phi )
+
+        # Return answer
+        ans = recomposed_wfarr
+        return ans
+
+
     # Recompose the waveforms at a sky position about the source
     # NOTE that this function returns a gwf object
-    def recompose( this,         # The current object
-                   theta,        # The polar angle
-                   phi,          # The anzimuthal angle
-                   kind=None,
-                   select_lm=None,
-                   verbose=False ):
+    def __recompose_gwf__( this,         # The current object
+                           theta,        # The polar angle
+                           phi,          # The anzimuthal angle
+                           kind=None,
+                           select_lm=None,
+                           verbose=False ):
 
         #
         from numpy import dot,array,zeros
-
-        #
-        if kind is None:
-            msg = 'no kind specified for recompose calculation. We will proceed assuming that you desire recomposed strain. Please specify the desired kind (e.g. strain, psi4 or news) you wishe to be output as a keyword (e.g. kind=news)'
-            warning( msg, 'gwylm.recompose' )
-            kind = 'strain'
 
         #
         select_lm = this.__input_lmlist__ if select_lm is None else select_lm
@@ -2862,6 +2914,7 @@ class gwylm:
                 yref,     # reference gwylm
                 dphi=0,   # rotation of orbital phase to apply to current object
                 dpsi=0,   # rotation of polarization to apply to current object
+                verbose=True,
                 lm = None): # which modes to use
         '''
         # Compute the simple vector inner-product (sky averaged overlap with no noise curve) between one gwylm  and another.
@@ -2877,6 +2930,7 @@ class gwylm:
         ---
         x,      # sky avergaed and normalized inner-product
         '''
+        if verbose: warning('this is not a proper match function, but an add-hock flat psd sky averaged match; for proper matches see nrutils.analysis.match')
         # Import useful things
         from numpy import sqrt
         #
@@ -2998,39 +3052,6 @@ class gwylm:
 
         # Return stuff, including the fit object
         return mf,xf,Q
-
-    #
-    def match( this,    # The current object
-               that,    # The referencce qwylm object with which to caculate a match
-               orientation = None, # Orientation of source relative to line of sight
-               noise_curve = None, # Detector noise curve to use (modeled only)
-               domain = None,
-               verbose = False ):
-
-        # Import useful things
-        from numpy import correlate as xcor
-
-        # Handle default options
-        if not isinstance(domain,str): error('domain input must be string')
-        if not isinstance(noise_curve,str): error('noise_curve input must be string')
-        domain = 'time' if domain is None else domain.lower()
-        noise_curve = 'flat' if noise_curve is None else noise_curve.lower()
-
-        # Validate domain input
-        valid_domains = ('time','freq')
-        if not domain in valid_domains:
-            error( 'the domain input must be either "time" or "freq", instead "%s" was found' % magenta(domain) )
-        valid_noise_curves = ('time','freq')
-        if not noise_curve in valid_noise_curves:
-            error( 'the noise_curve input must be in %s, instead "%s" was found' % (list(valid_noise_curves),magenta(domain) ) )
-
-        #
-        if domain == 'time':
-            #
-            error('functionality not yet implemented')
-        else:
-            #
-            error('functionality not yet implemented')
 
 
     # Los pass filter using romline in basics.py to determine window region

@@ -31,8 +31,9 @@ class match:
 
     #
     def calc_template_phi_optimized_match( this,
-                                           template_wfarr_fun, # takes in template orbital phase, outputs waveform array
+                                           template_wfarr_orbphi_fun, # takes in template orbital phase, outputs waveform array
                                            N_template_phi = 15,# number of orbital phase values to use for exploration
+                                           plot = False,
                                            verbose = False ):
 
         # Import useful things
@@ -49,7 +50,7 @@ class match:
             #
             if verbose: print '.',
             # Get the waveform array at the desired template oribtal phase
-            current_template_wfarr = template_wfarr_fun( phi_template )
+            current_template_wfarr = template_wfarr_orbphi_fun( phi_template )
             # Create the related match object
             that.apply( template_wfarr = current_template_wfarr )
             # Calculate the match
@@ -70,12 +71,123 @@ class match:
         optimal_phi_template = intrp_argmax(match_list,phi_template_range)
         match = match_helper( optimal_phi_template )
 
-        pp.figure()
-        pp.plot( phi_template_range, match_list, '-ok', mfc='none', mec = 'k', alpha=0.5 )
+        #
+        if plot:
+            from matplotlib import pyplot as pp
+            pp.figure()
+            pp.plot( phi_template_range, match_list, '-ok', mfc='none', mec = 'k', alpha=0.5 )
+            pp.show()
 
         # Return answer
         ans = match
         return ans
+
+
+    # Estimate the min, mean, and max match when varying signal polarization and orbital phase
+    def calc_match_sky_moments( this,
+                                signal_wfarr_fun,   # takes in template inclination & orbital phase, outputs waveform array
+                                template_wfarr_fun, # takes in signal   inclination & orbital phase, outputs waveform array
+                                N_theta = 25,
+                                N_psi_signal = 13,
+                                N_phi_signal = 13,
+                                verbose = not False ):
+
+        #-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-#
+        # Import useful things
+        #-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-#
+        from numpy import array,linspace,pi,mean
+
+        #-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-#
+        # Define 3D grid
+        #-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-#
+        # Inclination
+        theta_range = linspace(0,pi,N_theta)
+        # Signal polarization
+        psi_signal_range = linspace(0,pi,N_psi_signal)
+        # Signal orbital phase
+        phi_signal_range = linspace(0,2*pi,N_phi_signal)
+
+        #-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-#
+        # Evaluate match over grid
+        #-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-#
+        # For all inclinations
+        min_match,snr_min_match = [],[]
+        avg_match,snr_avg_match = [],[]
+        max_match,snr_max_match = [],[]
+        min_snr,avg_snr,max_snr = [],[],[]
+
+        '''Loop over INCLINATION'''
+        for theta in theta_range:
+
+            # Let the people know
+            if verbose: alert('theta = %1.2f\n%s'%(theta,20*'--'))
+
+            # Construct a representation of the template waveform evaluated at the current value of theta
+            template_fun = lambda _phi_: template_wfarr_fun(theta,_phi_)
+
+            #------------------------#
+            # For all reference orbital phase angles, calculate matches and snrs
+            #------------------------#
+            match_list,optsnr_list = [],[]
+            if verbose: print '>> working ',
+
+            '''Loop over SIGNAL ORBITAL PHASE'''
+            for phi_signal in phi_signal_range:
+
+                # Evaluate the signal representation at this orbital phase
+                signal_wfarr = signal_wfarr_fun(theta,phi_signal)
+
+                # For all signal polarization values
+                if verbose: print '.',
+
+                '''Loop over SIGNAL POLARIZATION'''
+                for psi_signal in psi_signal_range:
+                    # Apply the signal poliarzation to the current object
+                    this.apply( signal_polarization = psi_signal, signal_wfarr = signal_wfarr )
+                    #
+                    '''
+                    Optimize match over TEMPLATE ORBITAL PHASE and
+                    template phase, polarization and time
+                    '''
+                    optsnr = this.signal['optimal_snr']
+                    match = this.calc_template_phi_optimized_match( template_fun  )
+                    match_list.append( match )
+                    optsnr_list.append( optsnr )
+
+            #------------------------#
+            # Calculate moments for this inclination
+            #------------------------#
+            if verbose: print ' done.'
+            # convert to arrays to help with math
+            match_list,optsnr_list = array(match_list),array(optsnr_list)
+            # calculate min mean and max (no snr weighting)
+            this_min = min(match_list)
+            min_match.append(  this_min )
+            max_match.append(  max(match_list) )
+            avg_match.append( mean(match_list) )
+            print '>> min_match \t = \t %f' % this_min
+            print '>> avg_match \t = \t %f' % avg_match[-1]
+            print '>> max_match \t = \t %f' % max_match[-1]
+            print ''
+            # calculate min mean and max (with snr weighting)
+            snr_weighted_match = (match_list*optsnr_list**2) / sum( optsnr_list**2 )
+            snr_min_match.append(  min(snr_weighted_match) )
+            snr_max_match.append(  max(snr_weighted_match) )
+            snr_avg_match.append( mean(snr_weighted_match) )
+
+        #-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-#
+        # Store moments to dictionary for output
+        #-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-#
+        match_info = { 'theta':theta_range }
+        match_info['min'] = min_match
+        match_info['avg'] = avg_match
+        match_info['max'] = max_match
+        match_info['weighted_min'] = snr_min_match
+        match_info['weighted_avg'] = snr_avg_match
+        match_info['weighted_max'] = snr_max_match
+
+        #
+        return match_info
 
 
     # Plot template and signal against psd
@@ -111,10 +223,8 @@ class match:
         plot( this.f, sqrt(this.psd), '-k', label=r'$\sqrt{S_n(f)}$ for '+this.psd_name )
 
         #
-        # xscale('log')
         yscale('log')
         xlim(lim(this.f))
-        # ylim( [ sqrt(min(this.psd))/10 , max(ylim()) ] )
         xlabel( r'$f$ (Hz)' )
         ylabel( r'$\sqrt{S_n(f)}$  and  $2|\tilde{h}(f)|\sqrt{f}$' )
         legend( frameon=False, loc=3 )
@@ -440,13 +550,13 @@ class match:
     def __unpack_wfarr__(this,wfarr):
 
         #
-        f = wfarr[:,0]
+        f = wfarr[:,0].real
         mask = this.__getfmask__( f, this.fmin, this.fmax )
 
         #
         d = {}
         #
-        d['f'] = wfarr[mask,0]
+        d['f'] = wfarr[mask,0].real # wfarr is complex typed, thus the freq vals have a 0*1j imag part that needs to be removed
         d['+'] = wfarr[mask,1]
         d['x'] = wfarr[mask,2]
 
