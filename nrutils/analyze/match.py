@@ -1,5 +1,7 @@
 # Import useful things
 from nrutils.core.basics import *
+import sys
+flush =  sys.stdout.flush
 
 #
 class match:
@@ -32,12 +34,12 @@ class match:
     #
     def calc_template_phi_optimized_match( this,
                                            template_wfarr_orbphi_fun, # takes in template orbital phase, outputs waveform array
-                                           N_template_phi = 15,# number of orbital phase values to use for exploration
+                                           N_template_phi = 21,# number of orbital phase values to use for exploration
                                            plot = False,
                                            verbose = False ):
 
         # Import useful things
-        from numpy import linspace,pi,array
+        from numpy import linspace,pi,array,argmax
         from copy import deepcopy as copy
         import matplotlib.pyplot as pp
         that = copy(this)
@@ -76,6 +78,8 @@ class match:
             from matplotlib import pyplot as pp
             pp.figure()
             pp.plot( phi_template_range, match_list, '-ok', mfc='none', mec = 'k', alpha=0.5 )
+            pp.xlim( lim(phi_template_range) )
+            pp.xlabel(r'$\phi_\mathrm{Orb,Template}$')
             pp.show()
 
         # Return answer
@@ -95,13 +99,14 @@ class match:
         #-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-#
         # Import useful things
         #-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-#
-        from numpy import array,linspace,pi,mean
+        from numpy import array,linspace,pi,mean,average
 
         #-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-#
         # Define 3D grid
         #-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-#
         # Inclination
         theta_range = linspace(0,pi,N_theta)
+        # theta_range = linspace(0,pi,N_theta)
         # Signal polarization
         psi_signal_range = linspace(0,pi,N_psi_signal)
         # Signal orbital phase
@@ -129,21 +134,23 @@ class match:
             # For all reference orbital phase angles, calculate matches and snrs
             #------------------------#
             match_list,optsnr_list = [],[]
-            if verbose: print '>> working ',
+            if verbose:
+                print '>> working ',
+                flush()
 
             '''Loop over SIGNAL ORBITAL PHASE'''
             for phi_signal in phi_signal_range:
 
                 # Evaluate the signal representation at this orbital phase
                 signal_wfarr = signal_wfarr_fun(theta,phi_signal)
-
-                # For all signal polarization values
-                if verbose: print '.',
+                this.apply( signal_wfarr=signal_wfarr )
 
                 '''Loop over SIGNAL POLARIZATION'''
                 for psi_signal in psi_signal_range:
+                    print '.',
+                    flush()
                     # Apply the signal poliarzation to the current object
-                    this.apply( signal_polarization = psi_signal, signal_wfarr = signal_wfarr )
+                    this.apply( signal_polarization = psi_signal )
                     #
                     '''
                     Optimize match over TEMPLATE ORBITAL PHASE and
@@ -154,26 +161,32 @@ class match:
                     match_list.append( match )
                     optsnr_list.append( optsnr )
 
+                # For all signal polarization values
+                if verbose:
+                    print ',',
+                    flush()
+
             #------------------------#
             # Calculate moments for this inclination
             #------------------------#
-            if verbose: print ' done.'
+            if verbose:
+                print ' done.'
+                flush()
             # convert to arrays to help with math
             match_list,optsnr_list = array(match_list),array(optsnr_list)
             # calculate min mean and max (no snr weighting)
-            this_min = min(match_list)
-            min_match.append(  this_min )
+            min_match.append(  min(match_list) )
             max_match.append(  max(match_list) )
             avg_match.append( mean(match_list) )
-            print '>> min_match \t = \t %f' % this_min
-            print '>> avg_match \t = \t %f' % avg_match[-1]
-            print '>> max_match \t = \t %f' % max_match[-1]
-            print ''
             # calculate min mean and max (with snr weighting)
-            snr_weighted_match = (match_list*optsnr_list**2) / sum( optsnr_list**2 )
-            snr_min_match.append(  min(snr_weighted_match) )
-            snr_max_match.append(  max(snr_weighted_match) )
-            snr_avg_match.append( mean(snr_weighted_match) )
+            snr_avg_match.append( average( match_list, weights=optsnr_list ) )
+            #
+            print '>>  min_match \t = \t %f' % min_match[-1]
+            print '>>  avg_match \t = \t %f' % avg_match[-1]
+            print 'snr_avg_match \t = \t %f' % snr_avg_match[-1]
+            print '>>  max_match \t = \t %f' % max_match[-1]
+            print '--'*20
+            flush()
 
         #-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-#
         # Store moments to dictionary for output
@@ -182,9 +195,7 @@ class match:
         match_info['min'] = min_match
         match_info['avg'] = avg_match
         match_info['max'] = max_match
-        match_info['weighted_min'] = snr_min_match
         match_info['weighted_avg'] = snr_avg_match
-        match_info['weighted_max'] = snr_max_match
 
         #
         return match_info
@@ -271,8 +282,7 @@ class match:
 
         # Handle signal polarization input; use constructor value as default
         if signal_polarization is not None:
-            this.signal['polarization']=signal_polarization
-            this.__set_waveform_fields__()
+            this.apply( signal_polarization=signal_polarization )
 
         #
         this.template['+norm'] = this.calc_norm( this.template['+'] )
@@ -500,24 +510,27 @@ class match:
         if this.verbose:
             alert('Verbose mode on.','match')
 
-        # Store input arrays; this should only been done upon initial construction
-        tag = '__input_signal_wfarr__'
-        if not ( tag in this.__dict__ ): this.__dict__[tag] = signal_wfarr
-        tag = '__input_template_wfarr__'
-        if not ( tag in this.__dict__ ): this.__dict__[tag] = template_wfarr
-
         # Handle optinal inputs; whith previously stored values being defaults in most cases
         this.fmin = fmin if fmin is not None else this.fmin
         this.fmax = fmax if fmax is not None else this.fmax
+
+        #-~~-~~-~~-~~-~~-~~-~~-~~-~~-~~-~~#
         # Handle None waveforms arrays
-        signal_is_None = signal_wfarr is None
-        template_is_None = template_wfarr is None
-        if signal_is_None:
+        #-~~-~~-~~-~~-~~-~~-~~-~~-~~-~~-~~#
+        # SIGNAL
+        if signal_wfarr is None:
             # set signal_wfarr to previously stored value
             signal_wfarr = this.__input_signal_wfarr__
-        if template_is_None:
+        else:
+            # Use the input value to set the default value for this object
+            this.__input_signal_wfarr__ = signal_wfarr
+        # TEMPLATE
+        if template_wfarr is None:
             # set template_wfarr to previously stored value
             template_wfarr = this.__input_template_wfarr__
+        else:
+            # Use the input value to set the default value for this object
+            this.__input_template_wfarr__ = template_wfarr
 
         # Validate arrays
         this.__validate_wfarrs__(signal_wfarr,template_wfarr)

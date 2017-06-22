@@ -322,7 +322,7 @@ class scentry:
     # Create dynamic function that references the user's current configuration to construct the simulation directory of this run.
     def simdir(this):
         if this.config:
-            ans = ''.join([this.config.reconfig().catalog_dir,this.relative_simdir])
+            ans = this.config.reconfig().catalog_dir + this.relative_simdir
             if not this.config.config_exists:
                 msg = 'The current object has been marked as '+red('non-existent')+', likely by reconfig(). Please verify that the ini file for the related run exists. You may see this message for other (yet unpredicted) reasons.'
                 error(msg,'scentry.simdir()')
@@ -2647,7 +2647,9 @@ class gwylm:
         # if it is desired to work with arrays
         if output_array:
             #
-            ans = this.__recompose_array__( theta, phi, kind=kind, select_lm=select_lm, verbose=verbose )
+            if (kind is None) or (domain is None):
+                error('When recomposing arrays, BOTH domain and kind keyword inputs must be given.')
+            ans = this.__recompose_array__( theta, phi, kind, domain, select_lm=select_lm, verbose=verbose )
         else: # if it desired to work with gwf objects (this is time domain recomposition followed by gwf construction)
             #
             ans = this.__recompose_gwf__( theta, phi, kind=kind, select_lm=select_lm, verbose=verbose )
@@ -2658,7 +2660,7 @@ class gwylm:
 
 
     # recompose individual arrays for a select data type (psi4, strain or news)
-    def __recompose_array__( this,theta,phi,kind=None,select_lm=None ):
+    def __recompose_array__( this,theta,phi,kind,domain,select_lm=None,verbose=False ):
         '''
         Recompose individual arrays for a select data type (psi4, strain or news)
         '''
@@ -2667,9 +2669,9 @@ class gwylm:
         select_lm = this.lm.keys() if select_lm is None else select_lm
 
         # Construct functions which handle options
-        fd_wfarr_dict_fun = lambda k: { lm:this.lm[lm][k].fd_wfarr[lm] for lm in select_lm }
-        td_wfarr_dict_fun = lambda k: { lm:this.lm[lm][k].wfarr[lm] for lm in select_lm }
-        wfarr_dict_fun    = lambda d,k: td_wfarr_dict_fun(k) if d in ('fd','freq','fequency','f') else fd_wfarr_dict_fun(k)
+        fd_wfarr_dict_fun = lambda k: { lm:this.lm[lm][k].fd_wfarr for lm in select_lm }
+        td_wfarr_dict_fun = lambda k: { lm:this.lm[lm][k].wfarr for lm in select_lm }
+        wfarr_dict_fun    = lambda d,k: fd_wfarr_dict_fun(k) if d in ('fd','freq','fequency','f') else td_wfarr_dict_fun(k)
         #  Get desired waveform array
         wfarr_dict = wfarr_dict_fun(domain,kind)
 

@@ -297,6 +297,7 @@ def recompose_wfarrs( wfarr_dict, theta, phi ):
                 error( 'invalid multipole eigenvalue found: %s'%[v] )
         # key values must be ndarray
         if not isinstance(wfarr_dict[k],ndarray):
+            print wfarr_dict[k].__class__
             error('key values must be ndarray')
 
     # Number of samples
