@@ -94,12 +94,17 @@ class match:
                                 N_theta = 25,
                                 N_psi_signal = 13,
                                 N_phi_signal = 13,
+                                hm_vs_quad = False,
                                 verbose = not False ):
 
         #-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-#
         # Import useful things
         #-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-#
         from numpy import array,linspace,pi,mean,average
+
+        #
+        if hm_vs_quad:
+            alert('We will also compute matches for the quadrupole only template.')
 
         #-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-#
         # Define 3D grid
@@ -116,10 +121,11 @@ class match:
         # Evaluate match over grid
         #-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-#
         # For all inclinations
-        min_match,snr_min_match = [],[]
-        avg_match,snr_avg_match = [],[]
-        max_match,snr_max_match = [],[]
-        min_snr,avg_snr,max_snr = [],[],[]
+        min_match,avg_match,snr_avg_match,max_match = [],[],[],[]
+        quadrupole_min_match = []
+        quadrupole_avg_match = []
+        quadrupole_snr_avg_match = []
+        quadrupole_max_match = []
 
         '''Loop over INCLINATION'''
         for theta in theta_range:
@@ -128,12 +134,16 @@ class match:
             if verbose: alert('theta = %1.2f\n%s'%(theta,20*'--'))
 
             # Construct a representation of the template waveform evaluated at the current value of theta
-            template_fun = lambda _phi_: template_wfarr_fun(theta,_phi_)
+            template_fun = lambda PHI: template_wfarr_fun(theta,PHI,None)
+            # NOTE that in the line above, None MUST default to all available LM multipoles being used
+            quadrupole_lm = [(2,2),(2,-2)]
+            quadrupole_template_fun = lambda PHI: template_wfarr_fun(theta,PHI,quadrupole_lm)
 
             #------------------------#
             # For all reference orbital phase angles, calculate matches and snrs
             #------------------------#
             match_list,optsnr_list = [],[]
+            quadrupole_match_list = []
             if verbose:
                 print '>> working ',
                 flush()
@@ -157,8 +167,15 @@ class match:
                     template phase, polarization and time
                     '''
                     optsnr = this.signal['optimal_snr']
-                    match = this.calc_template_phi_optimized_match( template_fun  )
+
+                    #
+                    if hm_vs_quad:
+                        quadrupole_match = this.calc_template_phi_optimized_match(quadrupole_template_fun)
+                        quadrupole_match_list.append( quadrupole_match )
+                    #
+                    match = this.calc_template_phi_optimized_match(template_fun)
                     match_list.append( match )
+                    #
                     optsnr_list.append( optsnr )
 
                 # For all signal polarization values
@@ -174,17 +191,30 @@ class match:
                 flush()
             # convert to arrays to help with math
             match_list,optsnr_list = array(match_list),array(optsnr_list)
+            quadrupole_match_list = array(quadrupole_match_list)
             # calculate min mean and max (no snr weighting)
             min_match.append(  min(match_list) )
             max_match.append(  max(match_list) )
             avg_match.append( mean(match_list) )
-            # calculate min mean and max (with snr weighting)
+            #
+            if hm_vs_quad:
+                quadrupole_min_match.append(  min(quadrupole_match_list) )
+                quadrupole_max_match.append(  max(quadrupole_match_list) )
+                quadrupole_avg_match.append( mean(quadrupole_match_list) )
+            # calculate min mean and max (with SIGNAL snr weighting)
             snr_avg_match.append( average( match_list, weights=optsnr_list ) )
+            if hm_vs_quad:
+                quadrupole_snr_avg_match.append( average( quadrupole_match_list, weights=optsnr_list ) )
             #
             print '>>  min_match \t = \t %f' % min_match[-1]
             print '>>  avg_match \t = \t %f' % avg_match[-1]
             print 'snr_avg_match \t = \t %f' % snr_avg_match[-1]
             print '>>  max_match \t = \t %f' % max_match[-1]
+            if hm_vs_quad:
+                print '##  quadrupole_min_match \t = \t %f' % quadrupole_min_match[-1]
+                print '##  quadrupole_avg_match \t = \t %f' % quadrupole_avg_match[-1]
+                print 'quadrupole_snr_avg_match \t = \t %f' % quadrupole_snr_avg_match[-1]
+                print '##  quadrupole_max_match \t = \t %f' % quadrupole_max_match[-1]
             print '--'*20
             flush()
 
@@ -192,13 +222,49 @@ class match:
         # Store moments to dictionary for output
         #-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-#
         match_info = { 'theta':theta_range }
+        #
         match_info['min'] = min_match
         match_info['avg'] = avg_match
         match_info['max'] = max_match
         match_info['weighted_avg'] = snr_avg_match
+        #
+        if hm_vs_quad:
+            match_info['quadrupole_min'] = quadrupole_min_match
+            match_info['quadrupole_avg'] = quadrupole_avg_match
+            match_info['quadrupole_max'] = quadrupole_max_match
+            match_info['quadrupole_weighted_avg'] = quadrupole_snr_avg_match
 
         #
         return match_info
+
+
+    #
+    def franks_match( this ):
+
+        #
+        from numpy import angle,sqrt
+        from numpy.fft import ifft
+
+        #
+        h1dat = this.template['+'] - 1j*this.template['x']
+        h2dat = this.signal['+'] - 1j*this.signal['x']
+
+        #
+        n1fun = lambda x: sum( abs(x)**2   / this.psd )
+        n2fun = lambda x: sum( x * x[::-1] / this.psd )
+        norm11,norm21 = n1fun(h1dat),n1fun(h2dat)
+        norm12,norm22 = n2fun(h1dat),n2fun(h2dat)
+        N2 = abs(norm22); sigma1 = angle(norm22)
+
+        #
+        int1 = h1dat * h2dat.conj() / this.psd
+        int2 = h1dat.conj()[::-1] * h2dat.conj() / this.psd
+
+        #
+        FFTs = [ ifft(int1),ifft(int2) ]
+
+        # Content of alloptmatches
+        h1norm = sqrt( norm11 + 0  )
 
 
     # Plot template and signal against psd
@@ -532,12 +598,12 @@ class match:
             # Use the input value to set the default value for this object
             this.__input_template_wfarr__ = template_wfarr
 
-        # Validate arrays
-        this.__validate_wfarrs__(signal_wfarr,template_wfarr)
-
         # Upack waveform arrays into dictionaries
         this.signal = this.__unpack_wfarr__(signal_wfarr)
         this.template = this.__unpack_wfarr__(template_wfarr)
+
+        # Validate arrays // NOTE that this method acts on this.signal and this.template
+        this.__validate_wfarrs__()
 
         # Make common frequncy easily accessible; note that the 'f' key in
         # signal and template has been tested to be all close at this point;
@@ -587,14 +653,28 @@ class match:
 
 
     # Validate the signal_wfarr against template_wfarr
-    def __validate_wfarrs__(this,signal_wfarr,template_wfarr):
+    def __validate_wfarrs__(this):
 
         # Import useful things
-        from numpy import allclose,diff,array,ones
+        from numpy import allclose,diff,array,ones,vstack
+
+        #
+        signal_wfarr   = vstack( [ this.signal['f'],this.signal['+'],this.signal['x'] ] ).T
+        template_wfarr = vstack( [ this.template['f'],this.template['+'],this.template['x'] ] ).T
 
         # arrays should be the same shape
         if signal_wfarr.shape != template_wfarr.shape:
-            error('waveform array shapes must be identical')
+            message = '''
+
+            Waveform array shapes must be identical:
+
+            Signal shape:   %s
+            Template shape: %s
+            Signal df:      %f
+            Template df:    %f
+
+            '''%(signal_wfarr.shape,template_wfarr.shape,diff(signal_wfarr[:,0])[0],diff(template_wfarr[:,0])[0])
+            error(message)
 
         # Extract frequencies for comparison
         template_f = template_wfarr[:,0]
