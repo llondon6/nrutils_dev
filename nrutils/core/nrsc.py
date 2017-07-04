@@ -2170,6 +2170,12 @@ class gwylm:
 
             # ---------------------------------------------------- #
             # Enforce internal sign convention for Psi4 multipoles
+            '''
+            NOTE that the change enforced here is equivalent to changing
+            the convention used when defining the time domain phase: e^i*phi
+            or e^-i*phi. NOTE that this convention is independent of the
+            symmetries of the radiation (e.g. Ylm = -1^l * conj(Yl,-m) ).
+            '''
             # ---------------------------------------------------- #
             msk_ = y_.amp > 0.01*amax(y_.amp)
             if int(scipy_version.split('.')[1])<16:
