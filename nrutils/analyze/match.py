@@ -94,7 +94,7 @@ class match:
 
         # Interpolate match over phi_template to estimate maximum
         # intrp_max lives in the "positive" repository
-        optimal_phi_template = intrp_argmax(match_list,phi_template_range)
+        optimal_phi_template = intrp_argmax(match_list,phi_template_range,plot=plot)
         match = match_helper( optimal_phi_template )
 
         #
@@ -497,7 +497,7 @@ class match:
 
 
     # Calculate overlap optimized over template polarization
-    def calc_template_pol_optimized_match( this, signal_polarization = None ):
+    def calc_template_pol_optimized_match( this, signal_polarization = None, plot = False ):
 
         # Import useful things
         from numpy import sqrt,dot,real,log,diff
@@ -525,10 +525,12 @@ class match:
         # Padding for effective sinc interpolation of ifft
         num_samples = len(this.psd)
         fftlen = int( 2 ** ( int(log( num_samples )/log(2)) + 1.0 + 3.0 ) )
+        # fftlen = num_samples
         #
         integrand = lambda a: a.conj() * this.signal['response'] / this.psd
         rho_p = ifft( integrand(normalized_template_plus ) , n=fftlen )*fftlen
         rho_c = ifft( integrand(normalized_template_cross) , n=fftlen )*fftlen
+
         #
         gamma = ( rho_p * rho_c.conj() ).real
         rho_p2 = abs( rho_p ) ** 2
@@ -536,6 +538,25 @@ class match:
         sqrt_part = sqrt( (rho_p2-rho_c2)**2 + 4*(IPC*rho_p2-gamma)*(IPC*rho_c2-gamma) )
         numerator = rho_p2 - 2.0*IPC*gamma + rho_c2 + sqrt_part
         denominator = 1.0 - IPC**2
+
+        # plotting
+        if plot:
+            #
+            from matplotlib.pyplot import figure,plot,show,xlabel,ylabel,xlim\
+            ,ylim,yscale,xscale,title,legend
+            from numpy import argmax,array
+            #
+            figure()
+            plot( abs(integrand(normalized_template_plus )) )
+            #
+            figure()
+            M = sqrt( numerator / (denominator*2.0) ) / (this.signal['norm'] if this.signal['norm'] != 0 else 1)
+            plot( M )
+            xlim( argmax(abs(rho_p)) + 200*array([-1,1]) )
+            show()
+            #
+            intrp_max( M, plot=True, verbose=True )
+
         #
         template_pol_optimized_match = sqrt( numerator.max() / (denominator*2.0) ) / (this.signal['norm'] if this.signal['norm'] != 0 else 1)
 
@@ -893,12 +914,36 @@ class match:
 
 
 
+    # Check conjugate symmetry of FD series
+    def __check_conjugate_sym__(this,f,vals):
+
+        #
+        from numpy import allclose
+
+        #
+        j = f >  this.fmin
+        k = f < -this.fmin
+
+        #
+        symmetry_broken = not allclose( vals[j], vals[k][::-1].conj(), rtol=1e-3 )
+        # print symmetry_broken
+        if symmetry_broken:
+            #
+            msg = '''
+                Double sided frequency spectra input, but the necessary conjugate symmetry for
+                at least one of the poalrizations is found to be broken. Each FD polarization
+                must the be fft of h+ or hx, where each is the real valued time domain waveform.
+                The fourier transform of real valued series, T(f), must obey: T(f) = Conjugate( T(-f) ).
+            '''
+            #
+            error(msg)
+
 
     # Validate the signal_wfarr against template_wfarr
     def __validate_wfarrs__(this):
 
         # Import useful things
-        from numpy import allclose,diff,array,ones,vstack
+        from numpy import allclose,diff,array,ones,vstack,allclose
 
         #
         signal_wfarr   = vstack( [ this.signal['f'],this.signal['+'],this.signal['x'] ] ).T
@@ -921,6 +966,12 @@ class match:
         # Extract frequencies for comparison
         template_f = template_wfarr[:,0]
         signal_f = signal_wfarr[:,0]
+
+        # If there are negative frequencies, make sure that inputs obey conjugate symmetry
+        if not this.__positive_f__:
+            for sym in ['+','x']:
+                this.__check_conjugate_sym__( this.template['f'], this.template[sym] )
+                this.__check_conjugate_sym__( this.signal['f'], this.signal[sym] )
 
         # Freqs must have same length
         if len(signal_f) != len(template_f):
@@ -1001,8 +1052,8 @@ def make_siminspiralFD_params(m1, m2, s1x, s1y, s1z, s2x, s2y, s2z, distance, in
         import numpy as np
 
         # print delta_F
-        # f_max_2 = 2**(np.int(np.log(fmax/delta_F)/np.log(2))+1) * delta_F
-        f_max_2 = fmax
+        f_max_2 = 2**(np.int(np.log(fmax/delta_F)/np.log(2))+1) * delta_F
+        # f_max_2 = fmax
 
         siminspiralFD_params = {
             'm1': m1SI, 'm2': m2SI,

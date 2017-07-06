@@ -143,7 +143,7 @@ def pad_wfarr(wfarr,new_length,where=None):
         dt = wfarr[1,0] - wfarr[0,0]
         _wfarr[:,0] = dt * arange( 0, new_length ) + wfarr[0,0]
 
-        if where is 'sides':
+        if where == 'sides':
 
             # Create the pads for the other columns
             left_pad = zeros( int(new_length-length)/2 )

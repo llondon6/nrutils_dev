@@ -944,7 +944,6 @@ class gwf:
                   label                 = None, # Optional label input (see gwylm)
                   preinspiral           = None, # Holder for information about the raw waveform's turn-on
                   postringdown          = None, # Holder for information about the raw waveform's turn-off
-                  fftfactor             = None,
                   verbose = False ):    # Verbosity toggle
 
         #
@@ -978,9 +977,6 @@ class gwf:
         # Optional Holders for remnant mass and spin
         this.mf = mf
         this.xf = xf
-
-        #
-        this.fftfactor = fftfactor
 
         # Optional label input (see gwylm)
         this.label = label
@@ -1133,15 +1129,18 @@ class gwf:
         # Always calculate frequency domain data
         # --------------------------------------------------- #
         if setfd:
+
             # compute the frequency domain
-            fftlen = this.n if this.fftfactor is None else int( 2 ** ( int(log( this.n )/log(2)) + 1.0 + this.fftfactor ) )-1
-            this.f = fftshift(fftfreq( fftlen, this.dt ))
+
+            # fftlen = this.n if this.fftfactor is None else int( 2 ** ( int(log( this.n )/log(2)) + 1.0 + this.fftfactor ) )-1
+            this.f = fftshift(fftfreq( this.n, this.dt ))
+
             this.w = 2*pi*this.f
             this.df     = this.f[1]-this.f[0]                                # freq resolution
 
             # compute fourier transform values
-            this.fd_plus   = fftshift(fft( this.plus, n=fftlen  )) * this.dt                    # fft of plus
-            this.fd_cross  = fftshift(fft( this.cross, n=fftlen )) * this.dt                    # fft of cross
+            this.fd_plus   = fftshift(fft( this.plus  )) * this.dt                    # fft of plus
+            this.fd_cross  = fftshift(fft( this.cross )) * this.dt                    # fft of cross
             this.fd_y       = this.fd_plus + 1j*this.fd_cross               # full fft
             this.fd_amp     = abs( this.fd_y )                              # amp of full fft
             this.fd_phi     = unwrap( angle( this.fd_y ) )                  # phase of full fft
@@ -1150,6 +1149,19 @@ class gwf:
             this.fd_dphi    = intrp_diff( this.f, this.fd_phi )             # phase rate: dphi/df
 
             this.fd_k_amp_max = argmax( this.fd_amp )
+
+            # # get rid of "junk" negative frequencies
+            # y = this.fd_y.copy()
+            # if this.m is not None:
+            #     if this.m > 0:
+            #         mask = this.f < 0
+            #     elif this.m < 0:
+            #         mask = this.f > 0
+            #     y[mask] *= 0
+            # c = ( y + y.conj()[::-1] ) / 2
+            # p = ( y - y.conj()[::-1] ) / 2j
+            # this.fd_wfarr = vstack( [this.f,p,c] ).T
+
             this.fd_wfarr = vstack( [this.f,this.fd_plus,this.fd_cross] ).T
 
         # Starting frequency in rad/sec
@@ -1301,7 +1313,7 @@ class gwf:
         from matplotlib.pyplot import show as shw
         from matplotlib.pyplot import ylabel as yl
         from matplotlib.pyplot import title as ttl
-        from numpy import ones,sqrt,hstack,array
+        from numpy import ones,sqrt,hstack,array,sign
 
         #
         if ref_gwf:
@@ -1328,10 +1340,10 @@ class gwf:
         ax = []
         # xlim = lim(this.t) # [-400,this.t[-1]]
 
-        #
-        pos_mask = this.f>0
+        # NOTE that m<0 cases are handled here via sign(m)
+        pos_mask = sign(this.m if this.m is not None else 1)*this.f>0
         if ref_gwf:
-            that_pos_mask = that.f>0
+            that_pos_mask = sign(that.m)*that.f>0
             that_lwid = 4
             that_alpha = 0.22
 
@@ -1352,10 +1364,10 @@ class gwf:
         ax[-1].set_xscale('log', nonposx='clip')
         ax[-1].set_yscale('log', nonposy='clip')
         #
-        plot( this.f[pos_mask], this.fd_amp[pos_mask], color=clr[0], label=labels[0] )
+        plot( sign(this.m if this.m is not None else 1)*this.f[pos_mask], this.fd_amp[pos_mask], color=clr[0], label=labels[0] )
         if ref_gwf:
-            plot( that.f[that_pos_mask], that.fd_amp[that_pos_mask], color=clr[0], linewidth=that_lwid, alpha=that_alpha, label=labels[-1] )
-        pylim( this.f[pos_mask], this.fd_amp[pos_mask], pad_y=10 )
+            plot( sign(that.m if that.m is not None else 1)*that.f[that_pos_mask], that.fd_amp[that_pos_mask], color=clr[0], linewidth=that_lwid, alpha=that_alpha, label=labels[-1] )
+        pylim( sign(this.m if this.m is not None else 1)*this.f[pos_mask], this.fd_amp[pos_mask], pad_y=10 )
         #
         yl('$|$'+kind+'$|(f)$',fontsize=fs,color=txclr, family=font_family )
         if set_legend: legend(frameon=False)
@@ -1368,10 +1380,10 @@ class gwf:
         setp(ax[-1].get_xticklabels(), visible=False)
         ax[-1].set_xscale('log', nonposx='clip')
         #
-        plot( this.f[pos_mask], this.fd_phi[pos_mask], color=1-clr[0] )
+        plot( sign(this.m if this.m is not None else 1)*this.f[pos_mask], this.fd_phi[pos_mask], color=1-clr[0] )
         if ref_gwf:
-            plot( that.f[that_pos_mask], that.fd_phi[that_pos_mask], color=1-clr[0], linewidth=that_lwid, alpha=that_alpha )
-        pylim( this.f[pos_mask], this.fd_phi[pos_mask] )
+            plot( sign(that.m if that.m is not None else 1)*that.f[that_pos_mask], that.fd_phi[that_pos_mask], color=1-clr[0], linewidth=that_lwid, alpha=that_alpha )
+        pylim( sign(this.m if this.m is not None else 1)*this.f[pos_mask], this.fd_phi[pos_mask] )
         #
         yl(r'$\phi = \mathrm{arg}($'+kind+'$)$',fontsize=fs,color=txclr, family=font_family )
 
@@ -1382,10 +1394,10 @@ class gwf:
         grid(color=gclr, linestyle='-')
         ax[-1].set_xscale('log', nonposx='clip')
         #
-        plot( this.f[pos_mask], this.fd_dphi[pos_mask], color=sqrt(clr[0]) )
+        plot( sign(this.m if this.m is not None else 1)*this.f[pos_mask], this.fd_dphi[pos_mask], color=sqrt(clr[0]) )
         if ref_gwf:
-            plot( that.f[that_pos_mask], that.fd_dphi[that_pos_mask], color=sqrt(clr[0]), linewidth=that_lwid, alpha=that_alpha )
-        pylim( this.f[pos_mask], this.fd_dphi[pos_mask] )
+            plot( sign(that.m if that.m is not None else 1)*that.f[that_pos_mask], that.fd_dphi[that_pos_mask], color=sqrt(clr[0]), linewidth=that_lwid, alpha=that_alpha )
+        pylim( sign(this.m if this.m is not None else 1)*this.f[pos_mask], this.fd_dphi[pos_mask] )
         #
         yl(r'$\mathrm{d}{\phi}/\mathrm{d}f$',fontsize=fs,color=txclr, family=font_family)
 
@@ -1406,7 +1418,7 @@ class gwf:
             subplots_adjust(hspace = .001)
 
         #
-        xlabel(r'$f$',fontsize=fs,color=txclr)
+        xlabel( r'$f$' if sign(this.m if this.m is not None else 1)>0 else r'$-f$' ,fontsize=fs,color=txclr)
 
         #
         if show:
@@ -1800,6 +1812,12 @@ class gwylm:
         # NOTE that we don't want the scentry's verbose property to overwrite the input above, so we definte this.verbose at this point, not before.
         this.verbose = verbose
 
+
+        # #
+        # if fftfactor is None:
+        #     warning('No fftfactor input given. As a matter of caution, we will set it to 1, meaning that the data length will be extended symmetrically to the next power of 2.')
+        #     fftfactor = 1
+
         #
         this.fftfactor = fftfactor
 
@@ -2063,7 +2081,7 @@ class gwylm:
 
         # Import useful things
         from os.path import isfile,basename
-        from numpy import sign,diff,unwrap,angle,amax,isnan,amin
+        from numpy import sign,diff,unwrap,angle,amax,isnan,amin,log,exp
         from scipy.stats.mstats import mode
         from scipy.version import version as scipy_version
         thisfun=inspect.stack()[0][3]
@@ -2149,6 +2167,23 @@ class gwylm:
             # NOTE that the line below is applied within the gwf constructor
             # wfarr = straighten_wfarr( wfarr )
 
+            # Pad the waveform array
+            if (this.fftfactor != 0) and (this.fftfactor is not None):
+                error('the fftfactor option seems to give strange results for td strain, and is thus currently disabled')
+                # if isinstance(this.fftfactor,int):
+                #     # pad the waveform array in the time domain
+                #     # NOTE that this is preferable to simply using the "n" input in fft calls
+                #     # becuase we wish the time and frequency domain data to be one-to-one under ffts
+                #     old_data_length = len(wfarr[:,0])
+                #     fftlen = int( 2 ** ( int(log( old_data_length )/log(2)) + 1.0 + this.fftfactor ) )
+                #     #
+                #     if this.verbose: alert( 'Padding wfarr. The old data length was %i, and the new one is %i'%(old_data_length,fftlen) )
+                #     #
+                #     # NOTE that this padding function only works with time domain data
+                #     wfarr = pad_wfarr(wfarr,fftlen,where='sides')
+                # else:
+                #     error('fftfactor must be int corresponding to additional powers of 2 to which the data will be padded symetrically')
+
             # Initiate waveform object and check that sign convetion is in accordance with core settings
             def mkgwf(wfarr_):
                 return gwf( wfarr_,
@@ -2161,7 +2196,6 @@ class gwylm:
                             m1 = this.m1, m2 = this.m2,
                             xf = this.xf,
                             label = this.label,
-                            fftfactor=this.fftfactor,
                             ref_scentry = this.__scentry__,
                             kind='$rM\psi_{%i%i}$'%(l,m) )
 
@@ -2315,7 +2349,7 @@ class gwylm:
             wfarr = array( [ t, h_plus, h_cross ] ).T
 
             # Add the new strain multipole to this object's list of multipoles
-            this.hlm.append( gwf( wfarr, l=y.l, m=y.m, mf=this.mf, xf=this.xf, kind='$rh_{%i%i}/M$'%(y.l,y.m), fftfactor=this.fftfactor ) )
+            this.hlm.append( gwf( wfarr, l=y.l, m=y.m, mf=this.mf, xf=this.xf, kind='$rh_{%i%i}/M$'%(y.l,y.m)) )
 
         # Create a dictionary representation of the mutlipoles
         this.__curate__()
@@ -2485,7 +2519,7 @@ class gwylm:
                 wfarr = array( [ t, l_plus, l_cross ] ).T
 
                 # Add the news multipole to this object's list of multipoles
-                flm.append( gwf( wfarr, l=y.l, m=y.m, fftfactor=this.fftfactor, kind='$r\dot{h}_{%i%i}$'%(y.l,y.m) ) )
+                flm.append( gwf( wfarr, l=y.l, m=y.m, kind='$r\dot{h}_{%i%i}$'%(y.l,y.m) ) )
 
             else:
 
@@ -2678,9 +2712,12 @@ class gwylm:
         fd_wfarr_dict_fun = lambda k: { lm:this.lm[lm][k].fd_wfarr for lm in select_lm }
         td_wfarr_dict_fun = lambda k: { lm:this.lm[lm][k].wfarr for lm in select_lm }
         wfarr_dict_fun    = lambda d,k: fd_wfarr_dict_fun(k) if d in ('fd','freq','fequency','f') else td_wfarr_dict_fun(k)
+
         #  Get desired waveform array
         wfarr_dict = wfarr_dict_fun(domain,kind)
 
+        #
+        error('There\'s a bug in this workflow that cases the spectra of h+/x to not obey conjugate symmetry!!')
         # Recompose using low level function in basics.py
         recomposed_wfarr = recompose_wfarrs( wfarr_dict, theta, phi )
 
@@ -2719,7 +2756,7 @@ class gwylm:
             Z = dot( M,Y )[:,0]
             wfarr = array( [ alm[0].t, Z.real, Z.imag ] ).T
             # return the ouput
-            return gwf( wfarr, kind=kind, ref_scentry = this.__scentry__, fftfactor=this.fftfactor )
+            return gwf( wfarr, kind=kind, ref_scentry = this.__scentry__ )
 
         #
         if kind=='psi4':
@@ -3268,8 +3305,13 @@ class gwfcharend:
         # Import useful things
         from numpy import log
         # ROM (Ruduce order model) the post-peak as two lines
-        la = log( ylm.amp[ ylm.k_amp_max: ])
-        tt = ylm.t[ ylm.k_amp_max: ]
+        amp = ylm.amp[ ylm.k_amp_max: ]
+        t = ylm.t[ ylm.k_amp_max: ]
+        mask = amp > 0
+        amp = amp[mask]
+        t = t[mask]
+        la = log( amp )
+        tt = t
         knots,rl = romline(tt,la,2)
         # Check for lack of noise floor (in the case of sims stopped before noise floor reached)
         # NOTE that in this case no effective windowing is applied
