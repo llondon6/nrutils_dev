@@ -68,8 +68,9 @@ def intrp_wfarr(wfarr,delta=None,domain=None):
     proceed = True
     if delta is not None:
         d = wfarr[0,0]-wfarr[1,0]
-        if abs(delta-d)/delta < 1e-6:
+        if abs(delta-d)/(delta+d) < 1e-6:
             proceed = False
+            warning('The waveform already has the desired time step, and so will not be interpolated.')
 
     # If there is need to interpolate, then interpolate.
     if proceed:
@@ -195,6 +196,10 @@ def pad_wfarr(wfarr,new_length,where=None,verbose=None):
         # Warn the user that nothing has happened.
         msg = 'The desired new length is <= the current array length (i.e. number of time domain points). Nothing will be padded.'
         warning( msg,fname='pad_wfarr'+cyan('@%i'%linenum()) )
+
+    #
+    if _wfarr.shape[0] != new_length:
+        error('The current length (%i) is not the desired new length(%i). This function has a bug.'%(_wfarr.shape[0],new_length))
 
     # Return padded array
     return _wfarr
@@ -439,13 +444,25 @@ def straighten_wfarr( wfarr, verbose=False ):
     '''
 
     # Import useful things
-    from numpy import arange,sum,array,diff,isfinite,hstack
+    from numpy import arange,sum,array,diff,isfinite,hstack,allclose
     thisfun = 'straighten_wfarr'
+
+    # check whether t is monotonically increasing
+    isincreasing = allclose( wfarr[:,0], sorted(wfarr[:,0]), 1e-6 )
+    if not isincreasing:
+        # Let the people know
+        msg = red('The time series has been found to be non-monotonic. We will sort the data to enforce monotinicity.')
+        warning(msg)
+        # In this case, we must sort the data and time array
+        map_ = arange( len(wfarr[:,0]) )
+        map_ = sorted( map_, key = lambda x: wfarr[x,0] )
+        wfarr = wfarr[ map_, : ]
+        if allclose( wfarr[:,0], sorted(wfarr[:,0]), 1e-6 ): alert('The waveform time series is now monotonic.')
 
     # Remove rows that contain non-finite data
     finite_mask = isfinite( sum( wfarr, 1 ) )
     if sum(finite_mask)!=len(finite_mask):
-        if verbose: alert('Non-finite values found in waveform array. Corresponding rows will be removed.',thisfun)
+        if verbose: warning('Non-finite values found in waveform array. Corresponding rows will be removed.',thisfun)
     wfarr = wfarr[ finite_mask, : ]
 
     # Sort rows by the time series' values
@@ -453,14 +470,14 @@ def straighten_wfarr( wfarr, verbose=False ):
     space = arange( wfarr.shape[0] )
     chart = sorted( space, key = lambda k: time[k] )
     if (space != chart).all():
-        if verbose: alert('The waveform array was found to have nonmonotinicities in its time series. The array will now be straightened.',thisfun)
+        if verbose: warning('The waveform array was found to have nonmonotinicities in its time series. The array will now be straightened.',thisfun)
     wfarr = wfarr[ chart, : ]
 
     # Remove rows with duplicate time series values
     time = array( wfarr[:,0] )
     diff_mask = hstack( [ True, diff(time).astype(bool) ] )
     if sum(diff_mask)!=len(diff_mask):
-        if verbose: alert('Repeated time values were found in the array. Offending rows will be removed.',thisfun)
+        if verbose: warning('Repeated time values were found in the array. Offending rows will be removed.',thisfun)
     wfarr = wfarr[ diff_mask, : ]
 
     # The wfarr should now be straight

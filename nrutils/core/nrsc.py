@@ -1012,13 +1012,6 @@ class gwf:
                   setfd=True,   # Option to toggle freq domain calculations
                   dt=None):     # The time spacing to apply to the current object
 
-        # If given dt, then interpolote waveform array accordingly
-        if dt is not None:
-            if this.verbose:
-                msg = 'Interpolating data to '+cyan('dt=%f'%dt)
-                alert(msg,'gwylm.setfields')
-            wfarr = intrp_wfarr(wfarr,delta=dt)
-
         # Alert the use if improper input is given
         if (wfarr is None) and (this.wfarr is None):
             msg = 'waveform array input (wfarr=) must be given'
@@ -1030,6 +1023,17 @@ class gwf:
         else:
             msg = 'unhandled waveform array configuration: input wfarr is %s and this.wfarr is %s'%(wfarr,this.wfarr)
             error(msg,'gwf.setfields')
+
+        # If given dt, then interpolote waveform array accordingly
+        wfarr = straighten_wfarr( wfarr, this.verbose )
+        wfdt = wfarr[1,0]-wfarr[0,0]
+
+        from numpy import abs
+        if (dt is not None) and (abs(dt-wfdt)/(dt+wfdt)>1e-6):
+          if this.verbose:
+              msg = 'Interpolating data to '+cyan('dt=%f'%dt)
+              alert(msg)
+          wfarr = intrp_wfarr(wfarr,delta=dt)
 
         ##########################################################
         # Make sure that waveform array is in t-plus-cross format #
@@ -2170,6 +2174,7 @@ class gwylm:
             # Pad the waveform array
             if (this.fftfactor != 0) and (this.fftfactor is not None):
                 # error('the fftfactor option seems to give strange results for td strain, and is thus currently disabled --- THIS WAS FIXED by calling straighten_wfarr within pad_wfarr.')
+                warning('Enabling the fftfactor option can sometimes cause strange behavior. Use with caution.')
                 if isinstance(this.fftfactor,int):
                     # pad the waveform array in the time domain
                     # NOTE that this is preferable to simply using the "n" input in fft calls
@@ -2179,6 +2184,8 @@ class gwylm:
                     #
                     if this.verbose: alert( 'Padding wfarr. The old data length was %i, and the new one is %i'%(old_data_length,fftlen) )
                     #
+                    wfarr = straighten_wfarr(wfarr,this.verbose)
+                    if dt is not None: wfarr = intrp_wfarr( wfarr, dt )
                     # NOTE that this padding function only works with time domain data
                     wfarr = pad_wfarr(wfarr,fftlen,where='sides',verbose=this.verbose)
                 else:
