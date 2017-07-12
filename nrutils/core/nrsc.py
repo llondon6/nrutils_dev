@@ -3342,7 +3342,7 @@ class gwfcharstart:
     #
     def __init__( this,                 # the object to be created
                   y,                    # input gwf object who'se start behavior will be characterised
-                  shift     = 2,        # The size of the turn on region in units of waveform cycles.
+                  shift     = 3,        # The size of the turn on region in units of waveform cycles.
                   verbose   = False ):
 
         #
