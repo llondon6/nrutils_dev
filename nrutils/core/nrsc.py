@@ -2169,20 +2169,20 @@ class gwylm:
 
             # Pad the waveform array
             if (this.fftfactor != 0) and (this.fftfactor is not None):
-                error('the fftfactor option seems to give strange results for td strain, and is thus currently disabled')
-                # if isinstance(this.fftfactor,int):
-                #     # pad the waveform array in the time domain
-                #     # NOTE that this is preferable to simply using the "n" input in fft calls
-                #     # becuase we wish the time and frequency domain data to be one-to-one under ffts
-                #     old_data_length = len(wfarr[:,0])
-                #     fftlen = int( 2 ** ( int(log( old_data_length )/log(2)) + 1.0 + this.fftfactor ) )
-                #     #
-                #     if this.verbose: alert( 'Padding wfarr. The old data length was %i, and the new one is %i'%(old_data_length,fftlen) )
-                #     #
-                #     # NOTE that this padding function only works with time domain data
-                #     wfarr = pad_wfarr(wfarr,fftlen,where='sides')
-                # else:
-                #     error('fftfactor must be int corresponding to additional powers of 2 to which the data will be padded symetrically')
+                # error('the fftfactor option seems to give strange results for td strain, and is thus currently disabled --- THIS WAS FIXED by calling straighten_wfarr within pad_wfarr.')
+                if isinstance(this.fftfactor,int):
+                    # pad the waveform array in the time domain
+                    # NOTE that this is preferable to simply using the "n" input in fft calls
+                    # becuase we wish the time and frequency domain data to be one-to-one under ffts
+                    old_data_length = len(wfarr[:,0])
+                    fftlen = int( 2 ** ( int(log( old_data_length )/log(2)) + 1.0 + this.fftfactor ) )
+                    #
+                    if this.verbose: alert( 'Padding wfarr. The old data length was %i, and the new one is %i'%(old_data_length,fftlen) )
+                    #
+                    # NOTE that this padding function only works with time domain data
+                    wfarr = pad_wfarr(wfarr,fftlen,where='sides',verbose=this.verbose)
+                else:
+                    error('fftfactor must be int corresponding to additional powers of 2 to which the data will be padded symetrically')
 
             # Initiate waveform object and check that sign convetion is in accordance with core settings
             def mkgwf(wfarr_):
@@ -2330,7 +2330,7 @@ class gwylm:
             if 0==y.m: w0 = w22
             # Let the people know
             if this.verbose:
-                alert( magenta('w0(w22) = %f' % w0)+yellow(' (this is the lower frequency used for FFI method [arxiv:1006.1632v3])') )
+                alert( magenta('w%i%i = m*w22/2 = %f' % (y.l,y.m,w0) )+yellow(' (this is the lower frequency used for FFI method [arxiv:1006.1632v3])') )
 
             # Create the core waveform information
             t       =  y.t
@@ -2404,13 +2404,15 @@ class gwylm:
 
             if method.lower() == 'window':
 
-                # Look for the l=m=2 psi4 multipole
-                y22_list = filter( lambda y: y.l==y.m==2, this.ylm )
-                # If it doesnt exist in this.ylm, then load it
-                if 0==len(y22_list):
-                    y22 = this.load(lm=[2,2],output=True,dt=this.dt)
-                else:
-                    y22 = y22_list[0]
+                # # Look for the l=m=2 psi4 multipole
+                # y22_list = filter( lambda y: y.l==y.m==2, this.ylm )
+                # # If it doesnt exist in this.ylm, then load it
+                # if 0==len(y22_list):
+                #     y22 = this.load(lm=[2,2],output=True,dt=this.dt)
+                # else:
+                #     y22 = y22_list[0]
+
+                # NOTE that the l=m=2 multipole is used to define the windows below. See gwylm.characterize_start_end for more info.
 
                 # Calculate the window to be applied using the starting information. The window nwill be aplied equally to all multipole moments. NOTE: language disambiguation -- a taper is the part of a window that varies from zero to 1 (or 1 to zero); a window may contain many tapers. Also NOTE that the usage of this4[0].ylm[0].t below is an arbitration -- any array of the dame dimentions could be used.
                 # -- The above is calculated in the gwfcharstart class -- #

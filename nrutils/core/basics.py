@@ -104,10 +104,14 @@ def intrp_wfarr(wfarr,delta=None,domain=None):
 
 
 # Fucntion to pad wfarr with zeros. NOTE that this should only be applied to a time domain waveform that already begins and ends with zeros.
-def pad_wfarr(wfarr,new_length,where=None):
+def pad_wfarr(wfarr,new_length,where=None,verbose=None):
 
     #
-    from numpy import hstack,zeros,arange
+    from numpy import hstack,zeros,arange,pad,unwrap,angle,cos,sin
+
+
+    # NOTE that the waveform array must be uniformly space at this point. This will be handled by straighten_wfarr(()
+    wfarr = straighten_wfarr( wfarr, verbose )
 
     # Only pad if size of the array is to increase
     length = len(wfarr[:,0])
@@ -146,12 +150,24 @@ def pad_wfarr(wfarr,new_length,where=None):
         if where == 'sides':
 
             # Create the pads for the other columns
-            left_pad = zeros( int(new_length-length)/2 )
-            right_pad = zeros( new_length-length-len(left_pad) )
+            left_length = int(new_length-length)/2
+            right_length = new_length-length-left_length
+            left_pad = zeros( left_length )
+            right_pad = zeros( right_length )
 
-            # Pad the remaining columns
-            for k in arange(1,wfarr.shape[1]):
-                _wfarr[:,k] = hstack( [left_pad,wfarr[:,k],right_pad] )
+            # # Pad the remaining columns
+            # for k in arange(1,wfarr.shape[1]):
+            #     _wfarr[:,k] = hstack( [left_pad,wfarr[:,k],right_pad] )
+            #     # _wfarr[:,k] = pad( wfarr[:,k], (left_length,right_length), 'linear_ramp'  )
+
+            # Pad amplitude and phase, then restructure
+            y = wfarr[:,1] + 1j*wfarr[:,2]
+            amp = abs( y )
+            pha = unwrap( angle(y) )
+            amp_ = pad( amp, (left_length,right_length), 'constant' )
+            pha_ = pad( pha, (left_length,right_length), 'edge' )
+            _wfarr[:,1] = amp_ * cos(pha_)
+            _wfarr[:,2] = amp_ * sin(pha_)
 
         elif where == 'right':
 
@@ -184,9 +200,26 @@ def pad_wfarr(wfarr,new_length,where=None):
     return _wfarr
 
 
+#
+def plot_wfarr(wfarr,domain=None,show=False,labels=None):
+
+    #
+    from matplotlib.pyplot import figure,plot,show,xlabel,ylabel,title
+
+    #
+    warning('Method under development.')
+
+    # Plot time domain
+    figure()
+    plot( wfarr[:,0], wfarr[:,1] )
+    plot( wfarr[:,0], wfarr[:,2] )
+    show()
+
+    # Plot frequency domain
+
 # Shift a waveform arra by some "shift" amount in time
 def tshift_wfarr( _wfarr, shift ):
-    '''Shift a waveform arra by some "shift" amount in time'''
+    '''Shift a waveform array by some "shift" amount in time'''
     # Import useful things
     from numpy import array
     # Unpack waveform array
@@ -282,7 +315,7 @@ def recompose_wfarrs( wfarr_dict, theta, phi ):
     '''
 
     # Import useful things
-    from numpy import ndarray,zeros,dot,array
+    from numpy import ndarray,zeros,dot,array,zeros_like
 
     #-%-%-%-%-%-%-%-%-%-%-%-#
     # Validate wfarr_dict   #
@@ -334,6 +367,31 @@ def recompose_wfarrs( wfarr_dict, theta, phi ):
     ans = recomposed_wfarr
     return ans
 
+
+#
+def recompose_complex_waveforms( y_dict, theta, phi ):
+
+    # Import useful things
+    from numpy import ndarray,zeros,dot,array
+
+    # Number of samples
+    n_samples = y_dict[y_dict.keys()[0]].shape[0]
+    # Number of multipoles given
+    n_multipoles = len( y_dict )
+
+    # Create matrices to hold spherical harmonic and waveform array data
+    M = zeros( [ n_samples, n_multipoles ], dtype=complex )
+    Y = zeros( [ n_multipoles, 1 ], dtype=complex )
+    # Seed the matrix as well as the vector of spherical harmonic values
+    for k,(l,m) in enumerate(y_dict.keys()):
+        M[:,k] = y_dict[l,m]
+        Y[k] = sYlm(-2,l,m,theta,phi)
+    # Perform the matrix multiplication and create the output gwf object
+    Z = dot( M,Y )[:,0] # NOTE that the "[:,0]" is to enforce a shape of (N,1) rather than (N,)
+
+    #
+    ans = Z
+    return Z
 
 #
 def get_wfarr_relative_phase(this,that):

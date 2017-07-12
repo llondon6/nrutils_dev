@@ -10,7 +10,7 @@ class match:
     def __init__( this,                       # The current object
                   template_wfarr = None,      # column format [ f + x ]
                   signal_wfarr = None,        # column format [ f + x ]
-                  psd_id = None,              # determines which psd to use; default is advLigo
+                  psd_thing = None,              # determines which psd to use; default is advLigo
                   fmin = 20,
                   fmax = 400,
                   signal_polarization = 0,
@@ -28,7 +28,7 @@ class match:
                    fmax = fmax,
                    signal_polarization = signal_polarization,
                    template_polarization = template_polarization,
-                   psd_id = 'aligo' if psd_id is None else psd_id,
+                   psd_thing = 'aligo' if psd_thing is None else psd_thing,
                    positive_f = positive_f,
                    verbose = verbose)
 
@@ -448,7 +448,7 @@ class match:
         #
         plot( this.f, 2*sqrt(abs(this.f))*abs(this.template['response']), label=r'Template (Response), $\rho_{\mathrm{opt}} = %1.2f$'%this.template['optimal_snr'] )
         #
-        plot( this.f, sqrt(this.psd), '-k', label=r'$\sqrt{S_n(f)}$ for %s'%this.psd_id )
+        plot( this.f, sqrt(this.psd), '-k', label=r'$\sqrt{S_n(f)}$ for %s'%this.psd_thing )
 
         #
         yscale('log')
@@ -659,7 +659,7 @@ class match:
     # Define a function for evaluating the PSD
     def __set_psd_fun__(this):
         '''
-        In an if-else sense, the psd_id will be interpreterd as:
+        In an if-else sense, the psd_thing will be interpreterd as:
         * a short string relating to know psd values
         * the path location of an ascii file containing psd values
         * an array of frequency and psd values
@@ -667,7 +667,7 @@ class match:
         # Import useful things
         from numpy import ndarray,loadtxt,sqrt
         #
-        psd_ids_for_tabulated_data = ['aligo','gw150914']
+        psd_things_for_tabulated_data = ['aligo','gw150914']
         not_valid_msg = 'unknown psd name found'
 
         # #
@@ -677,16 +677,16 @@ class match:
         #
 
 
-        '''If psd_id is a string'''
-        psd_id = this.psd_id
-        if isinstance(psd_id,str):
+        '''If psd_thing is a string'''
+        psd_thing = this.psd_thing
+        if isinstance(psd_thing,str):
 
-            # If psd_id is a standard psd name
-            if psd_id.lower() in psd_ids_for_tabulated_data:
+            # If psd_thing is a standard psd name
+            if psd_thing.lower() in psd_things_for_tabulated_data:
 
                 # Load the corresponding data
-                psd_id = psd_id.lower()
-                if 'al' in psd_id:
+                psd_thing = psd_thing.lower()
+                if 'al' in psd_thing:
                     data_path = nrutils.__path__[0]+'/data/ZERO_DET_high_P.dat'
                     psd_arr = loadtxt( data_path )
                     # Validate and unpack the psd array
@@ -694,7 +694,7 @@ class match:
                         psd_f,psd_vals = psd_arr[:,0],psd_arr[:,1]*psd_arr[:,1]
                     else:
                         error('Improperly formatted psd array given. Instead of having two columns, it has %i'%psd_arry.shape[-1])
-                elif '091' in psd_id:
+                elif '091' in psd_thing:
                     data_path = nrutils.__path__[0]+'/data/H1L1-AVERAGE_PSD-1127271617-1027800.txt'
                     psd_arr = loadtxt( data_path )
                     # Validate and unpack the psd array
@@ -707,25 +707,25 @@ class match:
                 # NOTE that this function is stored to the current object
                 psd_fun = spline(psd_f,psd_vals)
 
-            elif psd_id.lower() in ('iligo'):
+            elif psd_thing.lower() in ('iligo'):
 
                 # use the modeled PSD from nrutils (via Eq. 9 of https://arxiv.org/pdf/0901.1628.pdf)
                 psd_fun = lambda f: iligo(f,version=2)
 
             else:
 
-                error('unknown PSD name: %s'%psd_id)
+                error('unknown PSD name: %s'%psd_thing)
 
 
-        elif isinstance(psd_id,ndarray):
+        elif isinstance(psd_thing,ndarray):
             '''Else if it's an array of psd data'''
-            psd_arr = psd_id
+            psd_arr = psd_thing
             # Create an interpolation of the PSD data
             # NOTE that this function is stored to the current object
             psd_fun = spline(psd_f,psd_vals)
-        elif callable(psd_id):
+        elif callable(psd_thing):
             '''Else if it's a function'''
-            psd_fun = psd_id
+            psd_fun = psd_thing
         else:
             error(not_valid_msg)
 
@@ -734,17 +734,17 @@ class match:
 
 
     # Apply select properties to the current object
-    def apply(this,template_wfarr=None, signal_wfarr=None, fmin=None, fmax=None, signal_polarization=None, template_polarization=None, psd_id=None, positive_f=None, verbose=None):
+    def apply(this,template_wfarr=None, signal_wfarr=None, fmin=None, fmax=None, signal_polarization=None, template_polarization=None, psd_thing=None, positive_f=None, verbose=None):
         '''
         Apply select attributes to the current object.
         '''
 
         # Low level handing of inputs
-        this.__parse_inputs__(template_wfarr, signal_wfarr, fmin, fmax, signal_polarization, template_polarization, psd_id, positive_f, verbose)
+        this.__parse_inputs__(template_wfarr, signal_wfarr, fmin, fmax, signal_polarization, template_polarization, psd_thing, positive_f, verbose)
 
         # Only reset the psd data if needed
         new_fmin = fmin is not None; new_fmax = fmax is not None
-        new_psd = psd_id is not None; reset_psd_data = new_psd or new_fmax or new_fmin
+        new_psd = psd_thing is not None; reset_psd_data = new_psd or new_fmax or new_fmin
         if reset_psd_data : this.__set_psd__()
 
         #
@@ -755,7 +755,7 @@ class match:
 
 
     # Unpack and Validate inputs
-    def __parse_inputs__(this, template_wfarr, signal_wfarr, fmin, fmax, signal_polarization, template_polarization, psd_id, positive_f, verbose):
+    def __parse_inputs__(this, template_wfarr, signal_wfarr, fmin, fmax, signal_polarization, template_polarization, psd_thing, positive_f, verbose):
 
         # Import useful things
         from numpy import allclose,diff,array,ones
@@ -813,7 +813,7 @@ class match:
         this.f = this.signal['f']
 
         # Store the psd name input
-        this.psd_id = psd_id if psd_id is not None else this.psd_id
+        this.psd_thing = psd_thing if psd_thing is not None else this.psd_thing
 
         # NOTE the following polarization value cases:
         # * 0 if the object is initializing and None is given
