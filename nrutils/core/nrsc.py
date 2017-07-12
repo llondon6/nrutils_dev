@@ -1785,7 +1785,8 @@ class gwylm:
                   calcstrain = None,                # If True, strain will be calculated upon loading
                   calcnews = None,
                   enforce_polarization_convention = None, # If true, polarization will be adjusted according to initial separation vectors
-                  fftfactor=None,
+                  fftfactor=None,                   # Option for padding wfarr to next fftfactor powers of two
+                  pad = None,                       # Optional padding length in samples of wfarr upon loading; not used if fftfactor is present; 'pad' samples dwill be added to the wfarr rows
                   verbose               = None ):   # be verbose
 
         # NOTE that this method is setup to print the value of each input if verbose is true.
@@ -1870,7 +1871,7 @@ class gwylm:
 
         # Load the waveform data
         if load==True:
-            this.__load__(lmax=lmax,lm=lm,dt=dt)
+            this.__load__(lmax=lmax,lm=lm,dt=dt,pad=pad)
 
         #--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--#
         # Enforce polarization convention based on intial compoenent positions
@@ -2028,6 +2029,7 @@ class gwylm:
                   extraction_parameter=None, # the label for different extraction zones/radii
                   level = None,              # Simulation resolution level (Optional and not supported for all groups )
                   dt=None,
+                  pad = None, # optional padding length for wfarr upon load
                   verbose=None ):
 
         #
@@ -2038,7 +2040,7 @@ class gwylm:
 
         # Load all values in __lmlist__
         for lm in this.__lmlist__:
-            this.load(lm=lm,dt=dt,extraction_parameter=extraction_parameter,level=level,verbose=verbose)
+            this.load(lm=lm,dt=dt,extraction_parameter=extraction_parameter,level=level,pad=pad,verbose=verbose)
 
         # Ensuer that all modes are the same length
         this.__valpsi4multipoles__()
@@ -2081,6 +2083,7 @@ class gwylm:
              extraction_parameter=None,
              level=None,            # (Optional) Level specifyer for simulation. Not all simulation groups use this!
              output=False,          # Toggle whether to store data to the current object, or output it
+             pad = None, # optional padding length for wfarr upon load
              verbose=None):
 
         # Import useful things
@@ -2174,7 +2177,7 @@ class gwylm:
             # Pad the waveform array
             if (this.fftfactor != 0) and (this.fftfactor is not None):
                 # error('the fftfactor option seems to give strange results for td strain, and is thus currently disabled --- THIS WAS FIXED by calling straighten_wfarr within pad_wfarr.')
-                warning('Enabling the fftfactor option can sometimes cause strange behavior. Use with caution.')
+                warning('Enabling the fftfactor option can sometimes cause strange behavior. Use with caution. Make sure that time and frequency domain waveforms are as expected.')
                 if isinstance(this.fftfactor,int):
                     # pad the waveform array in the time domain
                     # NOTE that this is preferable to simply using the "n" input in fft calls
@@ -2190,6 +2193,23 @@ class gwylm:
                     wfarr = pad_wfarr(wfarr,fftlen,where='sides',verbose=this.verbose)
                 else:
                     error('fftfactor must be int corresponding to additional powers of 2 to which the data will be padded symetrically')
+            else:
+                #
+                if isinstance(pad,(int,float)):
+                    warning('Enabling the pad option can sometimes cause strange behavior. Use with caution. Make sure that time and frequency domain waveforms are as expected.')
+                    pad = int(pad)
+                    # pad the waveform array in the time domain
+                    # NOTE that this is preferable to simply using the "n" input in fft calls
+                    # becuase we wish the time and frequency domain data to be one-to-one under ffts
+                    old_data_length = len(wfarr[:,0])
+                    new_data_length = old_data_length + pad
+                    #
+                    if this.verbose: alert( 'Padding wfarr. The old data length was %i, and the new one is %i'%(old_data_length,new_data_length) )
+                    #
+                    wfarr = straighten_wfarr(wfarr,this.verbose)
+                    if dt is not None: wfarr = intrp_wfarr( wfarr, dt )
+                    # NOTE that this padding function only works with time domain data
+                    wfarr = pad_wfarr(wfarr,new_data_length,where='sides',verbose=this.verbose)
 
             # Initiate waveform object and check that sign convetion is in accordance with core settings
             def mkgwf(wfarr_):
