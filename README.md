@@ -8,11 +8,11 @@
 3. [Usage Examples](#examples)
 
 # Installation (OSX+Linux)
-### Use pip:
+### Please do NOT do this:
 ```bash
 pip install git+https://github.com/llondon6/nrutils_dev.git
 ```
-### Or clone, then install:
+### Recommended: Clone, then install:
 ```bash
 git clone https://github.com/llondon6/nrutils_dev.git
 pip install .
