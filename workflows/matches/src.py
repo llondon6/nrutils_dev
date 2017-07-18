@@ -24,6 +24,8 @@ mpl.rcParams['axes.formatter.useoffset'] = False
 # Plotting functions
 from matplotlib.pyplot import tight_layout, gcf, sca, plot, xlabel, ylabel, title, legend, xscale, yscale, xlim, ylim, subplot, figure, savefig, axvline, axhline, fill_between, xticks, yticks, gca, close
 
+alert("We are getting lalsimulation from: "+yellow(bold(lalsim.__path__[0])),"work",heading=True)
+
 # -~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~ #
 # Load content of config.ini
 # -~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~ #
@@ -69,7 +71,7 @@ for simkey in config.simulation_keywords:
     # Cofiguration and source files: mkdir and copy files
     config_dir = basedir
     mkdir(config_dir,verbose=True)
-    copyfile( os.path.realpath(__file__) , osjoin(config_dir,__file__) )
+    copyfile( os.path.realpath(__file__) , osjoin(config_dir,os.path.basename(__file__)) )
     copyfile(inipath, osjoin(config_dir,inipath.split('/')[-1]) )
     copyfile(osjoin(thisdir,executable_name),osjoin(config_dir,executable_name) )
     # Test plots
