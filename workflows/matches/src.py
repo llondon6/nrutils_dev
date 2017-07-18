@@ -8,7 +8,7 @@ from nrutils import scsearch,gwylm,physf,physhf,eta2q,lalphenom
 from nrutils.analyze.match import match as match_object
 from positive import *
 import lalsimulation as lalsim
-from numpy import pi,array,savetxt,log, angle, unwrap, average, linspace, arange, diff, ones, ones_like, zeros, zeros_like
+from numpy import pi,array,savetxt,log, angle, unwrap, average, linspace, arange, diff, ones, ones_like, zeros, zeros_like, hstack
 from shutil import copyfile
 from glob import glob
 executable_name = glob( parent( os.path.realpath(__file__) )+'*run*' )[0].split('/')[-1]
@@ -22,7 +22,7 @@ mpl.rcParams['axes.labelsize'] = 26
 mpl.rcParams['axes.titlesize'] = 20
 mpl.rcParams['axes.formatter.useoffset'] = False
 # Plotting functions
-from matplotlib.pyplot import tight_layout, gcf, sca, plot, xlabel, ylabel, title, legend, xscale, yscale, xlim, ylim, subplot, figure, savefig, axvline, axhline
+from matplotlib.pyplot import tight_layout, gcf, sca, plot, xlabel, ylabel, title, legend, xscale, yscale, xlim, ylim, subplot, figure, savefig, axvline, axhline, fill_between, xticks, yticks, gca
 
 # -~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~ #
 # Load content of config.ini
@@ -359,6 +359,5 @@ xlabel(r'$\iota$')
 ylabel(r'$( h_\mathrm{HM} | h_\mathrm{NR} )$')
 yl = lim( hstack([sm('quadrupole_min'),sm('max')]) )
 dy = 0.001*yl
-print dy
-ylim( yl + dy*array([-1,1]) )
+ylim( yl + dy*array([-1.5,1]) )
 savefig( basedir+'matches_'+sce.simname+'.pdf' )
