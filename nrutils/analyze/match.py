@@ -1012,10 +1012,10 @@ class match:
 
 
 #
-import lal
 def get_nr_dict(nrpath, distance=1.0e6 * lal.PC_SI, mtot=75.):
 
     #
+    import lal
     import lalsimulation as lalsim
     import numpy as np
 
@@ -1076,6 +1076,7 @@ def make_siminspiralFD_params(m1, m2, s1x, s1y, s1z, s2x, s2y, s2z, distance, in
         m2SI = m2 * lal.MSUN_SI
 
         import numpy as np
+        import lal
 
         # print delta_F
         f_max_2 = 2**(np.int(np.log(fmax/delta_F)/np.log(2))+1) * delta_F
