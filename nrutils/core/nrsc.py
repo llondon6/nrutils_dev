@@ -2088,7 +2088,7 @@ class gwylm:
 
         # Import useful things
         from os.path import isfile,basename
-        from numpy import sign,diff,unwrap,angle,amax,isnan,amin,log,exp
+        from numpy import sign,diff,unwrap,angle,amax,isnan,amin,log,exp,std,median,mod
         from scipy.stats.mstats import mode
         from scipy.version import version as scipy_version
         thisfun=inspect.stack()[0][3]
@@ -2174,6 +2174,18 @@ class gwylm:
             # NOTE that the line below is applied within the gwf constructor
             # wfarr = straighten_wfarr( wfarr )
 
+            # Make sure that waveform array is straight
+            wfarr = straighten_wfarr(wfarr,this.verbose)
+            # Make sure that it's equispaced
+            if (dt is not None) or (std(diff(wfarr[:,0]))>1e-6): wfarr = intrp_wfarr( wfarr, dt )
+            # NOTE: If no specific padding is requested, we will still pad the data by some small amount to enforce that the start and end values are identical prior to propper cleaning. This results in noticeable advatances in data quality when computing matches with short waveforms.
+            if not isinstance(pad,(int,float)):
+                old_data_length = len(wfarr[:,0])
+                default_pad = 2 + mod(len(wfarr[:,0]),2) + 1
+                new_data_length = old_data_length + default_pad
+                alert('Imposing a default padding of %i to the data.'%default_pad)
+                wfarr = pad_wfarr(wfarr,new_data_length,verbose=this.verbose)
+
             # Pad the waveform array
             if (this.fftfactor != 0) and (this.fftfactor is not None):
                 # error('the fftfactor option seems to give strange results for td strain, and is thus currently disabled --- THIS WAS FIXED by calling straighten_wfarr within pad_wfarr.')
@@ -2186,9 +2198,6 @@ class gwylm:
                     fftlen = int( 2 ** ( int(log( old_data_length )/log(2)) + 1.0 + this.fftfactor ) )
                     #
                     if this.verbose: alert( 'Padding wfarr. The old data length was %i, and the new one is %i'%(old_data_length,fftlen) )
-                    #
-                    wfarr = straighten_wfarr(wfarr,this.verbose)
-                    if dt is not None: wfarr = intrp_wfarr( wfarr, dt )
                     # NOTE that this padding function only works with time domain data
                     wfarr = pad_wfarr(wfarr,fftlen,where='sides',verbose=this.verbose)
                 else:
@@ -2205,9 +2214,6 @@ class gwylm:
                     new_data_length = old_data_length + pad
                     #
                     if this.verbose: alert( 'Padding wfarr. The old data length was %i, and the new one is %i'%(old_data_length,new_data_length) )
-                    #
-                    wfarr = straighten_wfarr(wfarr,this.verbose)
-                    if dt is not None: wfarr = intrp_wfarr( wfarr, dt )
                     # NOTE that this padding function only works with time domain data
                     wfarr = pad_wfarr(wfarr,new_data_length,where='sides',verbose=this.verbose)
 
@@ -2735,7 +2741,7 @@ class gwylm:
         '''
 
         # Set default for select_lm
-        select_lm = this.lm.keys() if select_lm is None else select_lm
+        select_lm = this.__input_lmlist__ if select_lm is None else select_lm
 
         # Construct functions which handle options
         fd_wfarr_dict_fun = lambda k: { lm:this.lm[lm][k].fd_wfarr for lm in select_lm }

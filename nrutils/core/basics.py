@@ -201,6 +201,10 @@ def pad_wfarr(wfarr,new_length,where=None,verbose=None):
     if _wfarr.shape[0] != new_length:
         error('The current length (%i) is not the desired new length(%i). This function has a bug.'%(_wfarr.shape[0],new_length))
 
+    #
+    if verbose:
+        alert('The shape was %s. Now the shape is %s.'%(wfarr.shape,_wfarr.shape) )
+
     # Return padded array
     return _wfarr
 
@@ -444,7 +448,7 @@ def straighten_wfarr( wfarr, verbose=False ):
     '''
 
     # Import useful things
-    from numpy import arange,sum,array,diff,isfinite,hstack,allclose
+    from numpy import arange,sum,array,diff,isfinite,hstack,allclose,median
     thisfun = 'straighten_wfarr'
 
     # check whether t is monotonically increasing
@@ -457,7 +461,7 @@ def straighten_wfarr( wfarr, verbose=False ):
         map_ = arange( len(wfarr[:,0]) )
         map_ = sorted( map_, key = lambda x: wfarr[x,0] )
         wfarr = wfarr[ map_, : ]
-        if allclose( wfarr[:,0], sorted(wfarr[:,0]), 1e-6 ): warning('The waveform time series is now monotonic.')
+        if allclose( wfarr[:,0], sorted(wfarr[:,0]), 1e-6 ): warning(red('The waveform time series is now monotonic.'))
 
     # Remove rows that contain non-finite data
     finite_mask = isfinite( sum( wfarr, 1 ) )
@@ -475,7 +479,8 @@ def straighten_wfarr( wfarr, verbose=False ):
 
     # Remove rows with duplicate time series values
     time = array( wfarr[:,0] )
-    diff_mask = hstack( [ True, diff(time).astype(bool) ] )
+    dt = median( diff(time) )
+    diff_mask = hstack( [ True, diff(time)/dt>1e-6 ] )
     if sum(diff_mask)!=len(diff_mask):
         if verbose: warning('Repeated time values were found in the array. Offending rows will be removed.',thisfun)
     wfarr = wfarr[ diff_mask, : ]
@@ -603,3 +608,86 @@ def betamax2(_gwylmo,n=10,plt=False,opt=True,verbose=False):
         k+=1
 
     return dphi,dpsi
+
+
+# -~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~ #
+# Define wrapper for LAL version of PhneomHM/D -- PHYSICAL UNITS
+# -~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~ #
+def lalphenom(eta,M,x1,x2,theta,phi,D,df_phys,fmin,fmax,approx=None):
+
+    #
+    import lal
+    from numpy import arange,hstack,array,vstack
+    import lalsimulation as lalsim
+    from lalsimulation import SimInspiralFD, SimInspiralGetApproximantFromString, SimInspiralChooseFDWaveform
+    from scipy.interpolate import InterpolatedUnivariateSpline as spline
+    from nrutils import eta2q
+
+    #
+    chi1 = [0,0,float(x1)]
+    chi2 = [0,0,float(x2)]
+
+    #
+    apx ='IMRPhenomHM' if approx is None else approx
+    # print apx, lalsim.__dict__[apx]
+    # Standardize input mass ratio and convert to component masses
+    M_phys = M; q = eta2q(float(eta)); q = max( [q,1.0/q] )
+    # NOTE m1>m2 convention
+    m2 = M_phys * 1.0 / (1.0+q); m1 = float(q) * m2
+    #
+    fmin_phys = fmin
+    fmax_phys = fmax
+    #
+    S1 = array(chi1); S2 = array(chi2)
+    #
+    M_total_phys = (m1+m2) * lal.MSUN_SI
+    r = (1e6)*D* lal.PC_SI
+    #
+    FD_arguments = {    'phiRef': phi,
+                        'deltaF': df_phys,
+                        'f_min': fmin_phys,
+                        'f_max': fmax_phys,
+                        'm1': m1 * lal.MSUN_SI,
+                        'm2' : m2 * lal.MSUN_SI,
+                        'S1x' : S1[0],
+                        'S1y' : S1[1],
+                        'S1z' : S1[2],
+                        'S2x' : S2[0],
+                        'S2y' : S2[1],
+                        'S2z' : S2[2],
+                        'f_ref': 0,
+                        'r': r,
+                        'i': theta,
+                        'lambda1': 0,
+                        'lambda2': 0,
+                        'waveFlags': None,
+                        'nonGRparams': None,
+                        'amplitudeO': -1,
+                        'phaseO': -1,
+                        'approximant': lalsim.__dict__[apx] }
+
+    # Use lalsimulation to calculate plus and cross in lslsim dataformat
+    hp_lal, hc_lal  = SimInspiralChooseFDWaveform(**FD_arguments) # SimInspiralFD
+    hp_ = hp_lal.data.data
+    hc_ = hc_lal.data.data
+    #
+    _hp = array(hp_[::-1]).conj()
+    hp = hstack( [ _hp , hp_[1:] ] ) # NOTE: Do not keep duplicate zero frequency point
+    #
+    _hc = array(hc_[::-1]).conj()
+    hc = hstack( [ _hc , hc_[1:] ] )
+    #
+    f_ = arange(hp_lal.data.data.size) * hp_lal.deltaF
+    _f = -array(f_[::-1])
+    f = hstack( [ _f, f_[1:] ] )
+    #
+    wfarr = vstack( [ f, hp, hc ] ).T
+    # only keep frequencies of interest
+    # NOTE that frequencies below fmin ar kept to maintain uniform spacing of the frequency domain
+    mask = abs(f) <= fmax
+    wfarr = wfarr[mask,:]
+    #
+    if  abs( hp_lal.deltaF - df_phys ) > 1e-10:
+        error('for some reason, df values are not as expected')
+    #
+    return wfarr

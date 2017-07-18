@@ -43,7 +43,7 @@ class match:
                                            verbose = False ):
 
         # Import useful things
-        from numpy import linspace,pi,array,argmax
+        from numpy import linspace,pi,array,argmax,isnan
         import matplotlib.pyplot as pp
 
         #
@@ -81,6 +81,9 @@ class match:
             this.apply( template_wfarr = current_template_wfarr )
             # Calculate the match
             match = matchfun()
+            #
+            if isnan(match):
+                error('The match should not be %s. There\'s a bug to be fixed here.'%match)
             # Return answer
             return match
 
@@ -127,7 +130,7 @@ class match:
         #-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-#
         # Import useful things
         #-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-#
-        from numpy import array,linspace,pi,mean,average,zeros
+        from numpy import array,linspace,pi,mean,average,zeros,pi
         if plot:
             from numpy import meshgrid
             import matplotlib.pyplot as pp
@@ -142,7 +145,7 @@ class match:
         #-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-#
         # Inclination
         et = 0.01
-        theta_range = linspace(et,pi-et,N_theta) if N_theta > 1 else array([3.1416/2])
+        theta_range = linspace(et,pi-et,N_theta) if N_theta > 1 else array([pi/2])
         # theta_range = linspace(0,pi,N_theta)
         # Signal polarization
         psi_signal_range = linspace(et,pi-et,N_psi_signal)
@@ -419,7 +422,7 @@ class match:
 
 
     # Plot template and signal against psd
-    def plot(this):
+    def plot(this,fig=None):
 
         # Import useful things
         from numpy import array,sqrt,log,sign
@@ -436,7 +439,8 @@ class match:
                                       legend,xscale,yscale,xlim,ylim,figure
 
         # Setup Figure
-        figure( figsize=1.8*array([4,4]) )
+        if fig is None:
+            fig = figure( figsize=3*array([4,4]) )
 
         #
         def slog(x):
@@ -448,7 +452,11 @@ class match:
         #
         plot( this.f, 2*sqrt(abs(this.f))*abs(this.template['response']), label=r'Template (Response), $\rho_{\mathrm{opt}} = %1.2f$'%this.template['optimal_snr'] )
         #
-        plot( this.f, sqrt(this.psd), '-k', label=r'$\sqrt{S_n(f)}$ for %s'%this.psd_thing )
+        if callable(this.psd_thing):
+            psd_label = this.psd_thing.__name__
+        else:
+            psd_label = str(this.psd_thing)
+        plot( this.f, sqrt(this.psd), '-k', label=r'$\sqrt{S_n(f)}$ for %s'%psd_label )
 
         #
         yscale('log')
@@ -459,9 +467,10 @@ class match:
 
         #
         xlim(lim(this.f))
+        xscale('log')
         xlabel( r'$f$ (Hz)' )
         ylabel( r'$\sqrt{S_n(f)}$  and  $2|\tilde{h}(f)|\sqrt{f}$' )
-        legend( frameon=False, loc=3 )
+        legend( frameon=False, loc=1 )
 
 
     # Precalculate items related to the signals
@@ -558,6 +567,7 @@ class match:
             intrp_max( M, plot=True, verbose=True )
 
         #
+        # print '\n',denominator, this.signal['norm'], this.template['norm']
         template_pol_optimized_match = sqrt( numerator.max() / (denominator*2.0) ) / (this.signal['norm'] if this.signal['norm'] != 0 else 1)
 
         # Calculate optimal template polarization angle ?
@@ -843,7 +853,23 @@ class match:
     def __unpack_wfarr__(this,wfarr,d=None):
 
         #
-        from numpy import diff,var
+        from numpy import diff,var,mod,array,arange,argmin,argmax
+        from numpy.fft import fftshift,ifftshift
+
+        # Detect fft convention
+        def monotonic_convention(_wfarr):
+            f = _wfarr[:,0]
+            return (argmin(f)==0) and (argmax(f)==len(f[1:]))
+        #
+        if not monotonic_convention(wfarr):
+            wfarr = ifftshift( wfarr, 0 ) if mod(len(wfarr[:,0]),2) else fftshift( wfarr, 0 )
+            f = array( wfarr[:,0] )
+            space = arange( wfarr.shape[0] )
+            chart = sorted( space, key = lambda k: f[k] )
+            wfarr = wfarr[ chart, : ]
+            if this.verbose: alert(yellow('Trying to flip FFT convention so that frequencies are monotocinally increasing from right to left in arrays.'))
+            if not monotonic_convention(wfarr):
+                error('Attempt to switch convention failed.')
 
         # Replace zero frequency value with a very small number
         f = wfarr[:,0].real
