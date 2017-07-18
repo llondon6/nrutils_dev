@@ -11,7 +11,7 @@ import lalsimulation as lalsim
 from numpy import pi,array,savetxt,log, angle, unwrap, average, linspace, arange, diff, ones, ones_like, zeros, zeros_like, hstack
 from shutil import copyfile
 from glob import glob
-executable_name = glob( parent( os.path.realpath(__file__) )+'*run*' )[0].split('/')[-1]
+executable_name = glob( parent( os.path.realpath(__file__) )+'*work' )[0].split('/')[-1]
 from scipy.interpolate import InterpolatedUnivariateSpline as spline
 # Setup plotting backend
 import matplotlib as mpl
