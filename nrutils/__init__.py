@@ -38,14 +38,14 @@ from commands import getstatusoutput as bash
 
 #
 import os
-verbose = True
+verbose = not True
 if not (  os.environ.get("koala_verbose",'') == '' or os.environ.get("koala_verbose",'').lower() == 'true'  ):
     verbose = False
 
 
 # Search recurssively within the config's sim_dir for files matching the config's metadata_id
 this_file = realpath(__file__)
-print "The highest level init for nrutils is located at: %s" % this_file
+if verbose: print "The highest level init for nrutils is located at: %s" % this_file
 if this_file[-1] == 'c': this_file = this_file[:-1]
 cmd = 'find %s -maxdepth 2 -name "__init__.py"' % dirname(this_file)
 status, output = bash(cmd)

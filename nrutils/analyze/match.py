@@ -36,18 +36,19 @@ class match:
     #
     def calc_template_phi_optimized_match( this,
                                            template_wfarr_orbphi_fun, # takes in template orbital phase, outputs waveform array
-                                           N_template_phi = 61,# number of orbital phase values to use for exploration
+                                           N_template_phi = 91,# number of orbital phase values to use for exploration
                                            plot = False,
                                            signal_polarization = None,
                                            method = None,
-                                           verbose = False ):
+                                           verbose = False,
+                                           **kwargs ):
 
         # Import useful things
         from numpy import linspace,pi,array,argmax,isnan
         import matplotlib.pyplot as pp
 
         #
-        if verbose: alert( 'Processing %s over list a phi_template values .'%(cyan('match.calc_template_pol_optimized_match()')), )
+        if verbose: alert( 'Processing %s over list a phi_template values.'%(cyan('match.calc_template_pol_optimized_match()')), )
 
 
         # Handle signal polarization input; use constructor value as default
@@ -80,7 +81,7 @@ class match:
             # Create the related match object
             this.apply( template_wfarr = current_template_wfarr )
             # Calculate the match
-            match = matchfun()
+            match = matchfun(**kwargs)
             #
             if isnan(match):
                 error('The match should not be %s. There\'s a bug to be fixed here.'%match)
@@ -98,7 +99,7 @@ class match:
         # Interpolate match over phi_template to estimate maximum
         # intrp_max lives in the "positive" repository
         optimal_phi_template = intrp_argmax(match_list,phi_template_range,plot=plot)
-        match = match_helper( optimal_phi_template )
+        match = max( match_helper( optimal_phi_template ), max(match_list) )
 
         #
         if plot:
@@ -125,7 +126,9 @@ class match:
                                 N_phi_signal = 13,
                                 hm_vs_quad = False,
                                 plot = False,
-                                verbose = not False ):
+                                method = None,
+                                verbose = not False,
+                                **kwargs ):
 
         #-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-#
         # Import useful things
@@ -162,6 +165,9 @@ class match:
         quadrupole_avg_match = []
         quadrupole_snr_avg_match = []
         quadrupole_max_match = []
+        #
+        samples = {'theta':[],'phi_signal':[],'psi_signal':[],'match':[],'optsnr':[]}
+        quadrupole_samples = {'theta':[],'phi_signal':[],'psi_signal':[],'match':[],'optsnr':[]}
 
         '''Loop over INCLINATION'''
         for theta in theta_range:
@@ -213,14 +219,28 @@ class match:
 
                     #
                     if hm_vs_quad:
-                        quadrupole_match = this.calc_template_phi_optimized_match(quadrupole_template_fun)
+                        quadrupole_match = this.calc_template_phi_optimized_match(quadrupole_template_fun,method=method)
                         quadrupole_match_list.append( quadrupole_match )
                     #
-                    match = this.calc_template_phi_optimized_match(template_fun)
+                    match = this.calc_template_phi_optimized_match(template_fun,method=method)
                     match_list.append( match )
                     match_arr[j,k] = match
                     #
                     optsnr_list.append( optsnr )
+                    #
+                    samples['theta'].append(theta)
+                    samples['phi_signal'].append(phi_signal)
+                    samples['psi_signal'].append(psi_signal)
+                    samples['match'].append(match)
+                    samples['optsnr'].append(optsnr)
+                    #
+                    if hm_vs_quad:
+                        #
+                        quadrupole_samples['theta'].append(theta)
+                        quadrupole_samples['phi_signal'].append(phi_signal)
+                        quadrupole_samples['psi_signal'].append(psi_signal)
+                        quadrupole_samples['match'].append(quadrupole_match)
+                        quadrupole_samples['optsnr'].append(optsnr)
 
                 # For all signal polarization values
                 if verbose:
@@ -279,12 +299,14 @@ class match:
         match_info['avg'] = avg_match
         match_info['max'] = max_match
         match_info['weighted_avg'] = snr_avg_match
+        match_info['samples'] = samples
         #
         if hm_vs_quad:
             match_info['quadrupole_min'] = quadrupole_min_match
             match_info['quadrupole_avg'] = quadrupole_avg_match
             match_info['quadrupole_max'] = quadrupole_max_match
             match_info['quadrupole_weighted_avg'] = quadrupole_snr_avg_match
+            match_info['quadrupole_samples'] = quadrupole_samples
 
         #
         return match_info
@@ -357,7 +379,7 @@ class match:
 
 
     # basic match function that optimizes over template polarization in a brute force way
-    def brute_match( this ):
+    def brute_match( this, **kwargs ):
 
         #
         from numpy import pi,linspace,argmax
@@ -372,7 +394,7 @@ class match:
         match_list = []
 
         #
-        matchfun = lambda PSI: this.calc_basic_match( template_polarization = PSI )
+        matchfun = lambda PSI: this.calc_basic_match( template_polarization = PSI, **kwargs )
 
         # for all template polarization values, calculate basic match which optimizes over arrival phase, and time shift
         for current_template_polarization in template_polarization_range :
@@ -396,6 +418,7 @@ class match:
     def calc_basic_match( this,
                           ifftmax = True,       # Toggel for time maximization via ifft
                           template_polarization = None,
+                          timeoptoff = False,   # TUrn off time shift optimization
                           verbose = False ):
 
         #
@@ -413,11 +436,14 @@ class match:
         G = this.signal['normalized_response'] * this.template['normalized_response'].conj() / this.psd
 
         #
-        fftlen = int( 2 ** ( int(log( len( this.psd ) )/log(2)) + 1.0 + 3.0 ) )
-        H = ifft( G, n = fftlen )*fftlen
+        if not timeoptoff:
+            fftlen = int( 2 ** ( int(log( len( this.psd ) )/log(2)) + 1.0 + 3.0 ) )
+            H = ifft( G, n = fftlen )*fftlen
+            ans = max( abs(H) )
+        else:
+            ans = sum( G )
 
         #
-        ans = max( abs(H) )
         return ans
 
 

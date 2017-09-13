@@ -1619,14 +1619,14 @@ class gwf:
         this.setfields(wfarr)
 
     # Pad this waveform object in the time domain with zeros
-    def pad(this,new_length=None,where=None,apply=False):
+    def pad(this,new_length=None,where=None,apply=False,extend=False):
         #
         where = 'right' if where is None else where
         # Pad this waveform object to the left and right with zeros
         ans = this.copy() if not apply else this
         if new_length is not None:
             # Create the new wfarr
-            wfarr = pad_wfarr( this.wfarr, new_length,where=where )
+            wfarr = pad_wfarr( this.wfarr, new_length,where=where,extend=extend )
             # Confer to the current object
             ans.setfields(wfarr)
 
@@ -1774,7 +1774,7 @@ class gwylm:
                   lm                    = None,     # iterable of length 2 containing multipolr l and m
                   lmax                  = None,     # if set, multipoles with all |m| up to lmax will be loaded.
                                                     # This input is not compatible with the lm tag
-                  dt                    = None,     # if given, the waveform array will beinterpolated to
+                  dt                    = 0.15,     # if given, the waveform array will beinterpolated to
                                                     # this timestep
                   load                  = None,     # IF true, we will try to load data from the scentry_object
                   clean                 = None,     # Toggle automatic tapering
@@ -2088,7 +2088,7 @@ class gwylm:
 
         # Import useful things
         from os.path import isfile,basename
-        from numpy import sign,diff,unwrap,angle,amax,isnan,amin,log,exp,std,median,mod
+        from numpy import sign,diff,unwrap,angle,amax,isnan,amin,log,exp,std,median,mod,mean
         from scipy.stats.mstats import mode
         from scipy.version import version as scipy_version
         thisfun=inspect.stack()[0][3]
@@ -2177,6 +2177,7 @@ class gwylm:
             # Make sure that waveform array is straight
             wfarr = straighten_wfarr(wfarr,this.verbose)
             # Make sure that it's equispaced
+            if (std(diff(wfarr[:,0]))>1e-6): dt = mean(diff(wfarr[:,0]))
             if (dt is not None) or (std(diff(wfarr[:,0]))>1e-6): wfarr = intrp_wfarr( wfarr, dt )
             # NOTE: If no specific padding is requested, we will still pad the data by some small amount to enforce that the start and end values are identical prior to propper cleaning. This results in noticeable advatances in data quality when computing matches with short waveforms.
             if not isinstance(pad,(int,float)):
@@ -2679,12 +2680,12 @@ class gwylm:
 
 
     # pad each mode to a new_length
-    def pad(this,new_length=None, apply=True):
+    def pad(this,new_length=None, apply=True, extend=False ):
         # Pad each mode
         ans = this if apply else this.copy()
         for z in this.lm:
             for k in this.lm[z]:
-                ans.lm[z][k].pad( new_length=new_length, apply=apply )
+                ans.lm[z][k].pad( new_length=new_length, apply=apply, extend=extend )
         #
         if not apply: return ans
 

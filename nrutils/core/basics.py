@@ -105,7 +105,7 @@ def intrp_wfarr(wfarr,delta=None,domain=None):
 
 
 # Fucntion to pad wfarr with zeros. NOTE that this should only be applied to a time domain waveform that already begins and ends with zeros.
-def pad_wfarr(wfarr,new_length,where=None,verbose=None):
+def pad_wfarr(wfarr,new_length,where=None,verbose=None,extend=False):
 
     #
     from numpy import hstack,zeros,arange,pad,unwrap,angle,cos,sin
@@ -116,6 +116,8 @@ def pad_wfarr(wfarr,new_length,where=None,verbose=None):
 
     # Only pad if size of the array is to increase
     length = len(wfarr[:,0])
+    # Look for option to interpret input as "length to pad" rather than "total new length"
+    if extend: new_length+= length
     proceed = length < new_length
 
     #
@@ -613,7 +615,7 @@ def betamax2(_gwylmo,n=10,plt=False,opt=True,verbose=False):
 # -~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~ #
 # Define wrapper for LAL version of PhneomHM/D -- PHYSICAL UNITS
 # -~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~ #
-def lalphenom(eta,M,x1,x2,theta,phi,D,df_phys,fmin,fmax,approx=None):
+def lalphenom(eta,M,x1,x2,theta,phi,D,df_phys,fmin,fmax,approx=None,interface_version=None):
 
     #
     import lal
@@ -642,32 +644,107 @@ def lalphenom(eta,M,x1,x2,theta,phi,D,df_phys,fmin,fmax,approx=None):
     #
     M_total_phys = (m1+m2) * lal.MSUN_SI
     r = (1e6)*D* lal.PC_SI
-    #
-    FD_arguments = {    'phiRef': phi,
-                        'deltaF': df_phys,
-                        'f_min': fmin_phys,
-                        'f_max': fmax_phys,
-                        'm1': m1 * lal.MSUN_SI,
-                        'm2' : m2 * lal.MSUN_SI,
-                        'S1x' : S1[0],
-                        'S1y' : S1[1],
-                        'S1z' : S1[2],
-                        'S2x' : S2[0],
-                        'S2y' : S2[1],
-                        'S2z' : S2[2],
-                        'f_ref': 0,
-                        'r': r,
-                        'i': theta,
-                        'lambda1': 0,
-                        'lambda2': 0,
-                        'waveFlags': None,
-                        'nonGRparams': None,
-                        'amplitudeO': -1,
-                        'phaseO': -1,
-                        'approximant': lalsim.__dict__[apx] }
 
-    # Use lalsimulation to calculate plus and cross in lslsim dataformat
-    hp_lal, hc_lal  = SimInspiralChooseFDWaveform(**FD_arguments) # SimInspiralFD
+    #
+    try:
+
+        #
+        FD_arguments = {    'phiRef': phi,
+                            'deltaF': df_phys,
+                            'f_min': fmin_phys,
+                            'f_max': fmax_phys,
+                            'm1': m1 * lal.MSUN_SI,
+                            'm2' : m2 * lal.MSUN_SI,
+                            'S1x' : S1[0],
+                            'S1y' : S1[1],
+                            'S1z' : S1[2],
+                            'S2x' : S2[0],
+                            'S2y' : S2[1],
+                            'S2z' : S2[2],
+                            'f_ref': 0,
+                            'r': r,
+                            'i': theta,
+                            'lambda1': 0,
+                            'lambda2': 0,
+                            'waveFlags': None,
+                            'nonGRparams': None,
+                            'amplitudeO': -1,
+                            'phaseO': -1,
+                            'approximant': lalsim.__dict__[apx] }
+
+        # Use lalsimulation to calculate plus and cross in lslsim dataformat
+        hp_lal, hc_lal  = SimInspiralChooseFDWaveform(**FD_arguments) # SimInspiralFD
+
+    except:
+
+        params = lal.CreateDict()
+
+        #
+        alert('Trying a different input format ...')
+        # print lalsim.__dict__[apx],params
+        FD_arguments = {    'phiRef': phi,
+                            'deltaF': df_phys,
+                            'f_min': fmin_phys,
+                            'f_max': fmax_phys,
+                            'm1': m1 * lal.MSUN_SI,
+                            'm2' : m2 * lal.MSUN_SI,
+                            'S1x' : S1[0],
+                            'S1y' : S1[1],
+                            'S1z' : S1[2],
+                            'S2x' : S2[0],
+                            'S2y' : S2[1],
+                            'S2z' : S2[2],
+                            'f_ref': 1.0,
+                            'distance': r,
+                            'inclination': theta,
+                            'longAscNodes': 0.0,
+                            'eccentricity': 0.0,
+                            'meanPerAno': 0.0,
+                            'LALpars': params,
+                            'approximant': lalsim.__dict__[apx] }
+
+        # print FD_arguments
+
+        # Use lalsimulation to calculate plus and cross in lslsim dataformat
+        # hp_lal, hc_lal  = SimInspiralChooseFDWaveform(**FD_arguments) # SimInspiralFD
+
+        M1,M2 = m1 * lal.MSUN_SI, m2 * lal.MSUN_SI
+        S1x,S1y,S1z = S1[0],S1[1],S1[2]
+        S2x,S2y,S2z = S2[0],S2[1],S2[2]
+        distance = r
+        inclination = theta
+        phiRef = 0
+        longAscNodes = 0
+        eccentricity = 0
+        meanPerAno = 0
+        deltaF = df_phys
+        f_min, f_max = fmin_phys, fmax_phys
+        f_ref = 200.0
+        LALpars = lal.CreateDict()
+        approximant = lalsim.RingdownMMRDNSFD
+        print lalsim.NR_hdf5
+        hp_lal, hc_lal  = SimInspiralChooseFDWaveform( M1,
+                                                       M2,
+                                                       S1x,
+                                                       S1y,
+                                                       S1z,
+                                                       S2x,
+                                                       S2y,
+                                                       S2,
+                                                       distance,
+                                                       inclination,
+                                                       phiRef,
+                                                       longAscNodes,
+                                                       eccentricity,
+                                                       meanPerAno,
+                                                       deltaF,
+                                                       f_min,
+                                                       f_max,
+                                                       f_ref,
+                                                       LALpars,
+                                                       approximant )
+
+
     hp_ = hp_lal.data.data
     hc_ = hc_lal.data.data
     #

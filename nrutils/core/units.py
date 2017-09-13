@@ -4,17 +4,36 @@ from nrutils.core.basics import *
 
 # --------------------------------------------------------------- #
 # Physical Constants
+# Also see: http://asa.usno.navy.mil/static/files/2015/Astronomical_Constants_2015.pdf
 # --------------------------------------------------------------- #
-__physical_constants__ = {  'mass_sun'          : 1.98892e30,		# kg
-                            'G'                 : 6.67428e-11,		# m^3/(kg s^2)
-                            'c'                 : 2.99792458e8,		# m/s
-                            'meter_to_mpc'      : 3.24077649e-23}	# meter to Mpc conversion
+
+#
+try:
+    import lal
+except:
+    lal = False
+
+#
+if lal:
+    #
+    __physical_constants__ = {  'mass_sun'          : lal.MSUN_SI,		# kg
+                                'G'                 : lal.G_SI,		    # m^3/(kg s^2)
+                                'c'                 : lal.C_SI,		    # m/s
+                                'meter_to_mpc'      : 3.24077649e-23}	# meter to Mpc conversion
+else:
+    #
+    __physical_constants__ = {  'mass_sun'          : 1.9885469549614615e+30,		# kg
+                                'G'                 : 6.67384e-11,		# m^3/(kg s^2)
+                                'c'                 : 299792458.0,		# m/s
+                                'meter_to_mpc'      : 3.24077649e-23}	# meter to Mpc conversion
 
 
 # mass of the sun in secs
 __physical_constants__['mass_sun_secs'] = __physical_constants__['G']*__physical_constants__['mass_sun']/(__physical_constants__['c']*__physical_constants__['c']*__physical_constants__['c'])
+
 # mass of the sun in meters
 __physical_constants__['mass_sun_meters'] = __physical_constants__['G']*__physical_constants__['mass_sun']/(__physical_constants__['c']*__physical_constants__['c'])
+
 # mass of the sun in Mpc
 __physical_constants__['mass_sun_mpc'] = __physical_constants__['mass_sun_meters'] * __physical_constants__['meter_to_mpc']
 
@@ -57,7 +76,7 @@ def physhf( harr, M, D ):
             # Return answer
             return harr
         else:
-            harr *= K
+            return harr*K
     else:
         error('unknown formatting for input: must be float, gwf, array, wor waveform array')
 
@@ -78,14 +97,17 @@ def physh( harr, M, D ):
     else:
         # Here we will asusme that input is numpy ndarray
         if 3 == harr.shape[-1]:
+            harr = harr.copy()
             # Convert the time column to physical units
             harr[:,0] = physt( harr[:,0], M )
             # Convert strain data to physical units
             harr[:,1:] *= K
-            # Return answer
-            return harr
         elif 1==len(harr.shape):
             harr *= K
+        else:
+            error('Unhandled input format. Input shape is %s'%len(harr.shape))
+        # Return answer
+        return harr
 
 # --------------------------------------------------------------- #
 # Given TIME DOMAIN strain in physical units, convert to Code units
