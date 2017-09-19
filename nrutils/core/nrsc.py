@@ -2181,7 +2181,7 @@ class gwylm:
             # Make sure that waveform array is straight
             wfarr = straighten_wfarr(wfarr,this.verbose)
             # Make sure that it's equispaced
-            if (std(diff(wfarr[:,0]))>1e-6): dt = mean(diff(wfarr[:,0]))
+            if (std(diff(wfarr[:,0]))>1e-6): dt = mean(diff(wfarr[:,0])) if dt is None else dt
             if (dt is not None) or (std(diff(wfarr[:,0]))>1e-6): wfarr = intrp_wfarr( wfarr, dt )
             # NOTE: If no specific padding is requested, we will still pad the data by some small amount to enforce that the start and end values are identical prior to propper cleaning. This results in noticeable advatances in data quality when computing matches with short waveforms.
             if not isinstance(pad,(int,float)):
