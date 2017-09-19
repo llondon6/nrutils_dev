@@ -1371,7 +1371,7 @@ class gwf:
         plot( sign(this.m if this.m is not None else 1)*this.f[pos_mask], this.fd_amp[pos_mask], color=clr[0], label=labels[0] )
         if ref_gwf:
             plot( sign(that.m if that.m is not None else 1)*that.f[that_pos_mask], that.fd_amp[that_pos_mask], color=clr[0], linewidth=that_lwid, alpha=that_alpha, label=labels[-1] )
-        pylim( sign(this.m if this.m is not None else 1)*this.f[pos_mask], this.fd_amp[pos_mask], pad_y=10 )
+        if this.m!=0: pylim( sign(this.m if this.m is not None else 1)*this.f[pos_mask], this.fd_amp[pos_mask], pad_y=10 )
         #
         yl('$|$'+kind+'$|(f)$',fontsize=fs,color=txclr, family=font_family )
         if set_legend: legend(frameon=False)
@@ -1387,7 +1387,7 @@ class gwf:
         plot( sign(this.m if this.m is not None else 1)*this.f[pos_mask], this.fd_phi[pos_mask], color=1-clr[0] )
         if ref_gwf:
             plot( sign(that.m if that.m is not None else 1)*that.f[that_pos_mask], that.fd_phi[that_pos_mask], color=1-clr[0], linewidth=that_lwid, alpha=that_alpha )
-        pylim( sign(this.m if this.m is not None else 1)*this.f[pos_mask], this.fd_phi[pos_mask] )
+        if this.m!=0: pylim( sign(this.m if this.m is not None else 1)*this.f[pos_mask], this.fd_phi[pos_mask] )
         #
         yl(r'$\phi = \mathrm{arg}($'+kind+'$)$',fontsize=fs,color=txclr, family=font_family )
 
@@ -1401,7 +1401,7 @@ class gwf:
         plot( sign(this.m if this.m is not None else 1)*this.f[pos_mask], this.fd_dphi[pos_mask], color=sqrt(clr[0]) )
         if ref_gwf:
             plot( sign(that.m if that.m is not None else 1)*that.f[that_pos_mask], that.fd_dphi[that_pos_mask], color=sqrt(clr[0]), linewidth=that_lwid, alpha=that_alpha )
-        pylim( sign(this.m if this.m is not None else 1)*this.f[pos_mask], this.fd_dphi[pos_mask] )
+        if this.m!=0: pylim( sign(this.m if this.m is not None else 1)*this.f[pos_mask], this.fd_dphi[pos_mask] )
         #
         yl(r'$\mathrm{d}{\phi}/\mathrm{d}f$',fontsize=fs,color=txclr, family=font_family)
 
@@ -1657,6 +1657,7 @@ class gwf:
                method=None,     # The alignment type e.g. phase
                options=None,    # Addtional options for subroutines
                mask=None,       # Boolean mask to apply for alignment (useful e.g. for average-phase alignment)
+               kind=None,
                verbose=False ):
 
         #
@@ -1686,6 +1687,9 @@ class gwf:
             if not ( k in handled_methods ):
                 msg = 'non-handled method input: %s. Handled methods include %s'%(red(k),handled_methods)
                 error(msg,'gwf.align')
+
+        #
+        if kind is None: kind = 'srtain'
 
         # Look for phase-alignement
         if 'initial-phase' in method:
@@ -2375,7 +2379,7 @@ class gwylm:
             # arxiv:0707.4654v3. Here we choose to be consistent with eq 4 of arxiv:1006.1632 and not add a
             # minus sign.
             if this.verbose:
-                msg = yellow('The user should note that there is no minus sign used in front of the double time integral for strain (i.e. Eq 4 of arxiv:1006.1632). This differs from Eq 3.4 of arxiv:0707.4654v3. The net effect is a rotation of the overall polarization of pi degrees. The user should also note that there is no minus sign applied to h_cross meaning that the user must be mindful to write h_pluss-1j*h_cross when appropriate.')
+                msg = yellow('The user should note that there is no minus sign used in front of the double time integral for strain (i.e. Eq 4 of arxiv:1006.1632). This differs from Eq 3.4 of arxiv:0707.4654v3. The net effect is a rotation of the overall polarization of pi degrees. The user should also note that there is no minus sign applied to h_cross meaning that the user must be mindful to write h_plus-1j*h_cross when appropriate.')
                 alert(msg,'gwylm.calchlm')
             #%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%#
 
@@ -2878,12 +2882,24 @@ class gwylm:
         return ans
 
     # Rotate the orbital phase of the current set to align with a reference gwylm object
-    def align( this, that, plot=False, apply=True, verbose=True, lm=None, return_match=False, plot_labels=None ):
+    def align( this, that,
+               plot=False,
+               apply=True,
+               verbose=True,
+               lm=None,
+               return_match=False,
+               kind=None,
+               plot_labels=None ):
+
         '''Rotate the orbital phase and polarization of the current set to align with a reference gwylm object'''
 
         # Import useful things
         from numpy import array,argmax,pi,linspace,angle
         from scipy.optimize import minimize
+
+        #
+        kind = 'psi4' if kind is None else kind
+        if not kind in ('strain','psi4'): error('unknown kind given')
 
         # Define a shortahnd
         (a,b) = (this,that) if apply else (this.copy,that.copy)
@@ -2891,19 +2907,19 @@ class gwylm:
         # Define data holders and the range of orbital phase to brture force
         ab_list = []
         dphi_range = pi*linspace(-1,1,19)
-        # Evaluate the nrmatch over the orbital phase brute force points
+        # Evaluate the nrxcorr over the orbital phase brute force points
         # and convert result into numpy array
         if verbose: alert('Performing sky-averaged match (no noise curve) to estimate optimal shift in orbital phase.')
-        ab_list = [ a.nrmatch(b,dphi,lm=lm) for dphi in dphi_range ]
+        ab_list = [ a.nrxcorr(b,dphi,lm=lm,kind=kind) for dphi in dphi_range ]
         ab = array(ab_list)
         # Perform numerical optimization
         if verbose: alert('Obtaining numerical estimate of optimal shift in orbital phase.')
-        action = lambda du: -abs( a.nrmatch(b,du,lm=lm) )
+        action = lambda du: -abs( a.nrxcorr(b,du,lm=lm,kind=kind) )
         guess_dphi = dphi_range[ argmax( abs(ab) ) ]
         Q = minimize( action, guess_dphi, bounds=[(-pi,pi)] )
         # Extract optimal orbital phase shift & calculate optimal polzarization shift
         dphi_opt = Q.x[0]
-        dpsi_opt = -angle( a.nrmatch(b,dphi_opt,lm=lm) )
+        dpsi_opt = -angle( a.nrxcorr(b,dphi_opt,lm=lm,kind=kind) )
         #
         a.rotate( dphi_opt, dpsi=dpsi_opt, verbose=verbose, apply=True )
 
@@ -2947,7 +2963,8 @@ class gwylm:
 
             #
             for j in a.lm:
-                b.lm[j]['psi4'].plot( ref_gwf = a.lm[j]['psi4'],labels= ('u','v') if plot_labels is None else plot_labels )
+                if j in b.lm:
+                    b.lm[j][kind].plot( ref_gwf = a.lm[j][kind],labels= ('u','v') if plot_labels is None else plot_labels )
 
         #
         if return_match:
@@ -2956,11 +2973,17 @@ class gwylm:
             if not apply: return a,b
 
     # Given a reference gwylm, ensure that there is a common dt
-    def dtalign(this,yref,apply=True):
+    def dtalign(this,yref,apply=True,kind=None):
         '''Given a reference gwylm, ensure that there is a common dt'''
+        kind = 'strain' if kind is None else kind
+        if not kind in ('strain','psi4'): error('unknown kind given')
         (that,zref) = (this,yref) if apply else (this.copy(),yref.copy())
-        dt1 = that.ylm[0].dt
-        dt2 = yref.ylm[0].dt
+        if kind in ('psi4'):
+            dt1 = that.ylm[0].dt
+            dt2 = yref.ylm[0].dt
+        elif kind in ('strain'):
+            dt1 = that.hlm[0].dt
+            dt2 = yref.hlm[0].dt
         if dt1!=dt2: ( that if dt2<dt1 else zref ).setdt( min([dt1,dt2]) )
         return that,zref
 
@@ -2974,28 +2997,39 @@ class gwylm:
         if not apply: return ans
 
     # Given a reference gwylm, pad the current object and perhaps the reference to the same length
-    def lengthalign(this,yref,apply=True):
+    def lengthalign(this,yref,apply=True,kind=None):
         '''Given a reference gwylm, pad the current object and perhaps the reference to the same length'''
+        #
+        kind = 'strain' if kind is None else kind
+        if not kind in ('strain','psi4'): error('unknown kind given')
         that,zref = this.dtalign(yref,apply=apply)
-        l1 = that.ylm[0].n
-        l2 = zref.ylm[0].n
+        if kind in ('psi4'):
+            l1 = that.ylm[0].n
+            l2 = zref.ylm[0].n
+        elif kind in ('strain','h'):
+            l1 = that.hlm[0].n
+            l2 = zref.hlm[0].n
+
         if l1!=l2: ( that if l2>l1 else zref ).pad( max([l1,l2]) )
         return that,zref
 
     # Given a reference gwylm, align the peak to that of a reference waveform
-    def tpeakalign(this,yref,apply=True):
+    def tpeakalign(this,yref,apply=True,kind=None):
         '''Given a reference gwylm, align the peak to that of a reference waveform'''
-        that,zref = this.lengthalign( yref, apply=apply )
-        shift = -that.lm[2,2]['psi4'].intrp_t_amp_max + zref.lm[2,2]['psi4'].intrp_t_amp_max
+        kind = 'strain' if kind is None else kind
+        if not kind in ('strain','psi4'): error('unknown kind given')
+        that,zref = this.lengthalign( yref, apply=apply, kind=kind )
+        shift = -that.lm[2,2][kind].intrp_t_amp_max + zref.lm[2,2][kind].intrp_t_amp_max
         that.tshift( shift=shift )
         if not apply: return that,zref
 
     # Compute the simple vector inner-product (sky averaged overlap with no noise curve) between one gwylm  and another
-    def nrmatch(this,     # The current object
+    def nrxcorr(this,     # The current object
                 yref,     # reference gwylm
                 dphi=0,   # rotation of orbital phase to apply to current object
                 dpsi=0,   # rotation of polarization to apply to current object
                 verbose=True,
+                kind=None,
                 lm = None): # which modes to use
         '''
         # Compute the simple vector inner-product (sky averaged overlap with no noise curve) between one gwylm  and another.
@@ -3011,11 +3045,13 @@ class gwylm:
         ---
         x,      # sky avergaed and normalized inner-product
         '''
-        if verbose: warning('this is not a proper match function, but an add-hock flat psd sky averaged match; for proper matches see nrutils.analysis.match')
+        # if verbose: warning('this is not a proper match function, but an add-hock flat psd sky averaged match; for proper matches see nrutils.analysis.match')
         # Import useful things
         from numpy import sqrt
         #
-        that,zref = this.lengthalign(yref,apply=False)
+        kind = 'psi4' if kind is None else kind
+        #
+        that,zref = this.lengthalign(yref,apply=False,kind=kind)
         lm  = zref.__lmlist__ if lm is None else lm
         # Define a simple inner product
         def prod(a,b): return sum(a.conj()*b)
@@ -3027,16 +3063,22 @@ class gwylm:
         # The code below normalizes the match for the entire sky average
         proceedfun = lambda ll,mm: True if lm is None else ((ll,mm) in lm)
         for k in range(N):
-            l,m = zref.ylm[k].l,zref.ylm[k].m
+            if kind=='psi4':
+                l,m = zref.ylm[k].l,zref.ylm[k].m
+            else:
+                l,m = zref.hlm[k].l,zref.hlm[k].m
             proceed = proceedfun(l,m) # True if lm is None else (l,m) in lm
             if proceed:
-                u,v = zref.lm[l,m]['psi4'].y, that.lm[l,m]['psi4'].y
+                u,v = zref.lm[l,m][kind].y, that.lm[l,m][kind].y
                 U += prod(u,u); V += prod(v,v)
         for k in range(N):
-            l,m = zref.ylm[k].l,zref.ylm[k].m
+            if kind=='psi4':
+                l,m = zref.ylm[k].l,zref.ylm[k].m
+            else:
+                l,m = zref.hlm[k].l,zref.hlm[k].m
             proceed = proceedfun(l,m) # True if lm is None else (l,m) in lm
             if proceed:
-                u,v = zref.lm[l,m]['psi4'].y, that.lm[l,m]['psi4'].y
+                u,v = zref.lm[l,m][kind].y, that.lm[l,m][kind].y
                 u_ = u/sqrt(U); v_ = v/sqrt(V)
                 x += prod( u_,v_ ) if m>=0 else prod( u_,v_ ).conj()
         #--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--#
@@ -3186,7 +3228,7 @@ class gwylm:
 
 
 
-# Time Domain LALSimulation Waveform Approximant h_pluss and cross, but using nrutils data conventions
+# Time Domain LALSimulation Waveform Approximant h_plus and cross, but using nrutils data conventions
 def lswfa( apx      ='IMRPhenomPv2',    # Approximant name; must be compatible with lal convenions
            eta      = None,           # symmetric mass ratio
            chi1     = None,           # spin1 iterable (Dimensionless)
@@ -3255,7 +3297,7 @@ def lswfa( apx      ='IMRPhenomPv2',    # Approximant name; must be compatible w
 
 
 
-# Frequency Domain Domain LALSimulation Waveform Approximant h_pluss and cross, but using nrutils data conventions
+# Frequency Domain Domain LALSimulation Waveform Approximant h_plus and cross, but using nrutils data conventions
 def lswfafd( apx      ='IMRPhenomPv2',    # Approximant name; must be compatible with lal convenions
            eta      = None,           # symmetric mass ratio
            chi1     = None,           # spin1 iterable (Dimensionless)

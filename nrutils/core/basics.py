@@ -70,7 +70,7 @@ def intrp_wfarr(wfarr,delta=None,domain=None):
         d = wfarr[0,0]-wfarr[1,0]
         if abs(delta-d)/(delta+d) < 1e-6:
             proceed = False
-            warning('The waveform already has the desired time step, and so will not be interpolated.')
+            # warning('The waveform already has the desired time step, and so will not be interpolated.')
 
     # If there is need to interpolate, then interpolate.
     if proceed:
@@ -768,3 +768,59 @@ def lalphenom(eta,M,x1,x2,theta,phi,D,df_phys,fmin,fmax,approx=None,interface_ve
         error('for some reason, df values are not as expected')
     #
     return wfarr
+
+#00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%#
+''' Convert dictionary of wavform data into gwylm '''
+#00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%#
+def dict2gwylm( multipole_dictionary ):
+    '''
+    This function is to help create gwylm objects without use of the nrutils' simulation catalog.
+    The desired input is to be a dictionary of spin -2 weighted spherical multipole moments:
+
+    multipole_dictionary = {  'psi4' :
+                                { (2,2):waveform_ndarray, (2,-2):another_waveform_ndarray, ... },
+                              'news' :
+                                { (2,2):waveform_ndarray, (2,-2):another_waveform_ndarray, ... },
+                              'strain' :
+                                { (2,2):waveform_ndarray, (2,-2):another_waveform_ndarray, ... },
+                            }
+
+    The at least one of the high-level keys (e.g. 'psi4') must exist.
+
+    THIS FUNCTION IS UNDER DEVELOPMENT AND MAY NOT HAVE ALL OF THE FEATURES YOU WANT. :-)
+    '''
+
+    #
+    from nrutils import scentry,gwylm,gwf
+    from numpy import inf,zeros
+
+    #
+    e = scentry( None, None )
+    chi1,chi2 = zeros(3),zeros(3)
+    e.S1,e.S2 = zeros(3),zeros(3)
+
+    #
+    e.xf,e.mf = 0,0
+    e.default_extraction_par = inf
+    e.default_level = None
+    e.config = None
+    e.setname = 'None'
+    e.label = 'None'
+
+    # Use shorthand
+    md = multipole_dictionary
+    # Validate input
+    if isinstance(md,dict):
+        #
+        None
+    else:
+        #
+        error('input must be dicionary')
+
+    #
+    if 'strain' in md:
+
+        #
+        strain_dict = md['strain']
+
+        #

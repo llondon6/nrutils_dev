@@ -65,7 +65,7 @@ def physhf( harr, M, D ):
         y = harr.copy()
         phys_wfarr = physh( y.wfarr, M, D )
         from nrutils import gwf
-        return gwf( phys_wfarr )
+        return gwf( phys_wfarr ).meet(harr)
     elif isinstance(harr,ndarray):
         # Here we will asusme that input is numpy ndarray
         if 3 == harr.shape[-1]:
@@ -85,6 +85,8 @@ def physhf( harr, M, D ):
 # --------------------------------------------------------------- #
 def physh( harr, M, D ):
     '''Given TIME DOMAIN strain (waveform array OR number) in code units, convert to Physical units'''
+    # Import useful things
+    from numpy import ndarray
     # Calculate unit conversion factor for strain amplitude
     K = mass_mpc(M)/D
     # If conversion of a number is desired
@@ -94,7 +96,13 @@ def physh( harr, M, D ):
     elif isinstance(harr,list):
         # Convert strain data to physical units and return
         return [ K*hj for hj in harr ]
-    else:
+    elif harr.__class__.__name__=='gwf':
+        # Convert gwf to physical units
+        y = harr.copy()
+        phys_wfarr = physh( y.wfarr, M, D )
+        from nrutils import gwf
+        return gwf( phys_wfarr ).meet(harr)
+    elif isinstance(harr,ndarray):
         # Here we will asusme that input is numpy ndarray
         if 3 == harr.shape[-1]:
             harr = harr.copy()
