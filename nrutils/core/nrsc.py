@@ -539,9 +539,14 @@ def scsearch( catalog = None,           # Manually input list of scentry objects
     if catalog is None:
         # Get a list of all catalog database files. NOTE that .cat files are either placed in database_path directly, or by scbuild()
         dblist = glob.glob( gconfig.database_path+'*.'+gconfig.database_ext )
+        # Let the people know which catalog files have been found
+        if verbose==2:
+            alert('Searching in "%s" for catalog files.'%yellow(gconfig.database_path))
         # Load the catalog file(s)
         catalog = []
+        alert('Loading catalog information from:')
         for db in dblist:
+            if verbose==2: print '>> %s' % cyan(db)
             with open( db , 'rb') as dbf:
                 catalog = catalog + pickle.load( dbf )
 
@@ -2648,7 +2653,7 @@ class gwylm:
         # Use its time series to define a mask
         a = peak_time + T0
         b = peak_time + T1
-        n = abs(float(b-a))/ref_gwf.dt
+        n = 1+abs(float(b-a))/ref_gwf.dt
         t = linspace(a,b,n)
 
         #
