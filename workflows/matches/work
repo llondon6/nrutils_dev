@@ -7,10 +7,10 @@
 # -~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~ #
 
 # Physically correct and simpler scaling of amplitude
-source ~/.virtual_enviroments/phenomhm_add_beta/opt/lalsuite/etc/lalsuiterc
+# source ~/.virtual_enviroments/phenomhm_add_beta/opt/lalsuite/etc/lalsuiterc
 
-# # Original (not quite physical) scaling of amp
-# source ~/.ve/phenomhm/opt/lalsuite/etc/lalsuiterc
+# Original scaling of amp
+source ~/.ve/phenomhm/opt/lalsuite/etc/lalsuiterc
 
 # -~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~ #
 # Get the location of the current script

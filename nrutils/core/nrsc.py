@@ -64,6 +64,13 @@ class scconfig(smart_object):
         # In some cases, it is useful to have this function return this
         return this
 
+    # Get location of handler file based on handler name in config ini
+    def get_handler_location(this):
+        '''Get location of handler file based on handler name in config ini'''
+        handler_location = gconfig.handler_path + this.handler_name + '.py'
+        # alert('The handler location is %s'%yellow(handler_location),header=True)
+        return handler_location
+
     # Validate the config file against a minimal set of required fields.
     def validate(this):
 
@@ -79,7 +86,7 @@ class scconfig(smart_object):
                            'catalog_dir',               # local directory where all simulation folders are stored
                                                         # this directory allows catalog files to be portable
                            'data_file_name_format',     # formatting string for referencing l m and extraction parameter
-                           'handler_location',          # location of python script which contains validator and
+                           'handler_name',              # name of handler file WITHOUT extension in gconfig.handler_path
                                                         # learn_metadata functions
                            'is_extrapolated',           # users should set this to true if waveform is extrapolated
                                                         # to infinity
@@ -190,7 +197,7 @@ class scentry:
     def loadhandler(this):
         # Import the module
         from imp import load_source
-        handler_module = load_source( '', this.config.handler_location )
+        handler_module = load_source( '', this.config.get_handler_location() )
         # Validate the handler module: it has to have a few requried methods
         required_methods = [ 'learn_metadata', 'validate', 'extraction_map' ]
         for m in required_methods:
@@ -243,7 +250,7 @@ class scentry:
 
         for attr in required_attrs:
             if attr not in standard_metadata.__dict__:
-                msg = '(!!) Error -- Output of %s does NOT contain required field %s' % ( this.config.handler_location, attr )
+                msg = '(!!) Error -- Output of %s does NOT contain required field %s' % ( this.config.get_handler_location(), attr )
                 raise ValueError(msg)
 
         # Add useful fields: chi1 chi2 and eta
@@ -1286,6 +1293,8 @@ class gwf:
               title = None,
               ref_gwf = None,
               labels = None,
+              tlim = None,
+              flim = None,
               domain = None):
 
         # Handle which default domain to plot
@@ -1297,9 +1306,9 @@ class gwf:
 
         # Plot selected domain.
         if domain == 'time':
-            ax = this.plottd( show=show,fig=fig,title=title, ref_gwf=ref_gwf, labels=labels )
+            ax = this.plottd( show=show,fig=fig,title=title, ref_gwf=ref_gwf, labels=labels, tlim=tlim )
         elif domain == 'freq':
-            ax = this.plotfd( show=show,fig=fig,title=title, ref_gwf=ref_gwf, labels=labels )
+            ax = this.plotfd( show=show,fig=fig,title=title, ref_gwf=ref_gwf, labels=labels, flim=tlim )
 
         #
         from matplotlib.pyplot import gcf
@@ -1314,6 +1323,7 @@ class gwf:
                 title   =   None,
                 ref_gwf = None,
                 labels = None,
+                flim = None,
                 verbose =   False ):
 
         #
@@ -1442,6 +1452,7 @@ class gwf:
               fig = None,
               ref_gwf = None,
               labels = None,
+              tlim = None,
               title = None):
 
         #
@@ -1536,7 +1547,7 @@ class gwf:
         yl(r'$\mathrm{d}{\phi}/\mathrm{d}t$',fontsize=fs,color=txclr, family=font_family)
 
         # Full figure settings
-        ax[0].set_xlim(lim(this.t))
+        ax[0].set_xlim( lim(this.t) if tlim is None else tlim )
         if title is not None:
             ax[0].set_title( title, family=font_family )
 

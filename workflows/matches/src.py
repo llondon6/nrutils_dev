@@ -20,7 +20,7 @@ mpl.rcParams['font.family'] = 'serif'
 mpl.rcParams['font.size'] = 16
 mpl.rcParams['axes.labelsize'] = 26
 mpl.rcParams['axes.titlesize'] = 20
-mpl.rcParams['axes.formatter.useoffset'] = False
+mpl.rcParams['axes.formatter.useoffset'] = True # False
 # Plotting functions
 from matplotlib.pyplot import tight_layout, gcf, sca, plot, xlabel, ylabel, title, legend, xscale, yscale, xlim, ylim, subplot, figure, savefig, axvline, axhline, fill_between, xticks, yticks, gca, close
 
@@ -343,7 +343,12 @@ for simkey in config.simulation_keywords:
     # -~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~ #
     # Plot results and output data
     # -~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~ #
-
+    # Setup plotting backend
+    mpl.rcParams['lines.linewidth'] = 0.8
+    mpl.rcParams['font.family'] = 'serif'
+    mpl.rcParams['font.size'] = 16
+    mpl.rcParams['axes.labelsize'] = 26
+    mpl.rcParams['axes.titlesize'] = 20
     #
     alert('Ploting results and outputting data',heading=True)
     filepath = data_dir + 'match_info.pickle'
@@ -351,11 +356,10 @@ for simkey in config.simulation_keywords:
         pickle.dump( match_info , datafile, pickle.HIGHEST_PROTOCOL )
     for k in match_info:
         savetxt( data_dir+k+'.asc', match_info[k] )
-    a = match_info
     figure( figsize = 6*array([1.5,1]) )
     alpha = 0.05
     sth = linspace(0,pi)
-    sm = lambda x: spline( a['theta'], a[x], k=2 )(sth)
+    sm = lambda x: spline( match_info['theta'], match_info[x], k=2 )(sth)
     fill_between( sth, sm('min'), sm('max'), color='k', alpha=alpha, edgecolor='none' )
     fill_between( sth, sm('quadrupole_min'), sm('quadrupole_max'), color='k', alpha=alpha, edgecolor='none' )
     plot( sth, sm('weighted_avg'),'-k',label='PhenomHM' )

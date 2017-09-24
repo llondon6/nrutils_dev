@@ -26,5 +26,5 @@ is_extrapolated = 0
 # Toggle for whether waveform is scaled by extration radius or not
 is_rscaled = 0
 
-#
-handler_location = /Users/book/JOKI/Libs/KOALA/nrutils_dev/nrutils/handlers/maya.py
+# Name of handler file within install directory: .../nrutils/handlers/[handler_name].py
+handler_name = maya

@@ -25,5 +25,5 @@ is_extrapolated = 1
 # Toggle for whether waveform is scaled by extration radius or not
 is_rscaled = 1
 
-#
-handler_location = /Users/book/JOKI/Libs/KOALA/nrutils_dev/nrutils/handlers/sxs.py
+# Name of handler file within install directory: .../nrutils/handlers/[handler_name].py
+handler_name = sxs

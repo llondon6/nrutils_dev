@@ -20,6 +20,8 @@ gconfig = smart_object()
 gconfig.config_path = __installpath__ + '/config/'
 # Path where catalog database files are to be stored
 gconfig.database_path = __installpath__ + '/database/'
+# Path where handler scripts are stored
+gconfig.handler_path = __installpath__ + '/handlers/'
 # File extension associated with catalog database files
 gconfig.database_ext = 'db'
 # Name a shorhand for the setting to make the user feel like they own something
