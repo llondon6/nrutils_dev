@@ -83,7 +83,7 @@ def physhf( harr, M, D ):
 # --------------------------------------------------------------- #
 # Given TIME DOMAIN strain in code units, convert to Physical units
 # --------------------------------------------------------------- #
-def physh( harr, M, D ):
+def physh( harr, M, D, verbose=False ):
     '''Given TIME DOMAIN strain (waveform array OR number) in code units, convert to Physical units'''
     # Import useful things
     from numpy import ndarray
@@ -101,7 +101,7 @@ def physh( harr, M, D ):
         y = harr.copy()
         phys_wfarr = physh( y.wfarr, M, D )
         from nrutils import gwf
-        return gwf( phys_wfarr ).meet(harr)
+        return gwf( phys_wfarr ).meet(harr,verbose=verbose)
     elif isinstance(harr,ndarray):
         # Here we will asusme that input is numpy ndarray
         if 3 == harr.shape[-1]:

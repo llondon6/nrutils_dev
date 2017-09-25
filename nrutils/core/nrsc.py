@@ -1191,18 +1191,13 @@ class gwf:
             msg = '1st input must be of type ' + bold(type(this).__name__)+'.'
             error( msg, fname=inspect.stack()[0][3] )
 
+        # Define transferable attributes
+        traits = ['ref_scentry', 'xf', 'label', 'm1', 'm2', 'extraction_parameter', 'preinspiral', 'kind', 'mf', 'postringdown', 'm', 'l']
+
         # Copy attrributed from friend. If init, then do not check if attribute already exists in this.
-        for attr in friend.__dict__:
-
-            proceed = (attr in this.__dict__)
-            proceed = proceed and type(friend.__dict__[attr]).__name__ in ('int','int64','float','scentry', 'string')
-
-            # msg = '%s is %s and %s' % (attr,type(friend.__dict__[attr]).__name__,magenta('proceed=%r'%proceed))
-            # alert(msg)
-
-            if proceed or init:
-                if verbose: print '\t that.%s --> this.%s (%s)' % (attr,attr,type(friend.__dict__[attr]).__name__)
-                setattr( this, attr, friend.__dict__[attr] )
+        for attr in traits:
+            if verbose: print '\t that.%s --> this.%s (%s)' % (attr,attr,type(friend.__dict__[attr]).__name__)
+            setattr( this, attr, friend.__dict__[attr] )
 
         #
         return this
@@ -1461,7 +1456,7 @@ class gwf:
 
         #
         from matplotlib.pyplot import plot,subplot,figure,tick_params,subplots_adjust
-        from matplotlib.pyplot import grid,setp,tight_layout,margins,xlabel,legend
+        from matplotlib.pyplot import grid,setp,tight_layout,margins,xlabel,legend,ylim
         from matplotlib.pyplot import show as shw
         from matplotlib.pyplot import ylabel as yl
         from matplotlib.pyplot import title as ttl
@@ -1521,7 +1516,12 @@ class gwf:
             subplots_adjust(hspace = .001)
 
         #
-        pylim( this.t, this.amp, domain=xlim, symmetric=True )
+        #pylim( this.t if tlim is None else this.t[this.t>min(tlim) & this.t<max(tlim)] , this.amp, domain=xlim, symmetric=True )
+        if tlim is not None:
+            mask = (this.t>min(tlim)) & (this.t<max(tlim))
+            yylm = lim( this.amp[mask], dilate=0.1 )
+            ylim( [ -yylm[-1],yylm[-1] ] )
+
         kind = this.kind
         yl(kind,fontsize=fs,color=txclr, family=font_family )
 
@@ -1533,7 +1533,10 @@ class gwf:
         plot( this.t, this.phi, linewidth=lwid, color=1-clr[0] )
         if ref_gwf:
             plot( that.t, that.phi, linewidth=that_lwid, color=1-clr[0], alpha=that_alpha )
-        pylim( this.t, this.phi, domain=xlim )
+        # pylim( this.t, this.phi, domain=xlim )
+        if tlim is not None:
+            mask = (this.t>min(tlim)) & (this.t<max(tlim))
+            ylim( lim( this.phi[mask], dilate=0.1 ) )
         yl( r'$\phi = \mathrm{arg}(%s)$' % kind.replace('$','') ,fontsize=fs,color=txclr, family=font_family)
 
         # Time domain frequency
@@ -1543,8 +1546,12 @@ class gwf:
         plot( this.t, this.dphi, linewidth=lwid, color=sqrt(clr[0]) )
         if ref_gwf:
             plot( that.t, that.dphi, linewidth=that_lwid, color=sqrt(clr[0]), alpha=that_alpha )
-        pylim( this.t, this.dphi, domain=xlim )
+        # pylim( this.t, this.dphi, domain=xlim )
         yl(r'$\mathrm{d}{\phi}/\mathrm{d}t$',fontsize=fs,color=txclr, family=font_family)
+
+        if tlim is not None:
+            mask = (this.t>min(tlim)) & (this.t<max(tlim))
+            ylim( lim( this.dphi[mask], dilate=0.1 ) )
 
         # Full figure settings
         ax[0].set_xlim( lim(this.t) if tlim is None else tlim )
@@ -2204,7 +2211,7 @@ class gwylm:
                 old_data_length = len(wfarr[:,0])
                 default_pad = 2 + mod(len(wfarr[:,0]),2) + 1
                 new_data_length = old_data_length + default_pad
-                alert('Imposing a default padding of %i to the data.'%default_pad)
+                if this.verbose: alert('Imposing a default padding of %i to the data.'%default_pad)
                 wfarr = pad_wfarr(wfarr,new_data_length,verbose=this.verbose)
 
             # Pad the waveform array
