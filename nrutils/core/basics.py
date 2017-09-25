@@ -791,6 +791,9 @@ def dict2gwylm( multipole_dictionary ):
     '''
 
     #
+    error('This function is in development.')
+
+    #
     from nrutils import scentry,gwylm,gwf
     from numpy import inf,zeros
 
@@ -824,3 +827,8 @@ def dict2gwylm( multipole_dictionary ):
         strain_dict = md['strain']
 
         #
+
+#Determine if input is a memeber of the gwf class
+def isgwf( obj ):
+    '''Determine if input is a memeber of the gwf class'''
+    return obj.__class__.__name__=='gwf'
