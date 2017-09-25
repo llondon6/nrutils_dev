@@ -424,10 +424,21 @@ def scbuild(keyword=None,save=True):
         logfid = open(logfstr, 'w')
         # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% #
 
+        # If catalog_dir is list of dirs, then select the first one that exists
+        catalog_dir = config.catalog_dir
+        if isinstance( config.catalog_dir, list ):
+            warning('Multiple catalog directories found. We will scan through the related list, and then store first the catalog_dir that the OS can find.')
+            for d in config.catalog_dir:
+                from os.path import isdir
+                if isdir(d):
+                    catalog_dir = d
+                    warning('Selecting "%s"'%cyan(d))
+                    break
+
         # Search recurssively within the config's catalog_dir for files matching the config's metadata_id
-        msg = 'Searching for %s in %s.' % ( cyan(config.metadata_id), cyan(config.catalog_dir) ) + yellow(' This may take a long time if the folder being searched is mounted from a remote drive.')
+        msg = 'Searching for %s in %s.' % ( cyan(config.metadata_id), cyan(catalog_dir) ) + yellow(' This may take a long time if the folder being searched is mounted from a remote drive.')
         alert(msg,thisfun)
-        mdfile_list = rfind(config.catalog_dir,config.metadata_id,verbose=True)
+        mdfile_list = rfind(catalog_dir,config.metadata_id,verbose=True)
         alert('done.',thisfun)
 
         # (try to) Create a catalog entry for each valid metadata file
@@ -462,7 +473,7 @@ def scbuild(keyword=None,save=True):
         #
         wave_train = ''#'~~~~<vvvvvvvvvvvvvWw>~~~~'
         hline = wave_train*3
-        msg = '\n\n#%s#\n%s with \"%s\". The related log file is at \"%s\".\n#%s#'%(hline,hlblack('Done'),green(config.catalog_dir),green(logfstr),hline)
+        msg = '\n\n#%s#\n%s with \"%s\". The related log file is at \"%s\".\n#%s#'%(hline,hlblack('Done'),green(catalog_dir),green(logfstr),hline)
         alert(msg,'scbuild')
 
 
@@ -1289,6 +1300,7 @@ class gwf:
               ref_gwf = None,
               labels = None,
               tlim = None,
+              sizescale=1.1,
               flim = None,
               domain = None):
 
@@ -1301,9 +1313,9 @@ class gwf:
 
         # Plot selected domain.
         if domain == 'time':
-            ax = this.plottd( show=show,fig=fig,title=title, ref_gwf=ref_gwf, labels=labels, tlim=tlim )
+            ax = this.plottd( show=show,fig=fig,title=title, ref_gwf=ref_gwf, labels=labels, tlim=tlim, sizescale=sizescale )
         elif domain == 'freq':
-            ax = this.plotfd( show=show,fig=fig,title=title, ref_gwf=ref_gwf, labels=labels, flim=tlim )
+            ax = this.plotfd( show=show,fig=fig,title=title, ref_gwf=ref_gwf, labels=labels, flim=tlim, sizescale=sizescale )
 
         #
         from matplotlib.pyplot import gcf
@@ -1319,6 +1331,7 @@ class gwf:
                 ref_gwf = None,
                 labels = None,
                 flim = None,
+                sizescale=1.1,
                 verbose =   False ):
 
         #
@@ -1335,7 +1348,7 @@ class gwf:
 
         #
         if fig is None:
-            fig = figure(figsize = 1.1*array([8,7.2]))
+            fig = figure(figsize = sizescale*array([8,7.2]))
             fig.set_facecolor("white")
 
         #
@@ -1448,6 +1461,7 @@ class gwf:
               ref_gwf = None,
               labels = None,
               tlim = None,
+              sizescale=1.1,
               title = None):
 
         #
@@ -1464,7 +1478,7 @@ class gwf:
 
         #
         if fig is None:
-            fig = figure(figsize = 1.1*array([8,7.2]))
+            fig = figure(figsize = sizescale*array([8,7.2]))
             fig.set_facecolor("white")
 
         #
@@ -1518,9 +1532,8 @@ class gwf:
         #
         #pylim( this.t if tlim is None else this.t[this.t>min(tlim) & this.t<max(tlim)] , this.amp, domain=xlim, symmetric=True )
         if tlim is not None:
-            mask = (this.t>min(tlim)) & (this.t<max(tlim))
-            yylm = lim( this.amp[mask], dilate=0.1 )
-            ylim( [ -yylm[-1],yylm[-1] ] )
+            mask = (this.t>min(tlim)) & (this.t<max(tlim)) & (this.amp>0)
+            ylim( array([-1,1])*this.amp[mask].max()*1.15 )
 
         kind = this.kind
         yl(kind,fontsize=fs,color=txclr, family=font_family )
@@ -1684,7 +1697,7 @@ class gwf:
                verbose=False ):
 
         #
-        if not isinstance(that,gwf):
+        if that.__class__.__name__!='gwf':
             msg = 'first input must be gwf -- the gwf object to alignt the current object to'
             error(msg,'gwf.align')
 
@@ -1692,7 +1705,7 @@ class gwf:
         if method is None:
             msg = 'No method chosen. We will proceed by aligning the waveform\'s initial phase.'
             warning(msg,'gwf.align')
-            memthod = ['initial-phase']
+            method = ['initial-phase']
 
         # Make sure method is list or tuple
         if not isinstance(method,(list,tuple)):
