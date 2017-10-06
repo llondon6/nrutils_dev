@@ -24,7 +24,7 @@ default_par_list = 5,5
 is_extrapolated = 0
 
 # Toggle for whether waveform is scaled by extration radius or not
-is_rscaled = 0
+is_rscaled = 1
 
 # Name of handler file within install directory: .../nrutils/handlers/[handler_name].py
 handler_name = bam
