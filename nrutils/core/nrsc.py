@@ -562,7 +562,7 @@ def scsearch( catalog = None,           # Manually input list of scentry objects
             alert('Searching in "%s" for catalog files.'%yellow(gconfig.database_path))
         # Load the catalog file(s)
         catalog = []
-        alert('Loading catalog information from:')
+        if verbose==2: alert('Loading catalog information from:')
         for db in dblist:
             if verbose==2: print '>> %s' % cyan(db)
             with open( db , 'rb') as dbf:
@@ -2218,7 +2218,8 @@ class gwylm:
             wfarr = straighten_wfarr(wfarr,this.verbose)
             # Make sure that it's equispaced
             if (std(diff(wfarr[:,0]))>1e-6): dt = mean(diff(wfarr[:,0])) if dt is None else dt
-            if (dt is not None) or (std(diff(wfarr[:,0]))>1e-6): wfarr = intrp_wfarr( wfarr, dt )
+            if (dt is not None) or (std(diff(wfarr[:,0]))>1e-6):
+                wfarr = intrp_wfarr( wfarr, dt, verbose = not True )
             # NOTE: If no specific padding is requested, we will still pad the data by some small amount to enforce that the start and end values are identical prior to propper cleaning. This results in noticeable advatances in data quality when computing matches with short waveforms.
             if not isinstance(pad,(int,float)):
                 old_data_length = len(wfarr[:,0])
@@ -2314,7 +2315,7 @@ class gwylm:
             raise NameError(msg)
 
     # Plotting function for class: plot plus cross amp phi of waveforms USING the plot function of gwf()
-    def plot(this,show=False,fig=None,kind=None,verbose=False,domain=None):
+    def plot(this,show=False,fig=None,kind=None,verbose=False,domain=None,tlim=None,flim=None):
         #
         from matplotlib.pyplot import show as shw
         from matplotlib.pyplot import figure
@@ -2353,7 +2354,7 @@ class gwylm:
                 fig = figure( figsize = 1.1*array([8,7.2]) )
                 fig.set_facecolor("white")
 
-                ax,_ = y.plot(fig=fig,title='%s: %s, (l,m)=(%i,%i)' % (this.setname,this.label,y.l,y.m),domain=domain)
+                ax,_ = y.plot(fig=fig,title='%s: %s, (l,m)=(%i,%i)' % (this.setname,this.label,y.l,y.m),domain=domain,tlim=tlim,flim=flim)
                 # If there is start characterization, plot some of it
                 if 'starting' in this.__dict__:
                     clr = 0.4*array([1./0.6,1./0.6,1])
@@ -2671,6 +2672,9 @@ class gwylm:
             T1_min = T0+60
             T1 = max(T1,T1_min)
             # NOTE that there is a chance that T1 chould be "too close" to T0
+        elif T1 == 'end':
+            # Deliberately use the end of the waveform
+            T1 = ref_gwf.t[-1] - peak_time
 
         # Validate T1 Value
         if T1<T0:

@@ -36,7 +36,7 @@ class match:
     #
     def calc_template_phi_optimized_match( this,
                                            template_wfarr_orbphi_fun, # takes in template orbital phase, outputs waveform array
-                                           N_template_phi = 91,# number of orbital phase values to use for exploration
+                                           N_template_phi = 61,# number of orbital phase values to use for exploration
                                            plot = False,
                                            signal_polarization = None,
                                            method = None,
@@ -94,7 +94,7 @@ class match:
 
         # Map template orbital phase values to match
         phi_template_range = linspace(0,2*pi,N_template_phi)
-        match_list = array( map( match_helper, phi_template_range ) )
+        match_list = abs( array( map( match_helper, phi_template_range ) ) )
 
         # Interpolate match over phi_template to estimate maximum
         # intrp_max lives in the "positive" repository
@@ -443,8 +443,11 @@ class match:
         else:
             ans = sum( G )
 
-        #
-        return ans
+        # Optimize over phase
+        match = abs(ans)
+
+        # Return the answer
+        return match
 
 
     # Plot template and signal against psd

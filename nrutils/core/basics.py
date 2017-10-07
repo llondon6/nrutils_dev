@@ -50,7 +50,7 @@ def l_test(string,l_max):
 
 
 # Interpolate waveform array to a given spacing in its first column
-def intrp_wfarr(wfarr,delta=None,domain=None):
+def intrp_wfarr(wfarr,delta=None,domain=None,verbose = False):
 
     #
     from numpy import linspace,array,diff,zeros,arange
@@ -67,13 +67,17 @@ def intrp_wfarr(wfarr,delta=None,domain=None):
     # Only interpolate if current delta is not input delta
     proceed = True
     if delta is not None:
-        d = wfarr[0,0]-wfarr[1,0]
+        d = wfarr[1,0]-wfarr[0,0]
+        if verbose: alert('The original dt is %f and the requested on is %f.'%(d,delta))
         if abs(delta-d)/(delta+d) < 1e-6:
             proceed = False
             # warning('The waveform already has the desired time step, and so will not be interpolated.')
 
     # If there is need to interpolate, then interpolate.
     if proceed:
+
+        #
+        if verbose: alert('Proceeding to interpolate to dt = %f.'%delta)
 
         # Encapsulate the input domain for ease of reference
         input_domain = wfarr[:,0]
@@ -90,12 +94,15 @@ def intrp_wfarr(wfarr,delta=None,domain=None):
 
         # Store the new domain
         _wfarr[:,0] = intrp_domain
+        if verbose: alert('The new dt is %f'%diff(intrp_domain)[0])
 
         # Interpolate the remaining columns
         for k in range(1,wfarr.shape[1]):
             _wfarr[:,k] = spline( input_domain, wfarr[:,k] )( intrp_domain )
 
     else:
+
+        alert('The waveform array will %s be interpolated.'%(bold(red('NOT'))))
 
         # Otherwise, return the input array
         _wfarr = wfarr
