@@ -1,1 +1,14 @@
 Folder to hold configuration files for each institute.
+
+
+is_extrapolated: 1 if the waveform data is extrapolated to infinite radius,
+0 otherwise
+
+r_scaled: 1 if the waveform data is scaled by extraction radius, 0
+otherwise. In all cases where is_extrapolated!=0, r_scaled should be 1.
+
+If the data has already been extrapolated then there is not extraction radius information.
+If the data has NOT been extrapolated and we have a finite set of modes
+corresponding to different extraction radii then the data is NOT scaled by the
+extraction radius (is_rscaled = 0) and nrutils should know that it has to scale
+the mode data by the corresponding extraction radius.

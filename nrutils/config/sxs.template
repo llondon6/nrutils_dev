@@ -20,9 +20,11 @@ data_file_name_format = Extrapolated_N{0:d}/rMPsi4_Y_l{1:d}_m{2:d}.asc
 default_par_list = 2,4
 
 #
+# is_extrapolated: 1 if the waveform data is extrapolated to infinite radius, 0 otherwise
 is_extrapolated = 1
 
 # Toggle for whether waveform is scaled by extration radius or not
+# r_scaled: 1 if the waveform data is scaled by extraction radius, 0 otherwise. In all cases where is_extrapolated!=0, r_scaled should be 1.
 is_rscaled = 1
 
 # Name of handler file within install directory: .../nrutils/handlers/[handler_name].py

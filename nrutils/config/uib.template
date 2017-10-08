@@ -21,10 +21,12 @@ data_file_name_format = /Psi4ModeDecomp/psi3col.r{0:d}.l{3:d}.l{1:d}.m{2:d}.gz
 default_par_list = 5,5
 
 #
-is_extrapolated = 1
+# is_extrapolated: 1 if the waveform data is extrapolated to infinite radius, 0 otherwise
+is_extrapolated = 0
 
 # Toggle for whether waveform is scaled by extration radius or not
-is_rscaled = 1
+# r_scaled: 1 if the waveform data is scaled by extraction radius, 0 otherwise. In all cases where is_extrapolated!=0, r_scaled should be 1.
+is_rscaled = 0
 
 # Name of handler file within install directory: .../nrutils/handlers/[handler_name].py
 handler_name = bam
