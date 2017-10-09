@@ -4,7 +4,41 @@ from positive import *
 #00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%#
 ''' Methods/Class for modeled PSDs '''
 #00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%#
-def iligo(freq,version=1):
+
+# Einstein Telescope
+def etb_psd(freq):
+    # Analytic formula from arxiv:1005.0304, eq. 2.2 and 2.3
+
+    #
+    from numpy import inf
+
+    # (eq. 2.3) Fitting Constants
+    a1 = 2.39*(10**(-27));   b1 = -15.64
+    a2 = 0.349;             b2 = -2.145
+    a3 = 1.76;              b3 = -0.12
+    a4 = 0.409;             b4 = 1.10
+    # -------------------------------- #
+    f0 = 100          # Hz
+    S0 = 10.0**(-50)  # Hz**-1
+    x = freq / f0     # unitless
+
+    # (eq. 2.2) The Analytic Fit
+    Sh_f = S0 * \
+                ( a1*pow(x,b1) + \
+                  a2*pow(x,b2) + \
+                  a3*pow(x,b3) + \
+                  a4*pow(x,b4) )**2
+
+    # Impose Low Frequency Cut-Off of 1 Hz %
+    mask = freq <= 1
+    Sh_f[mask] = inf
+
+    #
+    ans = Sh_f
+    return ans
+
+# Initial LIGO
+def iligo_psd(freq,version=1):
     '''
     Modeled iLIGO noise curves from arxiv:0901.4936 (version=2) and arxiv:0901.1628 (version=1)
     '''

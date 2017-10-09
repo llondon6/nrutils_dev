@@ -33,6 +33,9 @@ class scconfig(smart_object):
     def reconfig(this):
 
         #
+        from os.path import expanduser
+
+        #
         if this.config_file_location is None:
             msg = '(!!) scconfig objects cannot be initialted/reconfigured without a defined "config_file_location" location property (i.e. string where the related config file lives); you may be recieving this message if youve created an instance outside of the core routines'
             raise ValueError(msg)
@@ -43,7 +46,7 @@ class scconfig(smart_object):
             # Try to refresh the config location using the user's current settings (i.e. gconfig) (see __init__.py in nrutils/core)
             config_path = gconfig.config_path
             stale_config_name = this.config_file_location.split('/')[-1]
-            fresh_config_file_location = config_path + '/' + stale_config_name
+            fresh_config_file_location = expanduser( config_path + '/' + stale_config_name )
             # If the new config path exists, then store it and use it to reconfigure the current object
             if os.path.exists( fresh_config_file_location ):
                 this.config_file_location = fresh_config_file_location
@@ -121,8 +124,9 @@ class scconfig(smart_object):
         # If catalog_dir is list of dirs, then select the first one that exists
         if isinstance( this.catalog_dir, list ):
             warning('Multiple catalog directories found. We will scan through the related list, and then store first the catalog_dir that the OS can find.')
+            from os.path import isdir,expanduser
             for d in this.catalog_dir:
-                from os.path import isdir
+                d = expanduser(d)
                 if isdir(d):
                     this.catalog_dir = d
                     warning('Selecting "%s"'%cyan(d))
@@ -1176,18 +1180,6 @@ class gwf:
             this.fd_dphi    = intrp_diff( this.f, this.fd_phi )             # phase rate: dphi/df
 
             this.fd_k_amp_max = argmax( this.fd_amp )
-
-            # # get rid of "junk" negative frequencies
-            # y = this.fd_y.copy()
-            # if this.m is not None:
-            #     if this.m > 0:
-            #         mask = this.f < 0
-            #     elif this.m < 0:
-            #         mask = this.f > 0
-            #     y[mask] *= 0
-            # c = ( y + y.conj()[::-1] ) / 2
-            # p = ( y - y.conj()[::-1] ) / 2j
-            # this.fd_wfarr = vstack( [this.f,p,c] ).T
 
             this.fd_wfarr = vstack( [this.f,this.fd_plus,this.fd_cross] ).T
 
