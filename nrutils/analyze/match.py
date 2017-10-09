@@ -451,7 +451,7 @@ class match:
 
 
     # Plot template and signal against psd
-    def plot(this,fig=None):
+    def plot(this,fig=None,legend_loc=None,show_signal=True):
 
         # Import useful things
         from numpy import array,sqrt,log,sign
@@ -477,7 +477,7 @@ class match:
             return log(abs(x))*sign(x)
 
         # Plot
-        plot( this.f, 2*sqrt(abs(this.f))*abs(this.signal['response']), label=r'Signal (Response), $\rho_{\mathrm{opt}} = %1.2f$'%this.signal['optimal_snr'] )
+        if show_signal: plot( this.f, 2*sqrt(abs(this.f))*abs(this.signal['response']), label=r'Signal (Response), $\rho_{\mathrm{opt}} = %1.2f$'%this.signal['optimal_snr'] )
         #
         plot( this.f, 2*sqrt(abs(this.f))*abs(this.template['response']), label=r'Template (Response), $\rho_{\mathrm{opt}} = %1.2f$'%this.template['optimal_snr'] )
         #
@@ -485,7 +485,7 @@ class match:
             psd_label = this.psd_thing.__name__
         else:
             psd_label = str(this.psd_thing)
-        plot( this.f, sqrt(this.psd), '-k', label=r'$\sqrt{S_n(f)}$ for %s'%psd_label )
+        plot( this.f, sqrt(this.psd), '-k', label=r'$\sqrt{S_n(f)}$ for %s'%psd_label, alpha=1.0 )
 
         #
         yscale('log')
@@ -499,7 +499,10 @@ class match:
         xscale('log')
         xlabel( r'$f$ (Hz)' )
         ylabel( r'$\sqrt{S_n(f)}$  and  $2|\tilde{h}(f)|\sqrt{f}$' )
-        legend( frameon=False, loc=1 )
+        legend( frameon=False, loc = 'best' if legend_loc is None else legend_loc )
+
+        #
+        return fig
 
 
     # Precalculate items related to the signals
