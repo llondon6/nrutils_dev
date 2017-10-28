@@ -387,6 +387,61 @@ class scentry:
         return allclose( param_array(this), param_array(that), atol=atol )
 
 
+# Concert a simulation directory to a scentry object
+# NOTE that this algorithm is to be compared to scbuild()
+def simdir2scentry( catalog_dir ):
+
+    # Load useful packages
+    from commands import getstatusoutput as bash
+    from os.path import realpath, abspath, join, splitext, basename
+    from os import pardir,system,popen
+    import pickle
+
+    # Load all known configs
+    cpath_list = glob.glob( gconfig.config_path+'*.ini' )
+    # Warn/Error if needed
+    if not cpath_list:
+        msg = 'Cannot find configuration files (*.ini) in %s' % gconfig.config_path
+        error(msg,thisfun)
+
+    # Create config objects from list of config files
+    configs = [ scconfig( config_path ) for config_path in cpath_list ]
+
+    # For each config, look for the related metadata file; stop after the first metadata file is found
+    for config in configs:
+
+        # NOTE: At this point the algorithm differs from scbuild
+
+        # Set the catalog dir for this object to be the input, not what's in the config ini
+        config.catalog_dir = catalog_dir
+
+        # Search recurssively within the config's catalog_dir for files matching the config's metadata_id
+        msg = 'Searching for %s in %s.' % ( cyan(config.metadata_id), cyan(catalog_dir) ) + yellow(' This may take a long time if the folder being searched is mounted from a remote drive.')
+        alert(msg,header=True)
+        mdfile_list = rfind(catalog_dir,config.metadata_id,verbose=True)
+        alert('done.')
+
+        # (try to) Create a catalog entry for each valid metadata file
+        catalog = []
+        h = -1
+        for mdfile in mdfile_list:
+
+            # Create tempoary scentry object
+            entry = scentry(config,mdfile,verbose=True)
+
+            # If the obj is valid, add it to the catalog list, else ignore
+            if entry.isvalid:
+                catalog.append( entry )
+            else:
+                print entry.log
+                del entry
+
+        # Break the for-loop if a valid scentry has been built
+        if len( catalog ) > 0 : break
+
+    #
+    return catalog
+
 
 # Create the catalog database, and store it as a pickled file.
 def scbuild(keyword=None,save=True):
@@ -1294,6 +1349,7 @@ class gwf:
               tlim = None,
               sizescale=1.1,
               flim = None,
+              ax=None,
               domain = None):
 
         # Handle which default domain to plot
@@ -1305,9 +1361,9 @@ class gwf:
 
         # Plot selected domain.
         if domain == 'time':
-            ax = this.plottd( show=show,fig=fig,title=title, ref_gwf=ref_gwf, labels=labels, tlim=tlim, sizescale=sizescale )
+            ax = this.plottd( show=show,fig=fig,title=title, ref_gwf=ref_gwf, labels=labels, tlim=tlim, sizescale=sizescale, ax=ax )
         elif domain == 'freq':
-            ax = this.plotfd( show=show,fig=fig,title=title, ref_gwf=ref_gwf, labels=labels, flim=tlim, sizescale=sizescale )
+            ax = this.plotfd( show=show,fig=fig,title=title, ref_gwf=ref_gwf, labels=labels, flim=tlim, sizescale=sizescale, ax=ax )
 
         #
         from matplotlib.pyplot import gcf
@@ -1324,11 +1380,12 @@ class gwf:
                 labels = None,
                 flim = None,
                 sizescale=1.1,
+                ax=None,
                 verbose =   False ):
 
         #
         from matplotlib.pyplot import plot,subplot,figure,tick_params,subplots_adjust
-        from matplotlib.pyplot import grid,setp,tight_layout,margins,xlabel,legend
+        from matplotlib.pyplot import grid,setp,tight_layout,margins,xlabel,legend,sca
         from matplotlib.pyplot import show as shw
         from matplotlib.pyplot import ylabel as yl
         from matplotlib.pyplot import title as ttl
@@ -1344,6 +1401,13 @@ class gwf:
             fig.set_facecolor("white")
 
         #
+        if ax is None:
+            ax = []
+            ax.append( subplot(3,1,1) )
+            ax.append( subplot(3,1,2, sharex=ax[0]) )
+            ax.append( subplot(3,1,3, sharex=ax[0]) )
+
+        #
         kind = this.kind
 
         #
@@ -1356,7 +1420,7 @@ class gwf:
         gclr = '0.9'
 
         #
-        ax = []
+        # ax = []
         # xlim = lim(this.t) # [-400,this.t[-1]]
 
         # NOTE that m<0 cases are handled here via sign(m)
@@ -1377,11 +1441,11 @@ class gwf:
         # ------------------------------------------------------------------- #
         # Amplitude
         # ------------------------------------------------------------------- #
-        ax.append( subplot(3,1,1) );
+        sca( ax[0] )
         grid(color=gclr, linestyle='-')
-        setp(ax[-1].get_xticklabels(), visible=False)
-        ax[-1].set_xscale('log', nonposx='clip')
-        ax[-1].set_yscale('log', nonposy='clip')
+        setp(ax[0].get_xticklabels(), visible=False)
+        ax[0].set_xscale('log', nonposx='clip')
+        ax[0].set_yscale('log', nonposy='clip')
         #
         plot( sign(this.m if this.m is not None else 1)*this.f[pos_mask], this.fd_amp[pos_mask], color=clr[0], label=labels[0] )
         if ref_gwf:
@@ -1394,10 +1458,10 @@ class gwf:
         # ------------------------------------------------------------------- #
         # Total Phase
         # ------------------------------------------------------------------- #
-        ax.append( subplot(3,1,2, sharex=ax[0]) );
+        sca( ax[1] )
         grid(color=gclr, linestyle='-')
-        setp(ax[-1].get_xticklabels(), visible=False)
-        ax[-1].set_xscale('log', nonposx='clip')
+        setp(ax[1].get_xticklabels(), visible=False)
+        ax[1].set_xscale('log', nonposx='clip')
         #
         plot( sign(this.m if this.m is not None else 1)*this.f[pos_mask], this.fd_phi[pos_mask], color=1-clr[0] )
         if ref_gwf:
@@ -1409,9 +1473,9 @@ class gwf:
         # ------------------------------------------------------------------- #
         # Total Phase Rate
         # ------------------------------------------------------------------- #
-        ax.append( subplot(3,1,3, sharex=ax[0]) );
+        sca( ax[2] )
         grid(color=gclr, linestyle='-')
-        ax[-1].set_xscale('log', nonposx='clip')
+        ax[2].set_xscale('log', nonposx='clip')
         #
         plot( sign(this.m if this.m is not None else 1)*this.f[pos_mask], this.fd_dphi[pos_mask], color=sqrt(clr[0]) )
         if ref_gwf:
@@ -1454,6 +1518,7 @@ class gwf:
               labels = None,
               tlim = None,
               sizescale=1.1,
+              ax=None,
               title = None):
 
         #
@@ -1461,8 +1526,8 @@ class gwf:
         from numpy import array
 
         #
-        from matplotlib.pyplot import plot,subplot,figure,tick_params,subplots_adjust
-        from matplotlib.pyplot import grid,setp,tight_layout,margins,xlabel,legend,ylim
+        from matplotlib.pyplot import plot,subplot,figure,tick_params,subplots_adjust,sca
+        from matplotlib.pyplot import grid,setp,tight_layout,margins,xlabel,legend,ylim,xlim
         from matplotlib.pyplot import show as shw
         from matplotlib.pyplot import ylabel as yl
         from matplotlib.pyplot import title as ttl
@@ -1474,6 +1539,13 @@ class gwf:
             fig.set_facecolor("white")
 
         #
+        if ax is None:
+            ax = []
+            ax.append( subplot(3,1,1) )
+            ax.append( subplot(3,1,2, sharex=ax[0]) )
+            ax.append( subplot(3,1,3, sharex=ax[0]) )
+
+        #
         clr = rgb(3)
         grey = 0.9*ones(3)
         lwid = 1
@@ -1481,10 +1553,6 @@ class gwf:
         fs = 18
         font_family = 'serif'
         gclr = '0.9'
-
-        #
-        ax = []
-        xlim = lim(this.t) # [-400,this.t[-1]]
 
         #
         if ref_gwf:
@@ -1499,10 +1567,12 @@ class gwf:
         else:
             set_legend=True
 
+        #--~--~--~--~--~--~--~--~--~--~--~--~--~--~--~--#
         # Time domain plus and cross parts
-        ax.append( subplot(3,1,1) );
+        #--~--~--~--~--~--~--~--~--~--~--~--~--~--~--~--#
+        sca( ax[0] )
         grid(color=gclr, linestyle='-')
-        setp(ax[-1].get_xticklabels(), visible=False)
+        setp(ax[0].get_xticklabels(), visible=False)
         # actual plotting
         plot( this.t, this.plus,  linewidth=lwid, color=0.8*grey )
         plot( this.t, this.cross, linewidth=lwid, color=0.5*grey )
@@ -1530,10 +1600,12 @@ class gwf:
         kind = this.kind
         yl(kind,fontsize=fs,color=txclr, family=font_family )
 
+        #--~--~--~--~--~--~--~--~--~--~--~--~--~--~--~--#
         # Time domain phase
-        ax.append( subplot(3,1,2, sharex=ax[0]) );
+        #--~--~--~--~--~--~--~--~--~--~--~--~--~--~--~--#
+        sca( ax[1] )
         grid(color=gclr, linestyle='-')
-        setp(ax[-1].get_xticklabels(), visible=False)
+        setp(ax[1].get_xticklabels(), visible=False)
         # actual plotting
         plot( this.t, this.phi, linewidth=lwid, color=1-clr[0] )
         if ref_gwf:
@@ -1544,8 +1616,10 @@ class gwf:
             ylim( lim( this.phi[mask], dilate=0.1 ) )
         yl( r'$\phi = \mathrm{arg}(%s)$' % kind.replace('$','') ,fontsize=fs,color=txclr, family=font_family)
 
+        #--~--~--~--~--~--~--~--~--~--~--~--~--~--~--~--#
         # Time domain frequency
-        ax.append( subplot(3,1,3, sharex=ax[0]) );
+        #--~--~--~--~--~--~--~--~--~--~--~--~--~--~--~--#
+        sca( ax[2] )
         grid(color=gclr, linestyle='-')
         # Actual plotting
         plot( this.t, this.dphi, linewidth=lwid, color=sqrt(clr[0]) )
@@ -1831,6 +1905,11 @@ class gwylm:
                 if (eval(k) is not None) and (eval(k) is not False) and not ('this' in k):
                     msg = 'Found %s (=%r) keyword.' % (textul(k),eval(k))
                     alert( msg, 'gwylm' )
+
+        # Allow users to give directory instead of scentry object becuase it's easier for some people
+        if isinstance(scentry_obj,str):
+            simdir = scentry_obj
+            scentry_obj = simdir2scentry( simdir )
 
         # Handle default values
         load = True if load is None else load
@@ -2367,10 +2446,95 @@ class gwylm:
 
             # Plot both psi4 and strain
             for kind in ['psi4lm','hlm']:
-                ax = this.plot(show=show,kind=kind,domain=domain)
+                ax = this.plot(show=show,kind=kind,domain=domain,tlim=tlim)
 
         #
         return ax
+
+
+    #
+    def mollweide_plot(this,time=None,kind=None,ax=None,form=None,colorbar_shrink=1.0,N=120):
+
+        '''
+        Make mollweide plot for waveform at a specified time instance relative to peak.
+        See positive.plotting.sYlm_mollweide_plot for reference.
+        '''
+
+        # Handle optionals
+        if kind is None: kind = 'strain'
+        if time is None: time = 0
+
+        # Import usefuls
+        from matplotlib.pyplot import subplots,gca,gcf,figure,colorbar,draw
+        from numpy import array,pi,linspace,meshgrid,zeros
+
+        # Coordinate arrays for the graphical representation
+        x = linspace(-pi, pi, N)
+        y = linspace(-pi/2, pi/2, N/2)
+        X,Y = meshgrid(x,y)
+
+        # Spherical coordinate arrays derived from x, y
+        theta = pi/2 - y
+        phi = x.copy()
+
+        # Determine the peak realtive time series
+        if kind in ('h','strain'):
+            kind = 'strain'
+            peak_relative_time = this.lm[2,2]['strain'].t - this.lm[2,2]['strain'].intrp_t_amp_max
+        elif kind in ('y','psi4'):
+            kind = 'psi4'
+            peak_relative_time = this.lm[2,2]['psi4'].t - this.lm[2,2]['psi4'].intrp_t_amp_max
+        else:
+            error('kind can only be "strain" or "psi4", not %s'%(str(kind)))
+        # Define the mask which selects for time
+        # NOTE that this is an index value, not a time value
+        k = find( peak_relative_time >= time )[0]
+        # Store actual time referened for waveform
+        real_time = this.lm[2,2][kind].t[k]
+
+        # Recompose the waveform at this time evaluated over the source's sky
+        Z = zeros( X.shape, dtype=complex )
+        for l,m in this.lm:
+            Z += this.lm[l,m][kind].y[k] * sYlm(-2,l,m,theta,phi).T
+
+        #
+        if form in (None,'+','plus'):
+            Z = Z.real
+            title = r'$\Re \left[ %s(t) \right]$'%( 'h' if kind == 'strain' else r'\psi_4' )
+        elif form in ('x','cross'):
+            Z = Z.imag
+            title = r'$\Im \left[ %s(t) \right]$'%( 'h' if kind == 'strain' else r'\psi_4' )
+        elif form in ('a','abs'):
+            Z = abs(Z)
+            title = r'$|%s(t)|$'%( 'h' if kind == 'strain' else r'\psi_4' )
+
+        #
+        title += ', $t = %1.4f$'%this.lm[2,2][kind].t[k]
+
+        xlabels = ['$210^\circ$', '$240^\circ$','$270^\circ$','$300^\circ$','$330^\circ$',
+                   '$0^\circ$', '$30^\circ$', '$60^\circ$', '$90^\circ$','$120^\circ$', '$150^\circ$']
+
+        ylabels = ['$165^\circ$', '$150^\circ$', '$135^\circ$', '$120^\circ$',
+                   '$105^\circ$', '$90^\circ$', '$75^\circ$', '$60^\circ$',
+                   '$45^\circ$','$30^\circ$','$15^\circ$']
+
+        #
+        if ax is None:
+            fig, ax = subplots(subplot_kw=dict(projection='mollweide'), figsize= 1*array([10,8]) )
+
+        #
+        im = ax.pcolormesh(X,Y,Z)
+        ax.set_xticklabels(xlabels, fontsize=14)
+        ax.set_yticklabels(ylabels, fontsize=14)
+        ax.set_xlabel(r'$\phi$', fontsize=20)
+        ax.set_ylabel(r'$\theta$', fontsize=20)
+        ax.grid()
+        colorbar(im, ax=ax, orientation='horizontal',shrink=colorbar_shrink,label=title)
+        gcf().canvas.draw_idle()
+
+        #
+        return ax,real_time
+
 
     # Strain via ffi method
     def calchlm(this,w22=None):

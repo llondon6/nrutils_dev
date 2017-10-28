@@ -10,7 +10,7 @@ def etb_psd(freq):
     # Analytic formula from arxiv:1005.0304, eq. 2.2 and 2.3
 
     #
-    from numpy import inf
+    from numpy import inf,ndarray
 
     # (eq. 2.3) Fitting Constants
     a1 = 2.39*(10**(-27));   b1 = -15.64
@@ -30,8 +30,9 @@ def etb_psd(freq):
                   a4*pow(x,b4) )**2
 
     # Impose Low Frequency Cut-Off of 1 Hz %
-    mask = freq <= 1
-    Sh_f[mask] = inf
+    if isinstance(freq,ndarray):
+        mask = freq <= 1
+        Sh_f[mask] = inf
 
     #
     ans = Sh_f

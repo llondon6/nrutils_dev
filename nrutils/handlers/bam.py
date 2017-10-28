@@ -216,6 +216,10 @@ def extraction_map( this,                   # this may be an nrsc object or an g
         _map_ = [ float(k) for k in this.raw_metadata.extraction_radius[1:] ]
 
     #
+    # print this.raw_metadata.extraction_radius
+    # print this.raw_metadata.invariants_modes_r
+    # print '>> map = ',_map_
+    # raise
     extraction_radius = _map_[ extraction_parameter-1 ]
 
     return extraction_radius
@@ -237,6 +241,7 @@ def infer_default_level_and_extraction_parameter( this,     # An scentry object
 
     # Find all l=m=2 waveforms
     search_string = this.simdir() + '/Psi4ModeDecomp/*l2.m2*.gz'
+    print search_string
     file_list = glob( search_string )
 
     # For all results
@@ -254,6 +259,11 @@ def infer_default_level_and_extraction_parameter( this,     # An scentry object
         exr.append(exr_);lev.append(lev_);rad.append(rad_)
 
     # NOTE that we will use the extraction radius that is closest to desired_exraction_radius (in units of M)
+    print file_list
+    print desired_exraction_radius
+    print rad
+    raise
+
     k = argmin( abs(desired_exraction_radius - array(rad)) )
     extraction_parameter,level = exr[k],lev[k]
 

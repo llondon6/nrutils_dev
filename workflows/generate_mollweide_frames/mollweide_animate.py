@@ -31,7 +31,8 @@ kind = 'strain'
 
 # Find sim
 alert('Finding a simulation ...',header=True)
-A = scsearch(q=[10,20],keyword='hr',verbose=True,institute='gt')[0]
+A = scsearch(keyword='base_96')[0]
+# A = scsearch(q=[10,20],keyword='hr',verbose=True,institute='gt')[0]
 
 #
 framedir = join(outdir,A.simname)+'/'
@@ -78,8 +79,15 @@ for k,t in enumerate(frame_times):
 
 
     #
-    wfax,_ = y.lm[2,2][kind].plot(ax=[ax1,ax2,ax3],tlim=[ max(tmin,t+real_t_peak-100) ,min(tmax,t+real_t_peak+200)])
-    for a in wfax:
+    view_width = 300
+    t_left = max(tmin,t+real_t_peak-100)
+    if (t_left+view_width) < tmax:
+        t_right = t_left+view_width
+    else:
+        t_right = tmax
+        t_left = t_right - view_width
+    wf_ax,_ = y.lm[2,2][kind].plot(ax=[ax1,ax2,ax3],tlim=[ t_left,t_right])
+    for a in wf_ax:
         sca( a ); axvline( real_time, linestyle='-', color='k' )
 
     #
@@ -88,7 +96,10 @@ for k,t in enumerate(frame_times):
     #
     image_path = expanduser(framedir)+'mollweide_%04d.png'%k
     alert('* Saving frame %i/%i to : "%s"'%(k+1,len(frame_times),image_path)  )
-    savefig( image_path, bbox_inches='tight' )
+    savefig( image_path )
 
     #
-    close(fig)
+    close('all')
+
+alert('Trying to make video from frames.',header=True)
+os.system('ffmpeg -start_number 48 -r 12 -f image2 -i %s/mollweide_%s.png -vcodec libx264 -crf 25  -pix_fmt yuv420p %s/%s.mp4'%( framedir, '%04d', ourdir, y.simname ))

@@ -36,7 +36,7 @@ class match:
     #
     def calc_template_phi_optimized_match( this,
                                            template_wfarr_orbphi_fun, # takes in template orbital phase, outputs waveform array
-                                           N_template_phi = 61,# number of orbital phase values to use for exploration
+                                           N_template_phi = 13,# number of orbital phase values to use for exploration; NOTE that a solver is used after these points are evaluated
                                            plot = False,
                                            signal_polarization = None,
                                            method = None,
@@ -98,8 +98,15 @@ class match:
 
         # Interpolate match over phi_template to estimate maximum
         # intrp_max lives in the "positive" repository
-        optimal_phi_template = intrp_argmax(match_list,phi_template_range,plot=plot)
-        match = max( match_helper( optimal_phi_template ), max(match_list) )
+        # optimal_phi_template = intrp_argmax(match_list,phi_template_range,plot=plot)
+        optimal_phi_template = phi_template_range[ argmax( match_list ) ]
+        # match = max( match_helper( optimal_phi_template ), max(match_list) )
+
+        #
+        from scipy.optimize import minimize
+        info = minimize( match_helper, optimal_phi_template )
+        match = info.fun
+        optimal_phi_template =info.x[0]
 
         #
         if plot:
@@ -528,6 +535,10 @@ class match:
         this.signal['optimal_snr']   = this.calc_optsnr( this.signal['response'] )
         this.template['optimal_snr'] = this.calc_optsnr( this.template['response'] )
 
+        # Store SNRs: NOTE that signal snr will always be the optimal snr by convention
+        this.signal['snr']   = this.calc_snr( this.signal['response'], this.signal['response'] )
+        this.template['snr'] = this.calc_snr( this.template['response'], this.signal['response'] )
+
         # Calculate the normed signal with respect to the overlap
         this.signal['normalized_response'] = this.signal['response'] / (this.signal['norm'] if this.signal['norm'] != 0 else 1)
 
@@ -538,7 +549,7 @@ class match:
 
 
     # Calculate overlap optimized over template polarization
-    def calc_template_pol_optimized_match( this, signal_polarization = None, plot = False ):
+    def calc_template_pol_optimized_match( this, signal_polarization = None, plot = False, timeoptoff = False ):
 
         # Import useful things
         from numpy import sqrt,dot,real,log,diff
@@ -609,15 +620,21 @@ class match:
         return ans
 
 
-    # Claculate optimal snr
+    # Calculate optimal snr
     def calc_optsnr(this,a):
+        # This function is a simple wrapper for the more general: calc_snr
+        optsnr = this.calc_snr(a,a)
+        return optsnr
+
+    # Calculate snr
+    def calc_snr(this,a,b):
         #
         from numpy import sqrt
         # See Maggiori, p. 345 -- a factor of 2 comes from the definition of the psd
         # another factor of 2 is picked up if only positive frequencies are used for the integral; this is due to the signal being real valued and thus having identical power at positive and negative frequencies
         # ALSO see Eqs 1-2 of https://arxiv.org/pdf/0901.1628.pdf
-        optsnr = sqrt( (4 if this.__positive_f__ else 2) * this.calc_overlap(a,method='trapz') )
-        return optsnr
+        snr = sqrt( (4 if this.__positive_f__ else 2) * abs(this.calc_overlap(a,b,method='trapz')) )
+        return snr
 
 
     # Calculate noise curve weighted norm (aka Optimal SNR)
