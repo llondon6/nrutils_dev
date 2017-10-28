@@ -6,6 +6,8 @@ Make frames for an animation of mollweide + time domain plotting of gwylm object
 import os
 os.system('clear')
 from nrutils import scsearch,gwylm
+import matplotlib
+matplotlib.use('agg')
 from matplotlib.pyplot import *
 from numpy import array
 from os.path import expanduser,join
