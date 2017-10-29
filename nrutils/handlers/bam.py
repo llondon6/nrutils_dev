@@ -8,7 +8,7 @@ from numpy.linalg import inv, norm
 from numpy import sum as asum
 
 # Determine whether the folder containing a metadta file is valid: can it be used to reference waveform data?
-def validate( metadata_file_location, config = None ):
+def validate( metadata_file_location, config = None, verbose = False ):
 
     #
     from os.path import isfile as exist
@@ -240,8 +240,7 @@ def infer_default_level_and_extraction_parameter( this,     # An scentry object
     desired_exraction_radius = 90 if desired_exraction_radius is None else desired_exraction_radius
 
     # Find all l=m=2 waveforms
-    search_string = this.simdir() + '/Psi4ModeDecomp/*l2.m2*.gz'
-    print search_string
+    search_string = ( this.simdir() + '/Psi4ModeDecomp/*l2.m2*.gz' ).replace('//','/')
     file_list = glob( search_string )
 
     # For all results
@@ -259,10 +258,6 @@ def infer_default_level_and_extraction_parameter( this,     # An scentry object
         exr.append(exr_);lev.append(lev_);rad.append(rad_)
 
     # NOTE that we will use the extraction radius that is closest to desired_exraction_radius (in units of M)
-    print file_list
-    print desired_exraction_radius
-    print rad
-    raise
 
     k = argmin( abs(desired_exraction_radius - array(rad)) )
     extraction_parameter,level = exr[k],lev[k]

@@ -1928,11 +1928,6 @@ class gwylm:
                     msg = 'Found %s (=%r) keyword.' % (textul(k),eval(k))
                     alert( msg, 'gwylm' )
 
-        # Allow users to give directory instead of scentry object becuase it's easier for some people
-        if isinstance(scentry_obj,str):
-            simdir = scentry_obj
-            scentry_obj = simdir2scentry( simdir )
-
         # Handle default values
         load = True if load is None else load
         clean = False if clean is None else clean
@@ -1942,6 +1937,12 @@ class gwylm:
 
         # Validate the lm input
         this.__valinputs__(thisfun,lm=lm,lmax=lmax,scentry_obj=scentry_obj)
+
+        # Allow users to give directory instead of scentry object becuase it's easier for some people
+        if isinstance(scentry_obj,str):
+            simdir = scentry_obj
+            warning( 'You have input a directory rather than an scentry object. We will try to convert the directory to an scentry object, but this is slower than using the our catalog system. Please consider modifying the appropriate configuretion file (i.e. in "%s") to occomodate your new simulation, or perhaps create a new configuration file. Given your new or updated configuration file, please run nrutils.scbuild("my_config_name") to update your local catalog. If you are confident that all has gone well, you may also wish to push changes in your catalog (to the master repo). Live long and prosper. -- Lionel'%cyan(gconfig.config_path),'gwylm' )
+            scentry_obj = simdir2scentry( simdir, verbose=verbose )[0]
 
         # Confer the scentry_object's attributes to this object for ease of referencing
         for attr in scentry_obj.__dict__.keys():
@@ -2106,8 +2107,8 @@ class gwylm:
             raise ValueError(msg)
 
         # Make sure that only one scentry in instput (could be updated later)
-        if not (scentry_obj.__class__.__name__ == 'scentry'):
-            msg = 'First input must be member of scentry class (e.g. as returned from scsearch() ).'
+        if not ((scentry_obj.__class__.__name__ == 'scentry') or isinstance(scentry_obj,str)):
+            msg = 'First input must be member of scentry class (e.g. as returned from scsearch() ). OR it must be a path where a valid metadata file exists. See simdir2scentry() for more info.'
             error(msg,thisfun)
 
     # Make a list of lm values related to this gwylm object

@@ -8,7 +8,7 @@ from numpy.linalg import inv, norm
 from numpy import sum as asum
 
 # Determine whether the folder containing a metadta file is valid: can it be used to reference waveform data?
-def validate( metadata_file_location, config = None ):
+def validate( metadata_file_location, config = None, verbose = True ):
 
     #
     from os.path import isfile as exist
@@ -25,7 +25,7 @@ def validate( metadata_file_location, config = None ):
     # Let the people know
     if not status:
         msg = 'waveform data could not be found.'
-        warning(msg,'maya.validate')
+        if verbose: warning(msg,'maya.validate')
 
     # ignore directories with certain tags in filename
     ignore_tags = ['backup','old','archive']
