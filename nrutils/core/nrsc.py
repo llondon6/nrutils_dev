@@ -337,8 +337,11 @@ class scentry:
     # Create dynamic function that references the user's current configuration to construct the simulation directory of this run.
     def simdir(this):
         if this.config:
-            if this.static:
-                ans = this.config.simdir
+            if 'static' in this.__dict__:
+                if this.static:
+                    ans = this.config.simdir
+                else:
+                    ans = this.config.reconfig().catalog_dir + this.relative_simdir
             else:
                 ans = this.config.reconfig().catalog_dir + this.relative_simdir
             if not this.config.config_exists:

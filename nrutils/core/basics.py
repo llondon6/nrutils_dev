@@ -874,3 +874,190 @@ def dict2gwylm( multipole_dictionary ):
 def isgwf( obj ):
     '''Determine if input is a memeber of the gwf class'''
     return obj.__class__.__name__=='gwf'
+
+
+#00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%#
+''' Low level functions for rotating waveforms '''
+# https://arxiv.org/pdf/1304.3176.pdf
+#00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%#
+
+
+# Calculate the emission tensor given a dictionary of multipole data
+def calc_Lab_tensor( multipole_dict ):
+
+    '''
+    Given a dictionary of multipole moments (single values or time series)
+    determine the emission tensor, <L(aLb)>.
+
+    The input must be a dictionary of the format:
+    { (2,2):wf_data22, (2,1):wf_data21, ... (l,m):wf_datalm }
+
+    Key referece: https://arxiv.org/pdf/1304.3176.pdf
+    Secondary ref: https://arxiv.org/pdf/1205.2287.pdf
+
+    Lionel London 2017
+    '''
+
+    # Import usefuls
+    from numpy import sqrt,zeros_like,ndarray
+
+    # Check type of dictionary values and pre-allocate output
+    if isinstance( y[2,2], (float,int,complex) ):
+        L = zeros( (3,3), dtype=complex )
+    elif isinstance( y[2,2], ndarray ):
+        L = zeros( (3,3,len(y[2,2])), dtype=ndarray )
+    else:
+        error('Dictionary values of handled type; must be float or array')
+
+    # define lambda function for useful coeffs
+    c = lambda l,m: sqrt( l*(l+1) + m*(m+1) )
+
+    #-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-#
+    # Compute tensor elements (Eqs. A1-A2 of https://arxiv.org/pdf/1304.3176.pdf)
+    #-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-#
+
+    # Rename multipole_dict for short-hand
+    y = multipole_dict
+
+    # Pre-allocate elements
+    I0,I1,I2,Izz = zeros_like(y[2,2]), zeros_like(y[2,2]), zeros_like(y[2,2]), zeros_like(y[2,2])
+
+    # Sum contributions from input multipoles
+    for l,m in y:
+
+        # Eq. A2c
+        I0 += 0.5 * ( l*(l+1)-m*m ) * y[l,m] * y[l,m].conj()
+
+        # Eq. A2b
+        I1 += c(l,m) * (m+0.5) * ( y[l,m+1].conj() if (l,m+1) in y else 0 ) * y[l,m]
+
+        # Eq. A2a
+        I2 += 0.5 * c(l,m) * c(l,m+1) * y[l,m] * ( y[l,m+2].conj() if (l,m+2) in y else 0 )
+
+        # Eq. A2d
+        Izz += m*m * y[l,m] * y[l,m].conj()
+
+    # Compute the net power (amplitude squared) of the multipoles
+    N = sum( [ y[l,m] * y[l,m].conj() for l,m in y ] )
+
+    #-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-#
+    # Populate the emission tensor ( Eq. A2e )
+    #-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-#
+
+    # Populate asymmetric elements
+    L[0,0] = I0 + I2.real
+    L[0,1] = I2.imag
+    L[0,2] = I1.real
+    L[1,1] = I0 - I2.real
+    L[1,2] = I1.imag
+    L[2,2] = Izz
+    # Populate symmetric elements
+    L[1,0] = L[0,1]
+    L[2,0] = L[0,2]
+    L[2,1] = L[1,2]
+
+    #
+    return L
+
+# Given a dictionary of multipole data, calculate the Euler angles corresponding to a co-precessing frame
+def calc_coprecessing_angles( multipole_dict,       # dict of multipoles { ... l,m:data_lm ... }
+                              t = None,             # The time series corresponding to multipole data
+                              verbose = None ):
+
+    '''
+    Given a dictionary of multipole data, calculate the Euler angles corresponding to a co-precessing frame
+
+    Key referece: https://arxiv.org/pdf/1304.3176.pdf
+    Secondary ref: https://arxiv.org/pdf/1205.2287.pdf
+
+    INPUT
+    ---
+    multipole_dict,       # dict of multipoles { ... l,m:data_lm ... }
+    t,                    # The time series corresponding to multipole data; needed
+                            only to calculate gamma; Optional
+    verbose,              # Toggle for verbosity
+
+    OUTPUT
+    ---
+    alpha,beta,gamma euler angles as defined in https://arxiv.org/pdf/1205.2287.pdf
+
+    AUTHOR
+    ---
+    Lionel London (spxll) 2017
+    '''
+
+    # Import usefuls
+    from numpy.linalg import eig
+    from numpy import arctan2,sin,arcsin,alpha,beta,unwrap
+
+    #-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-#
+    # Enforce that multipole data is array typed with a well defined length
+    #-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-#
+    y = multipole_dict
+    for l,m in y:
+        if isinstance( y[l,m], (float,int) ):
+            y[l,m] = array( [ y[l,m], ] )
+        else:
+            # Some input validation
+            if t is None: error( 'Since your multipole data is a series, you must also input the related time array' )
+            if len(t) != len(y[l,m]): error('time array and multipole data not of same length')
+
+
+    #-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-#
+    # Calculate the emission tensor corresponding to the input data
+    #-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-#
+    L = calc_Lab_tensor( multipole_dict )
+
+    #-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-#
+    # Compute the eigenvectors and values of this tensor
+    #-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-#
+
+    # NOTE that members of L have the same length as each y[l,m]; the latter has been
+    # forced to always have a length above
+
+    # Initialize idents for angles. NOTE that gamma will be handled below
+    alpha,beta = [],[]
+
+    # For all multipole instances
+    for k in range( len(L[0,0]) ):
+
+        # Select the emission matrix for this instance, k
+        _L = L[:,:,k]
+
+        # Compute the eigen vals and vecs for this instance
+        vals,vec = eig( _L )
+
+        # Find the dominant direction's index
+        dominant_dex = argmax( vals )
+
+        # Select the corresponding vector
+        dominant_vec = vec[ dominant_dex ]
+
+        # Given this vector, calculate the related Euler angles
+        # NOTE Eq. A3 of arxiv:1304.3176
+
+        # Extract the components of the dominant eigenvector
+        x,y,z = dominant_vec
+
+        # Find alpha and beta using simple trig, and check beta solution
+        _alpha = arctan2(y,x)
+        _beta  = arcsin( y / sin(_alpha) )
+        _beta_check = arcsin( x / cos(_alpha) )
+        if abs(_beta-_beta_check)>1e-4 : error('beta angle fails consistency check! debug me please')
+
+        # NOTE that gamma may be found once all values of alpha and beta are found
+
+        # Store values of rotation angles
+        alpha.append( _alpha )
+        beta.append( _beta )
+
+    # Convert alpha and beta to arrays in prep for finding gamma
+    alpha = unwrap( array( alpha ) )
+    beta = unwrap( array( beta ) )
+
+    # Calculate gamma (Eq. A4 of of arxiv:1304.3176)
+    if len(alpha) > 1 :
+        gamma = - trapz( cos(beta) * spline_diff(t,alpha)  )
+    else:
+        # NOTE that this is the same as above, but here we're choosing an integration constant such that the value is zero. Above, no explicit integration constant is chosen.
+        gamma = 0
