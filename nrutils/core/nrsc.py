@@ -1382,10 +1382,12 @@ class gwf:
             error(msg,'gwylm.plot')
 
         # Plot selected domain.
-        if domain == 'time':
+        if domain in ('time','t'):
             ax = this.plottd( show=show,fig=fig,title=title, ref_gwf=ref_gwf, labels=labels, tlim=tlim, sizescale=sizescale, ax=ax )
-        elif domain == 'freq':
-            ax = this.plotfd( show=show,fig=fig,title=title, ref_gwf=ref_gwf, labels=labels, flim=tlim, sizescale=sizescale, ax=ax )
+        elif domain in ('f','freq'):
+            ax = this.plotfd( show=show,fig=fig,title=title, ref_gwf=ref_gwf, labels=labels, flim=flim, sizescale=sizescale, ax=ax )
+        else:
+            error('Domain must be in ("time","t","f","freq")')
 
         #
         from matplotlib.pyplot import gcf
@@ -1406,7 +1408,7 @@ class gwf:
                 verbose =   False ):
 
         #
-        from matplotlib.pyplot import plot,subplot,figure,tick_params,subplots_adjust
+        from matplotlib.pyplot import plot,subplot,figure,tick_params,subplots_adjust,ylim
         from matplotlib.pyplot import grid,setp,tight_layout,margins,xlabel,legend,sca
         from matplotlib.pyplot import show as shw
         from matplotlib.pyplot import ylabel as yl
@@ -1459,11 +1461,11 @@ class gwf:
         else:
             set_legend=True
 
-
         # ------------------------------------------------------------------- #
         # Amplitude
         # ------------------------------------------------------------------- #
         sca( ax[0] )
+
         grid(color=gclr, linestyle='-')
         setp(ax[0].get_xticklabels(), visible=False)
         ax[0].set_xscale('log', nonposx='clip')
@@ -1472,7 +1474,13 @@ class gwf:
         plot( sign(this.m if this.m is not None else 1)*this.f[pos_mask], this.fd_amp[pos_mask], color=clr[0], label=labels[0] )
         if ref_gwf:
             plot( sign(that.m if that.m is not None else 1)*that.f[that_pos_mask], that.fd_amp[that_pos_mask], color=clr[0], linewidth=that_lwid, alpha=that_alpha, label=labels[-1] )
-        if this.m!=0: pylim( sign(this.m if this.m is not None else 1)*this.f[pos_mask], this.fd_amp[pos_mask], pad_y=10 )
+        # if this.m!=0: pylim( sign(this.m if this.m is not None else 1)*this.f[pos_mask], this.fd_amp[pos_mask], pad_y=10 )
+
+        # impose flim if its not None
+        if flim is not None:
+            mask = (this.f>min(flim)) & (this.f<max(flim))
+            ylim( lim(this.fd_amp[pos_mask & mask],dilate=0.2) )
+
         #
         yl('$|$'+kind+'$|(f)$',fontsize=fs,color=txclr, family=font_family )
         if set_legend: legend(frameon=False)
@@ -1488,9 +1496,14 @@ class gwf:
         plot( sign(this.m if this.m is not None else 1)*this.f[pos_mask], this.fd_phi[pos_mask], color=1-clr[0] )
         if ref_gwf:
             plot( sign(that.m if that.m is not None else 1)*that.f[that_pos_mask], that.fd_phi[that_pos_mask], color=1-clr[0], linewidth=that_lwid, alpha=that_alpha )
-        if this.m!=0: pylim( sign(this.m if this.m is not None else 1)*this.f[pos_mask], this.fd_phi[pos_mask] )
+        # if this.m!=0: pylim( sign(this.m if this.m is not None else 1)*this.f[pos_mask], this.fd_phi[pos_mask] )
         #
         yl(r'$\phi = \mathrm{arg}($'+kind+'$)$',fontsize=fs,color=txclr, family=font_family )
+
+        # impose flim if its not None
+        if flim is not None:
+            mask = (this.f>min(flim)) & (this.f<max(flim))
+            ylim( lim(this.fd_phi[pos_mask & mask],dilate=0.2) )
 
         # ------------------------------------------------------------------- #
         # Total Phase Rate
@@ -1502,13 +1515,23 @@ class gwf:
         plot( sign(this.m if this.m is not None else 1)*this.f[pos_mask], this.fd_dphi[pos_mask], color=sqrt(clr[0]) )
         if ref_gwf:
             plot( sign(that.m if that.m is not None else 1)*that.f[that_pos_mask], that.fd_dphi[that_pos_mask], color=sqrt(clr[0]), linewidth=that_lwid, alpha=that_alpha )
-        if this.m!=0: pylim( sign(this.m if this.m is not None else 1)*this.f[pos_mask], this.fd_dphi[pos_mask] )
+        # if this.m!=0: pylim( sign(this.m if this.m is not None else 1)*this.f[pos_mask], this.fd_dphi[pos_mask] )
         #
         yl(r'$\mathrm{d}{\phi}/\mathrm{d}f$',fontsize=fs,color=txclr, family=font_family)
+
+        # impose flim if its not None
+        if flim is not None:
+            mask = (this.f>min(flim)) & (this.f<max(flim))
+            ylim( lim(this.fd_dphi[pos_mask & mask],dilate=0.2) )
 
         # ------------------------------------------------------------------- #
         # Full figure settings
         # ------------------------------------------------------------------- #
+
+        # impose flim if its not None
+        if flim is not None:
+            ax[0].set_xlim(flim)
+
         if title is not None:
             ax[0].set_title( title, family=font_family )
 
@@ -2469,7 +2492,7 @@ class gwylm:
 
             # Plot both psi4 and strain
             for kind in ['psi4lm','hlm']:
-                ax = this.plot(show=show,kind=kind,domain=domain,tlim=tlim)
+                ax = this.plot(show=show,kind=kind,domain=domain,tlim=tlim,flim=flim)
 
         #
         return ax

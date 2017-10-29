@@ -500,12 +500,12 @@ def straighten_wfarr( wfarr, verbose=False ):
     if not isincreasing:
         # Let the people know
         msg = red('The time series has been found to be non-monotonic. We will sort the data to enforce monotinicity.')
-        warning(msg)
+        if verbose: warning(msg)
         # In this case, we must sort the data and time array
         map_ = arange( len(wfarr[:,0]) )
         map_ = sorted( map_, key = lambda x: wfarr[x,0] )
         wfarr = wfarr[ map_, : ]
-        if allclose( wfarr[:,0], sorted(wfarr[:,0]), 1e-6 ): warning(red('The waveform time series is now monotonic.'))
+        if allclose( wfarr[:,0], sorted(wfarr[:,0]), 1e-6 ) and verbose: warning(red('The waveform time series is now monotonic.'))
 
     # Remove rows that contain non-finite data
     finite_mask = isfinite( sum( wfarr, 1 ) )
