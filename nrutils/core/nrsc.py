@@ -124,13 +124,13 @@ class scconfig(smart_object):
 
         # If catalog_dir is list of dirs, then select the first one that exists
         if isinstance( this.catalog_dir, list ):
-            if this.verbose: warning('Multiple catalog directories found. We will scan through the related list, and then store first the catalog_dir that the OS can find.')
+            # if this.verbose: warning('Multiple catalog directories found. We will scan through the related list, and then store first the catalog_dir that the OS can find.')
             from os.path import isdir,expanduser
             for d in this.catalog_dir:
                 d = expanduser(d)
                 if isdir(d):
                     this.catalog_dir = d
-                    if this.verbose: warning('Selecting "%s"'%cyan(d))
+                    # if this.verbose: warning('Selecting "%s"'%cyan(d))
                     break
 
 
