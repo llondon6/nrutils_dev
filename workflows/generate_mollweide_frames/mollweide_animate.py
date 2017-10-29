@@ -102,4 +102,4 @@ for k,t in enumerate(frame_times):
     close('all')
 
 alert('Trying to make video from frames.',header=True)
-os.system('ffmpeg -start_number 48 -r 12 -f image2 -i %s/mollweide_%s.png -vcodec libx264 -crf 25  -pix_fmt yuv420p %s/%s.mp4'%( framedir, '%04d', ourdir, y.simname ))
+os.system('ffmpeg -start_number 48 -r 12 -f image2 -i %s/mollweide_%s.png -vcodec libx264 -crf 25  -pix_fmt yuv420p %s/%s.mp4'%( framedir, '%04d', outdir, y.simname ))
