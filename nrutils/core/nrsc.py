@@ -1941,7 +1941,7 @@ class gwylm:
         # Allow users to give directory instead of scentry object becuase it's easier for some people
         if isinstance(scentry_obj,str):
             simdir = scentry_obj
-            warning( 'You have input a directory rather than an scentry object. We will try to convert the directory to an scentry object, but this is slower than using the our catalog system. Please consider modifying the appropriate configuretion file (i.e. in "%s") to occomodate your new simulation, or perhaps create a new configuration file. Given your new or updated configuration file, please run nrutils.scbuild("my_config_name") to update your local catalog. If you are confident that all has gone well, you may also wish to push changes in your catalog (to the master repo). Live long and prosper. -- Lionel'%cyan(gconfig.config_path),'gwylm' )
+            warning( 'You have input a directory rather than an scentry object. We will try to convert the directory to an scentry object, but this is slower than using the our catalog system. Please consider modifying the appropriate configuretion file (i.e. in "%s") to accommodate your new simulation, or perhaps create a new configuration file. Given your new or updated configuration file, please run nrutils.scbuild("my_config_name") to update your local catalog. If you are confident that all has gone well, you may also wish to push changes in your catalog (to the master repo). Live long and prosper. -- Lionel'%cyan(gconfig.config_path),'gwylm' )
             scentry_obj = simdir2scentry( simdir, verbose=verbose )[0]
 
         # Confer the scentry_object's attributes to this object for ease of referencing
