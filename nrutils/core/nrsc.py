@@ -18,12 +18,13 @@ import warnings,sys
 class scconfig(smart_object):
 
     # Create scconfig object from configuration file location
-    def __init__(this,config_file_location=None,overwrite=True):
+    def __init__(this,config_file_location=None,overwrite=True,verbose=True):
 
         # Required fields from smart_object
         this.source_file_path = []
         this.source_dir = []
         this.overwrite = overwrite
+        this.verbose = verbose
 
         # call wrapper for constructor
         this.config_file_location = config_file_location
@@ -123,13 +124,13 @@ class scconfig(smart_object):
 
         # If catalog_dir is list of dirs, then select the first one that exists
         if isinstance( this.catalog_dir, list ):
-            warning('Multiple catalog directories found. We will scan through the related list, and then store first the catalog_dir that the OS can find.')
+            if this.verbose: warning('Multiple catalog directories found. We will scan through the related list, and then store first the catalog_dir that the OS can find.')
             from os.path import isdir,expanduser
             for d in this.catalog_dir:
                 d = expanduser(d)
                 if isdir(d):
                     this.catalog_dir = d
-                    warning('Selecting "%s"'%cyan(d))
+                    if this.verbose: warning('Selecting "%s"'%cyan(d))
                     break
 
 
@@ -156,7 +157,7 @@ class scconfig(smart_object):
 class scentry:
 
     # Create scentry object given location of metadata file
-    def __init__( this, config_obj, metadata_file_location, verbose=False ):
+    def __init__( this, config_obj, metadata_file_location, static=False, verbose=True ):
 
         # Keep an internal log for each scentry created
         this.log = '[Log for %s] The file is "%s".' % (this,metadata_file_location)
@@ -165,17 +166,20 @@ class scentry:
         this.config = config_obj
         this.metadata_file_location = metadata_file_location
 
+        # Toggle for verbose mode
+        this.verbose = verbose
+
         # Validate the location of the metadata file: does it contain waveform information? is the file empty? etc
         this.isvalid = this.validate() if config_obj else False
 
-        #
-        this.verbose = verbose
+        # Toggle for whether configuration object is dynamic (dynamically reference ini file) or static ( keep values stored in object at all times -- see reconfig() )
+        this.static = static
 
         # If valid, learn metadata. Note that metadata property are defined as none otherise. Also NOTE that the standard metadata is stored directly to this object's attributes.
         this.raw_metadata = None
         if this.isvalid is True:
             #
-            print '## Working: %s' % cyan(metadata_file_location)
+            if this.verbose: print '## Working: %s' % cyan(metadata_file_location)
             this.log += ' This entry\'s metadata file is valid.'
 
             # i.e. learn the meta_data_file
@@ -188,13 +192,13 @@ class scentry:
             except:
                 emsg = sys.exc_info()[1].message
                 this.log += '%80s'%' [FATALERROR] The metadata failed to be read. There may be an external formatting inconsistency. It is being marked as invalid with None. The system says: %s'%emsg
-                warning( 'The following error message will be logged: '+red(emsg),'scentry')
+                if this.verbose: warning( 'The following error message will be logged: '+red(emsg),'scentry')
                 this.isvalid = None # An external program may use this to do something
                 this.label = 'invalid!'
 
         elif this.isvalid is False:
             if config_obj:
-                print '## The following is '+red('invalid')+': %s' % cyan(metadata_file_location)
+                if this.verbose: print '## The following is '+red('invalid')+': %s' % cyan(metadata_file_location)
                 this.log += ' This entry\'s metadta file is invalid.'
 
     # Method to load handler module
@@ -219,7 +223,7 @@ class scentry:
         validator = this.loadhandler().validate
 
         # vet the directory where the metadata file lives for: waveform and additional metadata
-        status = validator( this.metadata_file_location, config = this.config )
+        status = validator( this.metadata_file_location, config = this.config, verbose=this.verbose )
 
         #
         return status
@@ -333,7 +337,10 @@ class scentry:
     # Create dynamic function that references the user's current configuration to construct the simulation directory of this run.
     def simdir(this):
         if this.config:
-            ans = this.config.reconfig().catalog_dir + this.relative_simdir
+            if this.static:
+                ans = this.config.simdir
+            else:
+                ans = this.config.reconfig().catalog_dir + this.relative_simdir
             if not this.config.config_exists:
                 msg = 'The current object has been marked as '+red('non-existent')+', likely by reconfig(). Please verify that the ini file for the related run exists. You may see this message for other (yet unpredicted) reasons.'
                 error(msg,'scentry.simdir()')
@@ -389,13 +396,16 @@ class scentry:
 
 # Concert a simulation directory to a scentry object
 # NOTE that this algorithm is to be compared to scbuild()
-def simdir2scentry( catalog_dir ):
+def simdir2scentry( catalog_dir, verbose = False ):
 
     # Load useful packages
     from commands import getstatusoutput as bash
     from os.path import realpath, abspath, join, splitext, basename
     from os import pardir,system,popen
     import pickle
+
+    #
+    if verbose: alert('We will now try to convert a given directory to a scentry object.', heading=True,pattern='--')
 
     # Load all known configs
     cpath_list = glob.glob( gconfig.config_path+'*.ini' )
@@ -405,21 +415,24 @@ def simdir2scentry( catalog_dir ):
         error(msg,thisfun)
 
     # Create config objects from list of config files
-    configs = [ scconfig( config_path ) for config_path in cpath_list ]
+    if verbose: alert('(1) The directory must be compatible with a known config ini file. Let\'s load all known configs and use the first one which successfully parses the given directory.',header=True,pattern='##')
+    configs = [ scconfig( config_path, verbose=verbose ) for config_path in cpath_list ]
 
     # For each config, look for the related metadata file; stop after the first metadata file is found
+    if verbose: alert('(2) For all configs, try to build a catalog object.',header=True,pattern='##')
     for config in configs:
 
         # NOTE: At this point the algorithm differs from scbuild
 
         # Set the catalog dir for this object to be the input, not what's in the config ini
         config.catalog_dir = catalog_dir
+        config.simdir = catalog_dir
 
         # Search recurssively within the config's catalog_dir for files matching the config's metadata_id
         msg = 'Searching for %s in %s.' % ( cyan(config.metadata_id), cyan(catalog_dir) ) + yellow(' This may take a long time if the folder being searched is mounted from a remote drive.')
-        alert(msg,header=True)
-        mdfile_list = rfind(catalog_dir,config.metadata_id,verbose=True)
-        alert('done.')
+        if verbose: alert(msg,header=True)
+        mdfile_list = rfind(catalog_dir,config.metadata_id,verbose=verbose)
+        if verbose: alert('done.')
 
         # (try to) Create a catalog entry for each valid metadata file
         catalog = []
@@ -427,17 +440,26 @@ def simdir2scentry( catalog_dir ):
         for mdfile in mdfile_list:
 
             # Create tempoary scentry object
-            entry = scentry(config,mdfile,verbose=True)
+            entry = scentry(config,mdfile,static=True,verbose=verbose)
+
+            # Set the simulation's set name to note that this entry is not a part of a catalog
+            entry.setname = 'non-catalog'# entry.simname
 
             # If the obj is valid, add it to the catalog list, else ignore
             if entry.isvalid:
                 catalog.append( entry )
             else:
-                print entry.log
+                if verbose: print entry.log
                 del entry
 
         # Break the for-loop if a valid scentry has been built
         if len( catalog ) > 0 : break
+
+    #
+    if len(catalog):
+        if verbose: alert('(3) The previous config was able to parse the given directory --- We\'re all done here! :D',header=True,pattern='##')
+    else:
+        error( 'No configs were able to parse the given directory. Use this function with verbose=True to learn more.' )
 
     #
     return catalog
