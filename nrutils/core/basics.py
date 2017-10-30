@@ -1079,17 +1079,18 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
     alpha = array( alpha )
     beta = array( beta )
 
-    # Calculate gamma (Eq. A4 of of arxiv:1304.3176)
-    if len(alpha) > 1 :
-        gamma = - spline_antidiff( domain_vals, cos(beta) * spline_diff(domain_vals,alpha)  )
-    else:
-        # NOTE that this is the same as above, but here we're choosing an integration constant such that the value is zero. Above, no explicit integration constant is chosen.
-        gamma = 0
-
     # Make sure that angles are unwrapped
     alpha = unwrap( alpha )
     beta  = unwrap( beta  )
-    gamma = unwrap( gamma )
+
+    # Calculate gamma (Eq. A4 of of arxiv:1304.3176)
+    if len(alpha) > 1 :
+        k = 1
+        gamma = - spline_antidiff( domain_vals, cos(beta) * spline_diff(domain_vals,alpha,k=k), k=k  )
+        gamma = unwrap( gamma )
+    else:
+        # NOTE that this is the same as above, but here we're choosing an integration constant such that the value is zero. Above, no explicit integration constant is chosen.
+        gamma = 0
 
     # Return answer
     if return_xyz:
