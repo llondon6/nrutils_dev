@@ -1086,6 +1086,7 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
     # Calculate gamma (Eq. A4 of of arxiv:1304.3176)
     if len(alpha) > 1 :
         k = 1
+        # NOTE that spline_diff and spline_antidiff live in positive.maths
         gamma = - spline_antidiff( domain_vals, cos(beta) * spline_diff(domain_vals,alpha,k=k), k=k  )
         gamma = unwrap( gamma )
     else:
