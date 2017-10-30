@@ -899,25 +899,25 @@ def calc_Lab_tensor( multipole_dict ):
     '''
 
     # Import usefuls
-    from numpy import sqrt,zeros_like,ndarray
+    from numpy import sqrt,zeros_like,ndarray,zeros,double
+
+    # Rename multipole_dict for short-hand
+    y = multipole_dict
 
     # Check type of dictionary values and pre-allocate output
     if isinstance( y[2,2], (float,int,complex) ):
         L = zeros( (3,3), dtype=complex )
     elif isinstance( y[2,2], ndarray ):
-        L = zeros( (3,3,len(y[2,2])), dtype=ndarray )
+        L = zeros( (3,3,len(y[2,2])), dtype=complex )
     else:
         error('Dictionary values of handled type; must be float or array')
 
     # define lambda function for useful coeffs
-    c = lambda l,m: sqrt( l*(l+1) + m*(m+1) )
+    c = lambda l,m: sqrt( l*(l+1) - m*(m+1) ) if abs(m)<=l else 0
 
     #-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-#
     # Compute tensor elements (Eqs. A1-A2 of https://arxiv.org/pdf/1304.3176.pdf)
     #-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-#
-
-    # Rename multipole_dict for short-hand
-    y = multipole_dict
 
     # Pre-allocate elements
     I0,I1,I2,Izz = zeros_like(y[2,2]), zeros_like(y[2,2]), zeros_like(y[2,2]), zeros_like(y[2,2])
@@ -938,7 +938,7 @@ def calc_Lab_tensor( multipole_dict ):
         Izz += m*m * y[l,m] * y[l,m].conj()
 
     # Compute the net power (amplitude squared) of the multipoles
-    N = sum( [ y[l,m] * y[l,m].conj() for l,m in y ] )
+    N = sum( [ y[l,m] * y[l,m].conj() for l,m in y ] ).real
 
     #-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-#
     # Populate the emission tensor ( Eq. A2e )
@@ -956,12 +956,17 @@ def calc_Lab_tensor( multipole_dict ):
     L[2,0] = L[0,2]
     L[2,1] = L[1,2]
 
+    # Normalize
+    N[ N==0 ] = min( N[N>0] )
+    L = L.real / N
+
     #
     return L
 
 # Given a dictionary of multipole data, calculate the Euler angles corresponding to a co-precessing frame
-def calc_coprecessing_angles( multipole_dict,       # dict of multipoles { ... l,m:data_lm ... }
-                              t = None,             # The time series corresponding to multipole data
+def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l,m:data_lm ... }
+                              domain_vals = None,   # The time or freq series for multipole data
+                              return_xyz = False,
                               verbose = None ):
 
     '''
@@ -987,8 +992,10 @@ def calc_coprecessing_angles( multipole_dict,       # dict of multipoles { ... l
     '''
 
     # Import usefuls
-    from numpy.linalg import eig
-    from numpy import arctan2,sin,arcsin,alpha,beta,unwrap
+    from scipy.linalg import eig
+    from scipy.integrate import cumtrapz
+    from numpy import arctan2,sin,arcsin,pi
+    from numpy import unwrap,argmax,cos,array,sqrt
 
     #-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-#
     # Enforce that multipole data is array typed with a well defined length
@@ -999,8 +1006,8 @@ def calc_coprecessing_angles( multipole_dict,       # dict of multipoles { ... l
             y[l,m] = array( [ y[l,m], ] )
         else:
             # Some input validation
-            if t is None: error( 'Since your multipole data is a series, you must also input the related time array' )
-            if len(t) != len(y[l,m]): error('time array and multipole data not of same length')
+            if domain_vals is None: error( 'Since your multipole data is a series, you must also input the related domain_vals (i.e. times or frequencies) array' )
+            if len(domain_vals) != len(y[l,m]): error('domain_vals array and multipole data not of same length')
 
 
     #-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-#
@@ -1017,9 +1024,10 @@ def calc_coprecessing_angles( multipole_dict,       # dict of multipoles { ... l
 
     # Initialize idents for angles. NOTE that gamma will be handled below
     alpha,beta = [],[]
+    if return_xyz: X,Y,Z = [],[],[]
 
     # For all multipole instances
-    for k in range( len(L[0,0]) ):
+    for k in range( len(L[0,0,:]) ):
 
         # Select the emission matrix for this instance, k
         _L = L[:,:,k]
@@ -1031,19 +1039,35 @@ def calc_coprecessing_angles( multipole_dict,       # dict of multipoles { ... l
         dominant_dex = argmax( vals )
 
         # Select the corresponding vector
-        dominant_vec = vec[ dominant_dex ]
+        dominant_vec = vec[ :, dominant_dex ]
+
+        # There is a z axis degeneracy that we will break here
+        # by imposing that the z component is always positive
+        if dominant_vec[-1]<0: dominant_vec *= -1
 
         # Given this vector, calculate the related Euler angles
         # NOTE Eq. A3 of arxiv:1304.3176
 
         # Extract the components of the dominant eigenvector
-        x,y,z = dominant_vec
+        _x,_y,_z = dominant_vec
 
-        # Find alpha and beta using simple trig, and check beta solution
-        _alpha = arctan2(y,x)
-        _beta  = arcsin( y / sin(_alpha) )
-        _beta_check = arcsin( x / cos(_alpha) )
-        if abs(_beta-_beta_check)>1e-4 : error('beta angle fails consistency check! debug me please')
+        # Find alpha and beta
+        _alpha = arctan2(_y,_x)
+
+        # NOTE that the commeted method below imposes that sin(beta)>0, and is therefore not general
+        # _beta = arctan2( sqrt(_y*_y+_x*_x), _z )
+
+        # The below method for finding beta uses only odd functions and so has no sign ambiguity
+        _beta  = arcsin( _y / (sin(_alpha) if sin(_alpha)!=0 else 1e-8 ) )
+
+        # Look for and handle trivial cases
+        if abs(_x)+abs(_y) < 1e-8 :
+            _x = _y = 0
+            _alpha = 0
+
+        # Store positions if output is desired
+        if return_xyz:
+            X.append(_x);Y.append(_y);Z.append(_z)
 
         # NOTE that gamma may be found once all values of alpha and beta are found
 
@@ -1052,12 +1076,23 @@ def calc_coprecessing_angles( multipole_dict,       # dict of multipoles { ... l
         beta.append( _beta )
 
     # Convert alpha and beta to arrays in prep for finding gamma
-    alpha = unwrap( array( alpha ) )
-    beta = unwrap( array( beta ) )
+    alpha = array( alpha )
+    beta = array( beta )
 
     # Calculate gamma (Eq. A4 of of arxiv:1304.3176)
     if len(alpha) > 1 :
-        gamma = - trapz( cos(beta) * spline_diff(t,alpha)  )
+        gamma = - spline_antidiff( domain_vals, cos(beta) * spline_diff(domain_vals,alpha)  )
     else:
         # NOTE that this is the same as above, but here we're choosing an integration constant such that the value is zero. Above, no explicit integration constant is chosen.
         gamma = 0
+
+    # Make sure that angles are unwrapped
+    alpha = unwrap( alpha )
+    beta  = unwrap( beta  )
+    gamma = unwrap( gamma )
+
+    # Return answer
+    if return_xyz:
+        return array(X),array(Y),array(Z)
+    else:
+        return alpha,beta,gamma
