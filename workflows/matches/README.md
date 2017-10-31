@@ -1,6 +1,10 @@
 # Matches (Faithfulness) with NR waveforms
 ---
 
+### WARNING!!!!
+
+This workflow is intended as an example only. You should copy the workflow folder to your own directory, and then edit it according to your needs. This specific example uses LALSimulation versions of PhenomHM and PhenomD to compute matches; the waveform calls are in template_wfarr_fun and signal_wfarr_fun as found in src.py -- you'll want to change this for your purposes. Also note that LAL is sourced in "work". You will likely also want to change this.
+
 ### Requirements
 
 LAL, nrutils, positive
