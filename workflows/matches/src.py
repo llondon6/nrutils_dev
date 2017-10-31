@@ -8,7 +8,7 @@ from nrutils import scsearch,gwylm,physf,physhf,eta2q,lalphenom
 from nrutils.analyze.match import match as match_object
 from positive import *
 import lalsimulation as lalsim
-from numpy import pi,array,savetxt,log, angle, unwrap, average, linspace, arange, diff, ones, ones_like, zeros, zeros_like, hstack
+from numpy import pi,array,savetxt,log, angle, unwrap, average, linspace, arange, diff, ones, ones_like, zeros, zeros_like, hstack, ndarray
 from shutil import copyfile
 from glob import glob
 executable_name = glob( parent( os.path.realpath(__file__) )+'*work' )[0].split('/')[-1]
@@ -31,7 +31,7 @@ alert("We are getting lalsimulation from: "+yellow(bold(lalsim.__path__[0])),"wo
 # -~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~ #
 thisdir = parent( os.path.realpath(__file__) )
 inipath = osjoin( thisdir, 'config.ini' )
-defaults = { 'M':90, 'fmin':'', 'fmax':400, 'diagnostic_inclination':'pi/2', 'diagnostic_phase':'pi/2', 'distance':450, 'outdir':'', 'N_inclinations':21, 'N_PSI_signal':8, 'N_phi_signal':11  }
+defaults = { 'M2_Sol':10, 'fmin':'', 'fmax':400, 'diagnostic_inclination':'pi/2', 'diagnostic_phase':'pi/2', 'D_Mpc':450, 'outdir':'', 'N_inclinations':21, 'N_PSI_signal':8, 'N_phi_signal':11  }
 config = smart_object( inipath, cleanup=True, comment=['#',';'], defaults=defaults )
 
 
@@ -91,28 +91,27 @@ for simkey in config.simulation_keywords:
         config.nrlmlist.append( (k[0],-k[-1]) )
     config.nrlmlist = list(set(config.nrlmlist))
     if len(config.nrlmlist) > 0:
-        y = gwylm(sce,lm=config.nrlmlist,clean=True,verbose=True,dt=0.5)
+        y = gwylm(sce,lm=config.nrlmlist,clean=True,verbose=True,dt=0.5,pad=500)
     else:
-        y = gwylm(sce,lmax=5,clean=True,verbose=True,dt=0.5)
-
-
-    # Make sure that the defulat behavior of fmin is handled
-    nrfmin = physf( y.wstart_pn/(2*pi), config.M ) + 10.0
-    config.fmin = eval(str(config.fmin)) if len(str(config.fmin))>0 else nrfmin
+        y = gwylm(sce,lmax=5,clean=True,verbose=True,dt=0.5,pad=500)
 
     # Let the people know what the settings are
     alert('The match workflow will be performed with the following settings:',heading=True)
     config.show()
-    if config.fmin < nrfmin: warning('The input fmin (%f) is less than the expect fmin of the NR data (%f)'%(config.fmin,nrfmin))
 
     # -- Define shorthand identifiers -- #
-    fmin = config.fmin
-    fmax = config.fmax
     theta = config.diagnostic_inclination
     phi = config.diagnostic_phase
-    M = config.M
-    D = config.distance
-    df = physf(y.ylm[0].df,M)
+    M_Sol = config.M2_Sol * ( 1.0 + sce.m1/sce.m2 )
+    # Determine the Total mass from the mass ratio and M2
+    D_Mpc = config.D_Mpc
+    df = physf(y.ylm[0].df,M_Sol)
+    # Make sure that the defulat behavior of fmin is handled
+    nrfmin = physf( y.wstart_pn/(2*pi), M_Sol ) + 10.0
+    if config.fmin < nrfmin: warning('The input fmin (%f) is less than the expect fmin of the NR data (%f)'%(config.fmin,nrfmin))
+    config.fmin = eval(str(config.fmin)) if len(str(config.fmin))>0 else nrfmin
+    fmin = config.fmin
+    fmax = config.fmax
 
     # -~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~ #
     # Make and save a diagnostic plot of the NR waveform in the TD
@@ -142,15 +141,15 @@ for simkey in config.simulation_keywords:
     # Define high-level waveform functions
     # -- For NR
     def signal_wfarr_fun( THETA,PHI,LM=None) :
-        ans = physhf( y.recompose( THETA,PHI,kind='strain',domain='freq').fd_wfarr, M, D )
+        ans = physhf( y.recompose( THETA,PHI,kind='strain',domain='freq').fd_wfarr, M_Sol, D_Mpc )
         return ans
     # -- For MODEL
     def template_wfarr_fun( THETA,PHI,LM=None) :
         if LM is None: LM = []
         if set(LM) == set([(2,2),(2,-2)]):
-            ans = lalphenom( y.eta,M,y.X1[-1],y.X2[-1],THETA,PHI,D,df,fmin,fmax, approx='IMRPhenomD' )
+            ans = lalphenom( y.eta,M_Sol,y.X1[-1],y.X2[-1],THETA,PHI,D_Mpc,df,fmin,fmax, approx='IMRPhenomD' )
         else:
-            ans = lalphenom( y.eta,M,y.X1[-1],y.X2[-1],THETA,PHI,D,df,fmin,fmax )
+            ans = lalphenom( y.eta,M_Sol,y.X1[-1],y.X2[-1],THETA,PHI,D_Mpc,df,fmin,fmax )
         return ans
 
     # Construct model and NR waveform at a fixed inclination and orbital phase
@@ -351,11 +350,21 @@ for simkey in config.simulation_keywords:
     mpl.rcParams['axes.titlesize'] = 20
     #
     alert('Ploting results and outputting data',heading=True)
+    # Output all match information
     filepath = data_dir + 'match_info.pickle'
     with open(filepath, 'wb') as datafile:
         pickle.dump( match_info , datafile, pickle.HIGHEST_PROTOCOL )
+    # Output match object and waveform data
+    filepath = data_dir + 'misc.pickle'
+    with open(filepath, 'wb') as datafile:
+        pickle.dump( (y,signal_wfarr_fun,template_wfarr_fun,M_Sol,D_Mpc,phys_template, phys_signal) , datafile, pickle.HIGHEST_PROTOCOL )
+    # Output workflow settings
+    filepath = data_dir + 'workflow_settings.pickle'
+    with open(filepath, 'wb') as datafile:
+        pickle.dump( config, datafile, pickle.HIGHEST_PROTOCOL )
     for k in match_info:
-        savetxt( data_dir+k+'.asc', match_info[k] )
+        if isinstance(match_info[k],ndarray) and isinstance(k,str):
+            savetxt( data_dir+k+'.asc', match_info[k] )
     figure( figsize = 6*array([1.5,1]) )
     alpha = 0.05
     sth = linspace(0,pi)
@@ -377,8 +386,32 @@ for simkey in config.simulation_keywords:
     xlim( [0,pi] )
     xlabel(r'$\iota$')
     ylabel(r'$( h_\mathrm{HM} | h_\mathrm{NR} )$')
-    yl = lim( hstack([sm('quadrupole_min'),sm('max')]) )
-    dy = 0.001*yl
-    ylim( yl + dy*array([-1.5,1]) )
+    yl = lim( hstack([sm('min'), sm('max'), sm('quadrupole_min'), sm('quadrupole_max')]) ); dy = 0.001*yl
+    ylim( yl + dy*array([-1,1]) )
     savefig( basedir+'matches_'+sce.simname+'.pdf' )
     close(gcf())
+
+
+    #
+    import corner
+
+    #
+    X = array( [ match_info['samples']['optsnr'],
+                 match_info['samples']['phi_signal'],
+                 match_info['samples']['psi_signal'],
+                 match_info['samples']['theta'],
+                 match_info['samples']['match']] ).T
+
+    c = corner.corner( X, range=[ lim(X[:,k],dilate=0.05) for k in range(X.shape[-1]) ],
+                       bins=50,quantiles=[0.16, 0.5, 0.84],
+                       labels=[ r'$\rho_{\mathrm{opt}}$',
+                                r'$\phi_s$',
+                                r'$\psi_s$',
+                                r'$\iota_s$',
+                                r'$\langle s | h_\mathrm{HM} \rangle$' ],
+                       show_titles=True )
+    c.set_size_inches( 13*array([1,1]) )
+    savefig( basedir+'matches_'+sce.simname+'_corner.pdf',bbox_inches='tight' )
+
+    #
+    alert('Done!!!!',header=True)
