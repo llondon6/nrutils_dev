@@ -36,7 +36,7 @@ class match:
     #
     def calc_template_phi_optimized_match( this,
                                            template_wfarr_orbphi_fun, # takes in template orbital phase, outputs waveform array
-                                           N_template_phi = 13,# number of orbital phase values to use for exploration; NOTE that a solver is used after these points are evaluated
+                                           N_template_phi = 61,# number of orbital phase values to use for exploration; NOTE that a solver is used after these points are evaluated
                                            plot = False,
                                            signal_polarization = None,
                                            method = None,
@@ -98,15 +98,16 @@ class match:
 
         # Interpolate match over phi_template to estimate maximum
         # intrp_max lives in the "positive" repository
-        # optimal_phi_template = intrp_argmax(match_list,phi_template_range,plot=plot)
-        optimal_phi_template = phi_template_range[ argmax( match_list ) ]
-        # match = max( match_helper( optimal_phi_template ), max(match_list) )
+        optimal_phi_template = intrp_argmax(match_list,phi_template_range,plot=plot)
+        match = max( match_helper( optimal_phi_template ), max(match_list) )
 
-        #
-        from scipy.optimize import minimize
-        info = minimize( match_helper, optimal_phi_template )
-        match = info.fun
-        optimal_phi_template =info.x[0]
+        # ~--~--~--~--~--~--~--~--~--~--~--~--~--~--~--~--~--~--~-- #
+        # NOTE -- Using the code below to perform the minimization can cause problems with LALSIMULATION !!! (scipy tries to pass an invalid input)
+        # ~--~--~--~--~--~--~--~--~--~--~--~--~--~--~--~--~--~--~-- #
+        # from scipy.optimize import minimize
+        # info = minimize( match_helper, optimal_phi_template )
+        # match = info.fun
+        # optimal_phi_template =info.x[0]
 
         #
         if plot:
