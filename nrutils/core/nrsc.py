@@ -1943,6 +1943,10 @@ class gwylm:
                   pad = None,                       # Optional padding length in samples of wfarr upon loading; not used if fftfactor is present; 'pad' samples dwill be added to the wfarr rows
                   verbose               = None ):   # be verbose
 
+        '''
+        Put something informative here!
+        '''
+
         # NOTE that this method is setup to print the value of each input if verbose is true.
         # NOTE that default input values are handled just below
 
@@ -3088,7 +3092,7 @@ class gwylm:
     #
     def deletelm( this, lm ):
         # remove an lm node from this object
-
+        error('method not implemented')
         return None
 
     # Find the polarization and orbital phase shifts that maximize the real part
@@ -3677,8 +3681,9 @@ class gwfcharstart:
 
         # 1. Find the pre-peak portion of the waveform.
         val_mask = arange( y.k_amp_max )
-        # 2. Find the peak locations of the plus part.
-        pks,pk_mask = findpeaks( y.cross[ val_mask ] )
+        # 2. Find the peak locations of the plus part. NOTE that smooth() is defined in positive.maths
+        pks,pk_mask = findpeaks( smooth( y.cross[ val_mask ], 20 ).answer )
+        # pks,pk_mask = findpeaks( y.cross[ val_mask ] )
         pk_mask = pk_mask[ pks > y.amp[y.k_amp_max]*5e-4 ]
 
         # 3. Find the difference between the peaks
