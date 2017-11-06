@@ -15,17 +15,17 @@ from basics import smart_object
 
 # # Make definitions in the pathsfile avaliable to this package. Note that these will be treated as global settings for the nrutils package.
 # settings = smart_object( __pathsfile__ )
-gconfig = smart_object()
+global_settings = smart_object()
 # Path where institute specific cinfiguration files are held
-gconfig.config_path = __installpath__ + '/config/'
+global_settings.config_path = __installpath__ + '/config/'
 # Path where catalog database files are to be stored
-gconfig.database_path = __installpath__ + '/database/'
+global_settings.database_path = __installpath__ + '/database/'
 # Path where handler scripts are stored
-gconfig.handler_path = __installpath__ + '/handlers/'
+global_settings.handler_path = __installpath__ + '/handlers/'
 # File extension associated with catalog database files
-gconfig.database_ext = 'db'
+global_settings.database_ext = 'db'
 # Name a shorhand for the setting to make the user feel like they own something
-my_settings = gconfig
+my_settings = global_settings
 
 # Sign convention to be used with multipole moments:
 M_RELATIVE_SIGN_CONVENTION = 1 # 1: Psi4 multipoles of are forced to have time domain frequencies of the SAME sign as m

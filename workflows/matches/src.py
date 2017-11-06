@@ -31,7 +31,7 @@ alert("We are getting lalsimulation from: "+yellow(bold(lalsim.__path__[0])),"wo
 # -~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~ #
 thisdir = parent( os.path.realpath(__file__) )
 inipath = osjoin( thisdir, 'config.ini' )
-defaults = { 'M2_Sol':10, 'fmin':'', 'fmax':400, 'diagnostic_inclination':'pi/2', 'diagnostic_phase':'pi/2', 'D_Mpc':450, 'outdir':'', 'N_inclinations':21, 'N_PSI_signal':8, 'N_phi_signal':11  }
+defaults = { 'M_Sol':100, 'fmin':'', 'fmax':400, 'diagnostic_inclination':'pi/2', 'diagnostic_phase':'pi/2', 'D_Mpc':450, 'outdir':'', 'N_inclinations':21, 'N_PSI_signal':8, 'N_phi_signal':11  }
 config = smart_object( inipath, cleanup=True, comment=['#',';'], defaults=defaults )
 
 
@@ -102,7 +102,7 @@ for simkey in config.simulation_keywords:
     # -- Define shorthand identifiers -- #
     theta = config.diagnostic_inclination
     phi = config.diagnostic_phase
-    M_Sol = config.M2_Sol * ( 1.0 + sce.m1/sce.m2 )
+    M_Sol = config.M_Sol
     # Determine the Total mass from the mass ratio and M2
     D_Mpc = config.D_Mpc
     df = physf(y.ylm[0].df,M_Sol)
@@ -357,13 +357,13 @@ for simkey in config.simulation_keywords:
     # Output match object and waveform data
     filepath = data_dir + 'misc.pickle'
     with open(filepath, 'wb') as datafile:
-        pickle.dump( (y,signal_wfarr_fun,template_wfarr_fun,M_Sol,D_Mpc,phys_template, phys_signal) , datafile, pickle.HIGHEST_PROTOCOL )
+        pickle.dump( (signal_wfarr_fun,template_wfarr_fun,M_Sol,D_Mpc,phys_template, phys_signal) , datafile, pickle.HIGHEST_PROTOCOL )
     # Output workflow settings
     filepath = data_dir + 'workflow_settings.pickle'
     with open(filepath, 'wb') as datafile:
         pickle.dump( config, datafile, pickle.HIGHEST_PROTOCOL )
     for k in match_info:
-        if isinstance(match_info[k],ndarray) and isinstance(k,str):
+        if isinstance(match_info[k],(ndarray,list,tuple)):
             savetxt( data_dir+k+'.asc', match_info[k] )
     figure( figsize = 6*array([1.5,1]) )
     alpha = 0.05

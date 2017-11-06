@@ -9,10 +9,82 @@ Modules for Numerical Relativity Simulation Catalog:
 '''
 
 #
-from nrutils.core import gconfig
+from nrutils.core import global_settings
 from nrutils.core.basics import *
 from nrutils.core import M_RELATIVE_SIGN_CONVENTION
 import warnings,sys
+
+#
+class __gconfig__:
+
+    '''
+    This class is to play the role of config files by:
+    1. Loading and storing static fields within each config file
+    2. Allowing the user to change fields such as catalog directories
+    3. Classes and methods within nrsc.py will use a member of this class to navigate the catalog database files.
+    4. Upon import, nrutils will load the user settings, with the user's previoius settings state carried over.
+    '''
+
+    #
+    def __init__( this, verbose=False ):
+
+        # Import usefuls
+        from glob import glob as find
+        from os.path import expanduser,join,basename,isdir,isfile
+        from shutil import copyfile as cp
+        import dill, pickle
+
+        # Load all default config file locations
+        config_paths = find( global_settings.config_path+'*.ini' )
+
+        # Let the people know
+        if verbose: alert('Found %i config (ini) files in "%s"'%(len(config_paths),cyan(global_settings.config_path)),'gconfig')
+
+        # Create a folder to store user settings files
+        user_settings_path = expanduser('~/.nrutils_user_settings/')
+        is_new_settings_filder = not isdir(user_settings_path)
+        mkdir(user_settings_path,verbose=verbose)
+
+        # Copy each default config file to the user's local config_path
+        # * existing files will not be overwritten
+        user_config_files = []
+        for config_path in config_paths:
+            config_file_location = join(user_settings_path,basename(config_path))
+            user_config_files.append(config_file_location)
+            if not isfile(config_file_location):
+                if verbose: print '>> copying "%s" to "%s" to make up for missing config'%(blue(config_path),blue(config_file_location))
+                cp( config_path, config_file_location )
+
+        # Create a smart object representation of each config
+        soconf = []
+        for ucf in user_config_files:
+            #
+            so = scconfig( ucf )
+            #
+            soconf.append( so )
+
+        # Define fucntion that return the first existing dir in a list of dirs
+        def take_existing( flist ):
+            if not isinstance(flist,(list,tuple)):
+                flist = [flist]
+            for f in flist:
+                if isdir(f):
+                    return f
+
+        # Determine the catalog directories for each, and store each catalog dir
+        for so in soconf:
+            #
+            so.catalog_dir = take_existing( so.catalog_dir )
+
+        # Store the list of config objects
+        this.configs = soconf
+
+        # Define the location of the user's living config bundle
+        user_config_obj_path = join( user_settings_path, 'global_config' )
+        # store the current object to this location
+        with open( user_config_obj_path, 'wb' ) as f:
+            pickle.dump( this , f )
+
 
 # Class representation of configuration files. The contents of these files define where the metadata for each simulation is stored, and where the related NR data is stored.
 class scconfig(smart_object):
@@ -30,7 +102,10 @@ class scconfig(smart_object):
         this.config_file_location = config_file_location
         this.reconfig()
 
-    # The actual constructor: this will be called within utility functions so that scentry objects are configured with local settings (i.e. gconfig).
+        # Possibly useful toggle for labeling existance of catalog_dir
+        this.is_valid = True
+
+    # The actual constructor: this will be called within utility functions so that scentry objects are configured with local settings (i.e. global_settings).
     def reconfig(this):
 
         #
@@ -44,8 +119,8 @@ class scconfig(smart_object):
         #
         stale_config_exists = os.path.exists( this.config_file_location )
         if not stale_config_exists:
-            # Try to refresh the config location using the user's current settings (i.e. gconfig) (see __init__.py in nrutils/core)
-            config_path = gconfig.config_path
+            # Try to refresh the config location using the user's current settings (i.e. global_settings) (see __init__.py in nrutils/core)
+            config_path = global_settings.config_path
             stale_config_name = this.config_file_location.split('/')[-1]
             fresh_config_file_location = expanduser( config_path + '/' + stale_config_name )
             # If the new config path exists, then store it and use it to reconfigure the current object
@@ -71,7 +146,7 @@ class scconfig(smart_object):
     # Get location of handler file based on handler name in config ini
     def get_handler_location(this):
         '''Get location of handler file based on handler name in config ini'''
-        handler_location = gconfig.handler_path + this.handler_name + '.py'
+        handler_location = global_settings.handler_path + this.handler_name + '.py'
         # alert('The handler location is %s'%yellow(handler_location),header=True)
         return handler_location
 
@@ -90,7 +165,7 @@ class scconfig(smart_object):
                            'catalog_dir',               # local directory where all simulation folders are stored
                                                         # this directory allows catalog files to be portable
                            'data_file_name_format',     # formatting string for referencing l m and extraction parameter
-                           'handler_name',              # name of handler file WITHOUT extension in gconfig.handler_path
+                           'handler_name',              # name of handler file WITHOUT extension in global_settings.handler_path
                                                         # learn_metadata functions
                            'is_extrapolated',           # users should set this to true if waveform is extrapolated
                                                         # to infinity
@@ -141,8 +216,13 @@ class scconfig(smart_object):
         # Make sure that all directories end with a forward slash
         for attr in this.__dict__:
             if 'dir' in attr:
-                if this.__dict__[attr][-1] != '/':
-                    this.__dict__[attr] += '/'
+                if isinstance(this.__dict__[attr],str):
+                    if this.__dict__[attr][-1] != '/':
+                        this.__dict__[attr] += '/'
+                elif isinstance(this.__dict__[attr],(list,tuple)):
+                    for k in range(len(this.__dict__[attr])):
+                        if this.__dict__[attr][k] != '/':
+                            this.__dict__[attr][k] += '/'
         # Make sure that user symbols (~) are expanded
         for attr in this.__dict__:
             if ('dir' in attr) or ('location' in attr):
@@ -411,10 +491,10 @@ def simdir2scentry( catalog_dir, verbose = False ):
     if verbose: alert('We will now try to convert a given directory to a scentry object.', heading=True,pattern='--')
 
     # Load all known configs
-    cpath_list = glob.glob( gconfig.config_path+'*.ini' )
+    cpath_list = glob.glob( global_settings.config_path+'*.ini' )
     # Warn/Error if needed
     if not cpath_list:
-        msg = 'Cannot find configuration files (*.ini) in %s' % gconfig.config_path
+        msg = 'Cannot find configuration files (*.ini) in %s' % global_settings.config_path
         error(msg,thisfun)
 
     # Create config objects from list of config files
@@ -481,7 +561,7 @@ def scbuild(keyword=None,save=True):
     thisfun = inspect.stack()[0][3]
 
     # Look for config files
-    cpath_list = glob.glob( gconfig.config_path+'*.ini' )
+    cpath_list = glob.glob( global_settings.config_path+'*.ini' )
 
     # If a keyword is give, filter against found config files
     if isinstance(keyword,(str,unicode)):
@@ -491,7 +571,7 @@ def scbuild(keyword=None,save=True):
 
     #
     if not cpath_list:
-        msg = 'Cannot find configuration files (*.ini) in %s' % gconfig.config_path
+        msg = 'Cannot find configuration files (*.ini) in %s' % global_settings.config_path
         error(msg,thisfun)
 
     # Create config objects from list of config files
@@ -502,7 +582,7 @@ def scbuild(keyword=None,save=True):
 
         # %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% #
         # Create streaming log file        #
-        logfstr = gconfig.database_path + '/' + splitext(basename(config.config_file_location))[0] + '.log'
+        logfstr = global_settings.database_path + '/' + splitext(basename(config.config_file_location))[0] + '.log'
         msg = 'Opening log file in: '+cyan(logfstr)
         alert(msg,thisfun)
         logfid = open(logfstr, 'w')
@@ -545,7 +625,7 @@ def scbuild(keyword=None,save=True):
 
         # Store the catalog to the database_path
         if save:
-            db = gconfig.database_path + '/' + splitext(basename(config.config_file_location))[0] + '.' + gconfig.database_ext
+            db = global_settings.database_path + '/' + splitext(basename(config.config_file_location))[0] + '.' + global_settings.database_ext
             msg = 'Saving database file to %s'%cyan(db)
             alert(msg,'scbuild')
             with open(db, 'wb') as dbf:
@@ -640,10 +720,10 @@ def scsearch( catalog = None,           # Manually input list of scentry objects
     # Handle the catalog input
     if catalog is None:
         # Get a list of all catalog database files. NOTE that .cat files are either placed in database_path directly, or by scbuild()
-        dblist = glob.glob( gconfig.database_path+'*.'+gconfig.database_ext )
+        dblist = glob.glob( global_settings.database_path+'*.'+global_settings.database_ext )
         # Let the people know which catalog files have been found
         if verbose==2:
-            alert('Searching in "%s" for catalog files.'%yellow(gconfig.database_path))
+            alert('Searching in "%s" for catalog files.'%yellow(global_settings.database_path))
         # Load the catalog file(s)
         catalog = []
         if verbose==2: alert('Loading catalog information from:')
@@ -1418,6 +1498,10 @@ class gwf:
         from matplotlib.pyplot import title as ttl
         from numpy import ones,sqrt,hstack,array,sign
 
+        from matplotlib import rc
+        rc('font', **{'family': 'serif', 'serif': ['Computer Modern']})
+        rc('text', usetex=True)
+
         #
         if ref_gwf:
             that = ref_gwf
@@ -1971,8 +2055,10 @@ class gwylm:
         # Allow users to give directory instead of scentry object becuase it's easier for some people
         if isinstance(scentry_obj,str):
             simdir = scentry_obj
-            warning( 'You have input a directory rather than an scentry object. We will try to convert the directory to an scentry object, but this is slower than using the our catalog system. Please consider modifying the appropriate configuretion file (i.e. in "%s") to accommodate your new simulation, or perhaps create a new configuration file. Given your new or updated configuration file, please run nrutils.scbuild("my_config_name") to update your local catalog. If you are confident that all has gone well, you may also wish to push changes in your catalog (to the master repo). Live long and prosper. -- Lionel'%cyan(gconfig.config_path),'gwylm' )
+            warning( 'You have input a directory rather than an scentry object. We will try to convert the directory to an scentry object, but this is slower than using the our catalog system. Please consider modifying the appropriate configuretion file (i.e. in "%s") to accommodate your new simulation, or perhaps create a new configuration file. Given your new or updated configuration file, please run nrutils.scbuild("my_config_name") to update your local catalog. If you are confident that all has gone well, you may also wish to push changes in your catalog (to the master repo). Live long and prosper. -- Lionel'%cyan(global_settings.config_path),'gwylm' )
             scentry_obj = simdir2scentry( simdir, verbose=verbose )[0]
+
+        # Allow users to input path to h5 file in lvc-nr format
 
         # Confer the scentry_object's attributes to this object for ease of referencing
         for attr in scentry_obj.__dict__.keys():
@@ -2644,12 +2730,13 @@ class gwylm:
     def characterize_start_end(this):
 
         # Look for the l=m=2 psi4 multipole
-        y22_list = filter( lambda y: y.l==y.m==2, this.ylm )
-        # If it doesnt exist in this.ylm, then load it
-        if 0==len(y22_list):
-            y22 = this.load(lm=[2,2],output=True,dt=this.dt)
+        if len( this.ylm ):
+            y22 = this.lm[2,2]['psi4']
+        elif len( this.hlm ):
+            y22 = this.lm[2,2]['strain']
         else:
-            y22 = y22_list[0]
+            # If it doesnt exist in this.ylm, then load it
+            y22 = this.load(lm=[2,2],output=True,dt=this.dt)
 
         #%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&#
         # Characterize the START of the waveform (pre-inspiral)      #
@@ -3674,8 +3761,8 @@ class gwfcharstart:
         # This algorithm estimates the start of the gravitational waveform -- after the initial junk radiation that is present within most raw NR output. The algorithm proceeds in the manner consistent with a time domain waveform.
 
         # Validate inputs
-        if not isinstance(y,gwf):
-            msg = 'First imput must be a '+cyan('gwf')+' object. Type %s found instead.' % type(y).__name__
+        if not (y.__class__.__name__=='gwf'):
+            msg = 'First imput must be a '+cyan('gwf')+' object. Type %s found instead.' % y.__class__.__name__
             error(msg,thisfun)
 
 
@@ -3798,3 +3885,86 @@ def gwftaper( y,                        # gwf object to be windowed
 
     #
     return window
+
+
+
+# -~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~ #
+# Given the location of an lvcnr h5 file, as well as the
+# desired multipoles to load, generate a gwylm object.
+# -~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~ #
+def lvcnr5_to_gwylm(h5dir,lm=None,verbose=True,dt=0.25,lmax=6,clean=True):
+    '''
+    Given the location of an lvcnr h5 file, as well as the desired multipoles to load,
+    generate a gwylm object.
+    '''
+
+    #
+    from scipy.interpolate import InterpolatedUnivariateSpline as spline
+    from numpy import array,arange,exp,inf,sqrt
+    from nrutils import scentry,gwylm,gwf
+    import h5py
+
+    #
+    lmlist = lm
+
+    #
+    f = h5py.File( h5dir )
+
+    #
+    e = scentry( None, None )
+    e.m1,e.m2 = f.attrs['mass1'], f.attrs['mass2']
+    chi1 = array([f.attrs['spin1x'],f.attrs['spin1y'],f.attrs['spin1z']])
+    chi2 = array([f.attrs['spin2x'],f.attrs['spin2y'],f.attrs['spin2z']])
+    e.X1,e.X2 = chi1,chi2
+    e.S1,e.S2 = chi1*e.m1**2,chi2*e.m1**2
+    e.mf = f['remnant-mass-vs-time']['Y'][-1]
+    #
+    e.R1 = array( [f['position1x-vs-time']['Y'][0],f['position1y-vs-time']['Y'][0],f['position1z-vs-time']['Y'][0]] )
+    #
+    e.R2 = array( [f['position2x-vs-time']['Y'][0],f['position2y-vs-time']['Y'][0],f['position2z-vs-time']['Y'][0]] )
+    #
+    R = e.R2-e.R1
+    e.b = sqrt(sum( R*R ))
+    #
+    e.default_extraction_par = inf
+    e.default_level = None
+    e.config = None
+    e.simname = h5dir.split('/')[-1].split('.')[0]
+    e.setname = f.attrs['NR-group']+'-'+f.attrs['type']
+    e.label = 'unknown-label'
+    e.eta = e.m1*e.m2 / ( (e.m1+e.m2)**2 )
+    #
+    y = gwylm(e,load=False)
+
+    nrtimes = f['NRtimes']
+    t = arange( min(nrtimes),max(nrtimes)+dt,dt )
+    #
+    done = False
+
+    # Generate l,m values based on lmax
+    if lmlist is None: lmlist = [ (l,m)  for l in range(2,lmax+1) for m in range(-l,l+1) ]
+
+    #
+    for l,m in lmlist:
+        if verbose: alert('Loading strain for %s'%cyan('(l,m) = (%i,%i)'%(l,m)))
+        try:
+            amp = spline(f['amp_l%i_m%i'%(l,m)]['X'],f['amp_l%i_m%i'%(l,m)]['Y'])(t)
+            pha = spline(f['phase_l%i_m%i'%(l,m)]['X'],f['phase_l%i_m%i'%(l,m)]['Y'])(t)
+        except:
+            break
+        z = amp * exp(1j*pha)
+        wfarr = array([ t, z.real, z.imag ]).T
+        y.hlm.append(  gwf( wfarr,l=l,m=m,kind='$rh_{%i%i}/M$'%(l,m) )  )
+
+    #
+    y.__lmlist__ = lmlist
+    y.__input_lmlist__ = lmlist
+    y.__curate__()
+    f.close()
+
+    #
+    y.characterize_start_end()
+    if clean: y.clean()
+
+    #
+    return y
