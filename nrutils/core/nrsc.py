@@ -140,6 +140,18 @@ class scconfig(smart_object):
             this.config_exists = False
             warning(msg,'scconfig.reconfig')
 
+        # Select existing catalof dir
+        if isinstance(this.catalog_dir,list):
+            found_directory = False
+            for d in this.catalog_dir:
+                if os.path.isdir(d):
+                    this.catalog_dir = d
+                    found_directory = True
+                    break
+            if not found_directory:
+                error('You system does not have access to the following catalog directories as defined in settings:\n\n%s\n\n Please update your settings or mount the desired location.'%(str(this.catalog_dir)))
+
+
         # In some cases, it is useful to have this function return this
         return this
 
@@ -416,6 +428,10 @@ class scentry:
 
     # Create dynamic function that references the user's current configuration to construct the simulation directory of this run.
     def simdir(this):
+
+        #
+        import os
+
         if this.config:
             if 'static' in this.__dict__:
                 if this.static:
@@ -3274,6 +3290,8 @@ class gwylm:
             mpl.rcParams['font.size'] = 12
             mpl.rcParams['axes.labelsize'] = 20
             mpl.rcParams['axes.titlesize'] = 20
+            from matplotlib import rc
+            rc('font', **{'family': 'serif', 'serif': ['Computer Modern']})
             from matplotlib.pyplot import plot,axes,xlabel,ylabel,xlim,ylim,figure,title
 
             dphis = pi*linspace(-1,1,2e2).T
