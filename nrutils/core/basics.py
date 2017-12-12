@@ -732,7 +732,7 @@ def lalphenom( eta,                     # symmetric mass ratio
     _hp = array(hp_[::-1]).conj()
     hp = hstack( [ _hp , hp_[1:] ] ) # NOTE: Do not keep duplicate zero frequency point
     #
-    _hc = array(hc_[::-1]).conj()
+    _hc = (array(hc_)[::-1]).conj()
     hc = hstack( [ _hc , hc_[1:] ] )
     #
     f_ = arange(hp_lal.data.data.size) * hp_lal.deltaF

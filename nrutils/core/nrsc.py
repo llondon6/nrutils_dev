@@ -149,7 +149,7 @@ class scconfig(smart_object):
                     found_directory = True
                     break
             if not found_directory:
-                error('You system does not have access to the following catalog directories as defined in settings:\n\n%s\n\n Please update your settings or mount the desired location.'%(str(this.catalog_dir)))
+                warning('You system does not have access to the following catalog directories as defined in settings:\n%s\n If you\'d like access to this catalog, please update your settings or manually mount the desired location.'%(cyan(str(this.catalog_dir))))
 
 
         # In some cases, it is useful to have this function return this
@@ -717,7 +717,8 @@ def scsearch( catalog = None,           # Manually input list of scentry objects
     if verbose is not None:
         for k in dir():
             if (eval(k) is not None) and (k != 'thisfun'):
-                alert('Found %s (=%r) keyword.' % (textul(k),eval(k)) )
+                # alert('Found %s keyword.' % (textul(k)) )
+                alert('Found %s (=%s) keyword.' % (textul(k),str(eval(k) if not isinstance(eval(k),list) else '...' )) )
 
     '''
     Handle individual cases in serial
@@ -786,17 +787,17 @@ def scsearch( catalog = None,           # Manually input list of scentry objects
     # non-precessing, same as spinaligned & spin anti aligned
     nptol = 1e-4
     if nonprecessing is True:
-        test = lambda k: allclose( abs(dot(k.S1+k.S2,k.L1+k.L2)), norm(k.L1+k.L2)*norm(k.S1+k.S2) , atol = nptol )
+        test = lambda k: allclose( abs(dot(k.S2,k.L1+k.L2)), norm(k.L1+k.L2)*norm(k.S2) , atol = nptol ) and allclose( abs(dot(k.S1,k.L1+k.L2)), norm(k.L1+k.L2)*norm(k.S1) , atol = nptol )
         catalog = filter( test, catalog )
 
     # spins have equal magnitude
     if equalspin is True:
-        test = lambda k: allclose( norm(k.S1), norm(k.S2), atol = tol )
+        test = lambda k: allclose( k.S1, k.S2, atol = tol )
         catalog = filter( test, catalog )
 
     # spins have unequal magnitude
     if unequalspin is True:
-        test = lambda k: not allclose( norm(k.S1), norm(k.S2), atol = tol )
+        test = lambda k: not allclose( k.S1, k.S2, atol = tol )
         catalog = filter( test, catalog )
 
     #
@@ -2039,7 +2040,7 @@ class gwylm:
                   calcstrain = None,                # If True, strain will be calculated upon loading
                   calcnews = None,
                   enforce_polarization_convention = None, # If true, polarization will be adjusted according to initial separation vectors
-                  fftfactor=None,                   # Option for padding wfarr to next fftfactor powers of two
+                  fftfactor = None,                   # Option for padding wfarr to next fftfactor powers of two
                   pad = None,                       # Optional padding length in samples of wfarr upon loading; not used if fftfactor is present; 'pad' samples dwill be added to the wfarr rows
                   verbose               = None ):   # be verbose
 
@@ -2108,6 +2109,9 @@ class gwylm:
             extraction_parameter = scentry_obj.default_extraction_par
         if level is None:
             level = scentry_obj.default_level
+
+        # There will be a common time for all multipoles. This time will be set either upon loading of psi4 or upon calculation of strain
+        this.t = None
 
         #
         if scentry_obj.config:
@@ -2531,6 +2535,7 @@ class gwylm:
             # use array data to construct gwf object with multipolar fields
             if not output:
                 this.ylm.append( y_ )
+                if this.t is None: this.t = y_.t
             else:
                 return y_
 
@@ -2733,6 +2738,7 @@ class gwylm:
 
             # Constrcut the waveform array for the new strain object
             wfarr = array( [ t, h_plus, h_cross ] ).T
+            if this.t is None: this.t = t
 
             # Add the new strain multipole to this object's list of multipoles
             this.hlm.append( gwf( wfarr, l=y.l, m=y.m, mf=this.mf, xf=this.xf, kind='$rh_{%i%i}/M$'%(y.l,y.m)) )
@@ -3072,7 +3078,7 @@ class gwylm:
             warning( msg, 'gwylm.recompose' )
             kind = 'strain'
         if domain is None:
-            msg = 'no domain specified for recompose calculation. We will proceed assuming that you desire recomposed time domain data. Please specify the desired domain (e.g. time or freq) you wish to be output as a keyword (e.g. kind="freq")'
+            msg = 'no domain specified for recompose calculation. We will proceed assuming that you desire recomposed time domain data. Please specify the desired domain (e.g. time or freq) you wish to be output as a keyword (e.g. domain="freq")'
             warning( msg, 'gwylm.recompose' )
             domain = 'time'
 
@@ -3531,6 +3537,139 @@ class gwylm:
         return mf,xf,Q
 
 
+    # Estimate the energy radiated for the current collection of GW multipoles
+    def __calc_radiated_quantities__(this):
+        ''' Reference: https://arxiv.org/pdf/0707.4654.pdf '''
+        # Import usefuls
+        from numpy import trapz,pi,arange,isfinite,vstack
+        # Do not use this function for cleaned waveforms
+        if this.__isclean__: error('Calculation of radiated quantities should be performed only on unleaned datasets. Perhaps you have set clean=True in a call to gwylm?')
+        # Construct a mask of usueable data
+        mask = arange(this.startindex,this.endindex+1)
+        # Energy Raditated (Eq. 3.8)
+        dE = (1.0/(16*pi)) * sum( [ f.amp**2 for f in this.flm ] )
+        E0 = 1-this.madm # NOTE: this assumes unit norm for intial space-time energy
+        if not isfinite(this.madm):
+            E0 = 0
+            warning('non-finite ADM mass given for this object; therefore, an initial radiated energy of 0 will be assumed to be valid for the start of the simulation.')
+        E = E0 + spline_antidiff( this.t[mask],dE[mask],k=3 )
+        E = E - E[-1] + (1-this.mf) # Enforce consistency with final mass
+        # Store radiated Quantities
+        this.radiated = {}
+        this.radiated['dE/dt'] = dE
+        this.radiated['E'] = E
+        this.radiated['time_used'] = this.t[mask]
+        this.radiated['mask'] = mask
+        this.radiated['J0'] = (this.S1 + this.S2) + (this.L1 + this.L2)
+        this.radiated['J'] = this.__calc_radiated_angular_momentum__(mask)
+        this.radiated['J_sim_start'] = this.Sf - this.radiated['J'][-1,:]
+        this.radiated['P'] = this.__calc_radiated_linear_momentum__(mask)
+        # Store remant Quantities
+        this.remnant = {}
+        this.remnant['mask'] = mask
+        this.remnant['time_used'] = this.radiated['time_used']
+        this.remnant['M'] = 1 - this.radiated['E']
+        this.remnant['Mw'] = this.remnant['M'] * this.lm[2,2]['psi4'].dphi[ mask ]/2
+        this.remnant['J'] = -this.radiated['J']
+        this.remnant['J'] = this.remnant['J'] - this.remnant['J'][-1] + this.Sf # Enforce consistency with final spin vector
+        this.remnant['S'] = this.remnant['J'] # The remnant has no orbital angular momentum. Is this rig?
+        this.remnant['P'] = -this.radiated['P'] # Assumes zero linear momentum at integration region start
+        this.remnant['X'] = vstack([ this.remnant['J'][:,k]/(this.remnant['M']**2) for k in range(3) ]).T
+        return None
+
+    #
+    def __calc_radiated_linear_momentum__(this,mask):
+        ''' Reference: https://arxiv.org/pdf/0707.4654.pdf '''
+
+        # Import usefuls
+        from numpy import sqrt,pi,vstack,zeros_like,array
+
+        # NOTE:
+        # * Extraction radii are already scaled in by default
+        # * The paper uses a strange cnvetion for Imag which we account for here
+        # * The user should be wary of tetrad differnces.
+
+        # Pre-allocate arrays
+        dPp,dPz = zeros_like(this.t,dtype=complex),zeros_like(this.t,dtype=complex)
+        nothing = zeros_like(this.t,dtype=complex)
+        # Define intermediate functions for coeffs
+        a = lambda l,m: sqrt( (l-m)*(l+m+1.0) ) / ( l*(l+1) )
+        b = lambda l,m: (1.0/(2*l)) * sqrt( ( (l-2)*(l+2)*(l+m)*(l+m-1.0) )/( (2*l-1)*(2*l+1) ) )
+        c = lambda l,m: m*2.0 / ( l*(l+1) )
+        d = lambda l,m: (1.0/l) * sqrt( (l-2)*(l+2)*(l-m)*(l+float(m))/( (2*l-1)*(2*l+1) ) )
+
+        # Define shorthand for accessing strain and news
+        f  = lambda l,m: this.lm[l,m]['news'].y   if (l,m) in this.lm else nothing
+
+        # Sum over l,m ; NOTE that the overall scale factors will be applied later
+        for l,m in this.lm:
+            # Eq. 3.14
+            dPp += f(l,m) * ( a(l,m)*f(l,m+1).conj() + b(l,-m)*f(l-1,m+1).conj() - b(l+1,m+1)*f(l+1,m+1).conj() )
+            # Eq. 3.15
+            dPz += f(l,m) * ( c(l,m)*f(l,m).conj() * d(l,m)*f(l-1,m).conj() + d(l+1,m)*f(l+1,m).conj() )
+
+        # Apply overall operations
+        dPp =  dPp.imag / ( 8*pi )
+        dPz =  dPz.imag / ( 16*pi )
+
+        # Unpack in-place linear momentum rate
+        dPx,dPy = dPp.real,dPp.imag
+
+        # Integrate to get angular momentum
+        Px = spline_antidiff( this.t[mask],dPx[mask],k=3 )
+        Py = spline_antidiff( this.t[mask],dPy[mask],k=3 )
+        Pz = spline_antidiff( this.t[mask],dPz[mask],k=3 )
+
+        #
+        ans = vstack([Px,Py,Pz]).T
+        return ans
+
+    #
+    def __calc_radiated_angular_momentum__(this,mask):
+        ''' Reference: https://arxiv.org/pdf/0707.4654.pdf '''
+
+        # Import usefuls
+        from numpy import sqrt,pi,vstack,zeros_like,array
+
+        # NOTE:
+        # * Extraction radii are already scaled in by default
+        # * The paper uses a strange cnvetion for Imag which we account for here
+        # * The user should be wary of tetrad differnces.
+
+        #
+        dJx,dJy,dJz = zeros_like(this.t,dtype=complex), zeros_like(this.t,dtype=complex), zeros_like(this.t,dtype=complex)
+        nothing = zeros_like(this.t,dtype=complex)
+        F = lambda l,m: sqrt( l*(l+1) - m*(m+1) )
+
+        # Sum over l,m ; NOTE that the overall scale factors will be applied later
+        for l,m in this.lm:
+            #
+            hlm  = this.lm[l,m]['strain'].y
+            flm  = this.lm[l,m]['news'].y
+            fmp1 = this.lm[l,m+1]['news'].y if (l,m+1) in this.lm else nothing
+            fmm1 = this.lm[l,m-1]['news'].y if (l,m-1) in this.lm else nothing
+            # Eq. 3.22
+            dJx += hlm * ( F(l,m)*fmp1.conj() + F(l,-m)*fmm1.conj() )
+            # Eq. 3.23
+            dJy += hlm * ( F(l,m)*fmp1.conj() - F(l,-m)*fmm1.conj() )
+            # Eq. 3.24
+            dJz += hlm * m * flm.conj()
+
+        # Apply overall operations
+        dJx =  dJx.imag / ( 32*pi )
+        dJy = -dJy.real / ( 32*pi )
+        dJz =  dJz.imag / ( 16*pi )
+
+        # Integrate to get angular momentum
+        Jx = spline_antidiff( this.t[mask],dJx[mask],k=3 )
+        Jy = spline_antidiff( this.t[mask],dJy[mask],k=3 )
+        Jz = spline_antidiff( this.t[mask],dJz[mask],k=3 )
+
+        #
+        ans = vstack([Jx,Jy,Jz]).T
+        return ans
+
+
     # Los pass filter using romline in basics.py to determine window region
     def lowpass(this):
 
@@ -3951,6 +4090,9 @@ def lvcnr5_to_gwylm(h5dir,lm=None,verbose=True,dt=0.25,lmax=6,clean=True):
     e.setname = f.attrs['NR-group']+'-'+f.attrs['type']
     e.label = 'unknown-label'
     e.eta = e.m1*e.m2 / ( (e.m1+e.m2)**2 )
+    Xf = array( [f['remnant-spinx-vs-time']['Y'][-1],f['remnant-spiny-vs-time']['Y'][-1],f['remnant-spinz-vs-time']['Y'][-1]] )
+    e.xf = sqrt( sum( Xf*Xf ) )
+    e.mf = f['remnant-mass-vs-time']['Y'][-1]
     #
     y = gwylm(e,load=False)
 

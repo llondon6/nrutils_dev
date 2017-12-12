@@ -34,7 +34,7 @@ def hfspa( f,eta,X1z,X2z,mode, leading_in_f=False ):
         error('option not implemented')
 
     #
-    x = (pi*f)**(2.0/3.0)   # This is sometimes called v
+    x = (2*pi*f/m)**(2.0/3.0)   # This is sometimes called v
 
     # eq 6.4 of https://arxiv.org/pdf/1204.1043.pdf
     Atime = 8 * eta * x * sqrt(pi/5) * spa_intermediate_amplitude( x, eta,X1z,X2z,mode )

@@ -67,7 +67,7 @@ def physhf( harr, M, D ):
         from nrutils import gwf
         return gwf( phys_wfarr ).meet(harr)
     elif isinstance(harr,ndarray):
-        # Here we will asusme that input is numpy ndarray
+        # Here we will assume that input is numpy ndarray
         if 3 == harr.shape[-1]:
             # Convert the frequency column to physical units
             harr[:,0] = physf( harr[:,0], M )

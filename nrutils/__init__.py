@@ -110,20 +110,3 @@ del cmd, bash, p, dir_list, status, output, this_file, basename, dirname, isdir,
 #     # cmd = 'from %s import *'
 #     cmd = 'from %s import *' % d
 #     exec cmd
-
-# Setup plotting backend
-alert('Applying custom matplotlib settings.','nrutils')
-from matplotlib import rc
-rc('font', **{'family': 'serif', 'serif': ['Computer Modern']})
-# rc('text', usetex=True)
-import matplotlib as mpl
-mpl.rcParams['mathtext.fontset'] = 'cm'
-mpl.rcParams['mathtext.rm'] = 'serif'
-mpl.rcParams['lines.linewidth'] = 0.8
-mpl.rcParams['font.size'] = 18
-mpl.rcParams['axes.labelsize'] = 20
-mpl.rcParams['axes.titlesize'] = 20
-mpl.rcParams['xtick.labelsize'] = 18
-mpl.rcParams['ytick.labelsize'] = 18
-mpl.rcParams['legend.frameon'] = False
-del mpl,rc
