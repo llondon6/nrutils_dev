@@ -1,5 +1,6 @@
 #
 from positive import *
+from positive.physics import *
 
 #00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%#
 ''' Methods/Class for modeled PSDs '''

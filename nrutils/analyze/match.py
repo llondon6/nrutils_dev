@@ -39,6 +39,7 @@ class match:
                                            N_template_phi = 61,# number of orbital phase values to use for exploration; NOTE that a solver is used after these points are evaluated
                                            plot = False,
                                            signal_polarization = None,
+                                           return_opt=False, # Toggle for returning optimal phi value
                                            method = None,
                                            verbose = False,
                                            **kwargs ):
@@ -98,16 +99,22 @@ class match:
 
         # Interpolate match over phi_template to estimate maximum
         # intrp_max lives in the "positive" repository
-        optimal_phi_template = intrp_argmax(match_list,phi_template_range,plot=plot)
-        match = max( match_helper( optimal_phi_template ), max(match_list) )
+        optimal_template_phi = intrp_argmax(match_list,phi_template_range,plot=plot)
+        match = max( match_helper( optimal_template_phi ), max(match_list) )
+
+        # Get the optimal polarization for the match
+        if return_opt:
+            current_template_wfarr = template_wfarr_orbphi_fun( optimal_template_phi )
+            this.apply( template_wfarr=current_template_wfarr )
+            (optimal_template_pol,_) = this.brute_match( return_opt=True )
 
         # ~--~--~--~--~--~--~--~--~--~--~--~--~--~--~--~--~--~--~-- #
         # NOTE -- Using the code below to perform the minimization can cause problems with LALSIMULATION !!! (scipy tries to pass an invalid input)
         # ~--~--~--~--~--~--~--~--~--~--~--~--~--~--~--~--~--~--~-- #
         # from scipy.optimize import minimize
-        # info = minimize( match_helper, optimal_phi_template )
+        # info = minimize( match_helper, optimal_template_phi )
         # match = info.fun
-        # optimal_phi_template =info.x[0]
+        # optimal_template_phi =info.x[0]
 
         #
         if plot:
@@ -120,8 +127,13 @@ class match:
             pp.title('max = %f'%match )
             pp.show()
 
-        # Return answer
-        ans = match
+        # Handle output option
+        if not return_opt:
+            ans = match
+        else:
+            ans = (optimal_template_phi,optimal_template_pol,match)
+
+        # Return the answer
         return ans
 
 
@@ -387,7 +399,7 @@ class match:
 
 
     # basic match function that optimizes over template polarization in a brute force way
-    def brute_match( this, **kwargs ):
+    def brute_match( this, return_opt=False, **kwargs ):
 
         #
         from numpy import pi,linspace,argmax
@@ -418,8 +430,13 @@ class match:
         best_polarization = template_polarization_range[argmax( max_matches )]
         best_match = max( max_matches )
 
-        #
-        ans = best_match
+        # Handle optional input
+        if return_opt:
+            ans = (best_polarization, best_match)
+        else:
+            ans = best_match
+
+        # Return answer
         return ans
 
     #
@@ -462,22 +479,22 @@ class match:
     def plot(this,fig=None,legend_loc=None,show_signal=True):
 
         # Import useful things
-        from numpy import array,sqrt,log,sign
+        from numpy import array,sqrt,log,sign,ones
 
         # Setup plotting backend
         import matplotlib as mpl
         from mpl_toolkits.mplot3d import axes3d
         mpl.rcParams['lines.linewidth'] = 0.8
         mpl.rcParams['font.family'] = 'serif'
-        mpl.rcParams['font.size'] = 12
-        mpl.rcParams['axes.labelsize'] = 16
+        mpl.rcParams['font.size'] = 16
+        mpl.rcParams['axes.labelsize'] = 18
         mpl.rcParams['axes.titlesize'] = 16
-        from matplotlib.pyplot import plot,show,xlabel,ylabel,title,\
+        from matplotlib.pyplot import plot,show,xlabel,ylabel,title,figaspect,\
                                       legend,xscale,yscale,xlim,ylim,figure
 
         # Setup Figure
         if fig is None:
-            fig = figure( figsize=3*array([4,4]) )
+            fig = figure( figsize=2.4*figaspect(1) )
 
         #
         def slog(x):
@@ -485,15 +502,15 @@ class match:
             return log(abs(x))*sign(x)
 
         # Plot
-        if show_signal: plot( this.f, 2*sqrt(abs(this.f))*abs(this.signal['response']), label=r'Signal (Response), $\rho_{\mathrm{opt}} = %1.2f$'%this.signal['optimal_snr'] )
+        if show_signal: plot( this.f, 2*sqrt(abs(this.f))*abs(this.signal['response']), label=r'Signal (Response), $\rho_{\mathrm{opt}} = %1.2f$'%this.signal['optimal_snr'],lw=1 )
         #
-        plot( this.f, 2*sqrt(abs(this.f))*abs(this.template['response']), label=r'Template (Response), $\rho_{\mathrm{opt}} = %1.2f$'%this.template['optimal_snr'] )
+        plot( this.f, 2*sqrt(abs(this.f))*abs(this.template['response']), label=r'Template (Response), $\rho_{\mathrm{opt}} = %1.2f$'%this.template['optimal_snr'],lw=1 )
         #
         if callable(this.psd_thing):
             psd_label = this.psd_thing.__name__
         else:
             psd_label = str(this.psd_thing)
-        plot( this.f, sqrt(this.psd), '-k', label=r'$\sqrt{S_n(f)}$ for %s'%psd_label, alpha=1.0 )
+        plot( this.f, sqrt(this.psd), label=r'$\sqrt{S_n(f)}$ for %s'%psd_label, lw=2, color=ones(3)*0.6 )
 
         #
         yscale('log')
@@ -620,6 +637,36 @@ class match:
         ans = template_pol_optimized_match
         return ans
 
+    # Align: Vary template parameters to align with signal
+    def align_template( this,
+                        signal_theta,
+                        signal_phi,
+                        signal_wfarr_fun,   # takes in template inclination & orbital phase, outputs waveform array
+                        template_wfarr_fun, # takes in signal   inclination & orbital phase, outputs waveform array
+                        verbose = False ):
+
+        # Evaluate the signal representation at this orbital phase
+        signal_wfarr = signal_wfarr_fun(signal_theta,signal_phi)
+        this.apply( signal_wfarr=signal_wfarr )
+        alert('Applying the signal array according to input.')
+
+        # For a range of orbital phase values, calculate a match
+        template_wfarr_orbphi_fun = lambda PHI: template_wfarr_fun(signal_theta,PHI,None)
+        phi_opt,pol_opt,_ = this.calc_template_phi_optimized_match( template_wfarr_orbphi_fun, return_opt=True, method='numerical' )
+
+        #
+        alert('Optimal template orbital phase: %s'%(green(str(phi_opt))))
+
+        #
+        alert('Applying optimal orbital phase to this object\'s template.')
+        template_wfarr = template_wfarr_orbphi_fun( phi_opt )
+        this.apply( template_wfarr=template_wfarr, template_polarization=pol_opt )
+
+        #
+        foo = {'phi':phi_opt,'psi':pol_opt}
+
+        #
+        return foo
 
     # Calculate optimal snr
     def calc_optsnr(this,a):

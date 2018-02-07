@@ -922,8 +922,10 @@ def scsearch( catalog = None,           # Manually input list of scentry objects
             warning('Applying remant fit to scentry objects. This should be done if the final mass and spin meta data are not trustworth. '+magenta('The fit being used only works for non-precessing systems.'))
         #
         for e in catalog:
-            e.mf,e.xf = Mf14067295(e.m1,e.m2,e.X1[-1],e.X2[-1]),jf14067295(e.m1,e.m2,e.X1[-1],e.X2[-1])
+            #e.mf,e.xf = Mf14067295(e.m1,e.m2,e.X1[-1],e.X2[-1]),jf14067295(e.m1,e.m2,e.X1[-1],e.X2[-1])
+            e.mf,e.xf = remnant(e.m1,e.m2,e.X1[-1],e.X2[-1])
             e.Sf = e.mf*e.mf*array([0,0,e.xf])
+            e.Xf = e.Sf/(e.mf**2)
 
     #
     if verbose:
@@ -2477,7 +2479,7 @@ class gwylm:
             else:
                 #
                 if isinstance(pad,(int,float)):
-                    warning('Enabling the pad option can sometimes cause strange behavior. Use with caution. Make sure that time and frequency domain waveforms are as expected.')
+                    # warning('Enabling the pad option can sometimes cause strange behavior. Use with caution. Make sure that time and frequency domain waveforms are as expected.')
                     pad = int(pad)
                     # pad the waveform array in the time domain
                     # NOTE that this is preferable to simply using the "n" input in fft calls
@@ -2707,7 +2709,7 @@ class gwylm:
         # If there is no w22 given, then use the internally defined value of wstart
         if w22 is None:
             # w22 = this.wstart
-            # NOTE: here we choose to use the ORBITAL FREQUENCY as a lower bound for the l=m=2 mode.
+            # NOTE: here we choose to use the spin independent PN estimate as a lower bound for the l=m=2 mode.
             w22 = this.wstart_pn
 
 
@@ -2778,8 +2780,9 @@ class gwylm:
         #%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&#
         this.postringdown = gwfcharend( y22 )
         # After endindex, the data is dominated by noise
-        this.noiseindex = this.postringdown.left_index
         this.endindex = this.postringdown.right_index
+        this.endindex_by_amplitude = this.postringdown.left_index
+        this.endindex_by_frequency = this.postringdown.frequency_end_index
 
     # Clean the time domain waveform by removing junk radiation.
     def clean( this, method=None, crop_time=None ):
@@ -3045,9 +3048,13 @@ class gwylm:
     def pad(this,new_length=None, apply=True, extend=False ):
         # Pad each mode
         ans = this if apply else this.copy()
+        treset=True
         for z in this.lm:
             for k in this.lm[z]:
                 ans.lm[z][k].pad( new_length=new_length, apply=apply, extend=extend )
+                if treset:
+                    ans.t = ans.lm[z][k].t
+                    treset = False
         #
         if not apply: return ans
 
@@ -3487,7 +3494,7 @@ class gwylm:
         # Import useful things
         thisfun='gwylm.brute_masspin'
         from scipy.optimize import minimize
-        from nrutils import jf14067295,Mf14067295
+        from nrutils import jf14067295,Mf14067295,remnant
         from kerr import qnmfit
 
         # Validate first input type
@@ -3510,8 +3517,9 @@ class gwylm:
         # Use PhenomD fit for guess
         eta = this.m1*this.m2/((this.m1+this.m2)**2)
         chi1, chi2 = this.S1[-1]/(this.m1**2), this.S2[-1]/(this.m2**2)
-        guess_xf = jf14067295( this.m1,this.m2,chi1,chi2 )
-        guess_Mf = Mf14067295( this.m1,this.m2,chi1,chi2 )
+        # guess_xf = jf14067295( this.m1,this.m2,chi1,chi2 )
+        # guess_Mf = Mf14067295( this.m1,this.m2,chi1,chi2 )
+        guess_Mf,guess_xf = remnant(this.m1,this.m2,this.chi1,this.chi2)
         guess = (guess_Mf,guess_xf)
 
         # perform the minization
@@ -3538,15 +3546,16 @@ class gwylm:
 
 
     # Estimate the energy radiated for the current collection of GW multipoles
-    def __calc_radiated_quantities__(this):
+    def __calc_radiated_quantities__(this,verbose=False):
         ''' Reference: https://arxiv.org/pdf/0707.4654.pdf '''
         # Import usefuls
         from numpy import trapz,pi,arange,isfinite,vstack
         # Do not use this function for cleaned waveforms
-        if this.__isclean__: error('Calculation of radiated quantities should be performed only on unleaned datasets. Perhaps you have set clean=True in a call to gwylm?')
+        # if this.__isclean__: error('Calculation of radiated quantities should be performed only on unleaned datasets. Perhaps you have set clean=True in a call to gwylm?')
         # Construct a mask of usueable data
-        mask = arange(this.startindex,this.endindex+1)
+        mask = arange(this.startindex,this.endindex_by_frequency+1)
         # Energy Raditated (Eq. 3.8)
+        if verbose: alert('Calculating radiated energy, E.')
         dE = (1.0/(16*pi)) * sum( [ f.amp**2 for f in this.flm ] )
         E0 = 1-this.madm # NOTE: this assumes unit norm for intial space-time energy
         if not isfinite(this.madm):
@@ -3560,11 +3569,14 @@ class gwylm:
         this.radiated['E'] = E
         this.radiated['time_used'] = this.t[mask]
         this.radiated['mask'] = mask
+        if verbose: alert('Calculating radiated angular momentum, J.')
         this.radiated['J0'] = (this.S1 + this.S2) + (this.L1 + this.L2)
         this.radiated['J'] = this.__calc_radiated_angular_momentum__(mask)
         this.radiated['J_sim_start'] = this.Sf - this.radiated['J'][-1,:]
+        if verbose: alert('Calculating radiated linear momentum, P.')
         this.radiated['P'] = this.__calc_radiated_linear_momentum__(mask)
         # Store remant Quantities
+        if verbose: alert('Using radiated quantity time series to calculate remnant quantity time series.')
         this.remnant = {}
         this.remnant['mask'] = mask
         this.remnant['time_used'] = this.radiated['time_used']
@@ -3575,6 +3587,8 @@ class gwylm:
         this.remnant['S'] = this.remnant['J'] # The remnant has no orbital angular momentum. Is this rig?
         this.remnant['P'] = -this.radiated['P'] # Assumes zero linear momentum at integration region start
         this.remnant['X'] = vstack([ this.remnant['J'][:,k]/(this.remnant['M']**2) for k in range(3) ]).T
+        #
+        if verbose: alert('Radiated quantities are stored to "this.radiated", and remnant quantities are stored to "this.remnant". Both are dictionaries.')
         return None
 
     #
@@ -3666,7 +3680,7 @@ class gwylm:
         Jz = spline_antidiff( this.t[mask],dJz[mask],k=3 )
 
         #
-        ans = vstack([Jx,Jy,Jz]).T
+        ans = -vstack([Jx,Jy,Jz]).T
         return ans
 
 
@@ -3873,6 +3887,12 @@ def lswfafd( apx      ='IMRPhenomPv2',    # Approximant name; must be compatible
 # Characterize END of time domain waveform (POST RINGDOWN)
 class gwfcharend:
     def __init__(this,ylm):
+        # Use amplitude
+        this.__characterize_amplitude__(ylm)
+        # Use frequency
+        this.__characterize_frequency__(ylm)
+    # Characterize the end of the waveform using values of the amplitude
+    def __characterize_amplitude__(this,ylm):
         # Import useful things
         from numpy import log
         # ROM (Ruduce order model) the post-peak as two lines
@@ -3896,6 +3916,20 @@ class gwfcharend:
         # Calculate the window and store to the current object
         this.window_state = [ this.right_index, this.left_index ]
         this.window = maketaper( ylm.t, this.window_state )
+
+    # Characterize the end of the waveform using values of the frequency
+    def __characterize_frequency__(this,ylm):
+        # Import usefuls
+        from numpy import argmax,diff
+        #
+        B = ylm.t > ylm.t[ ylm.k_amp_max ]
+        #
+        a = upbow(ylm.dphi[B])
+        knots,rl = romline(ylm.t[B],a,5)
+        #
+        this.frequency_end_index = ylm.k_amp_max + ( knots[0] if knots[0]>0 else knots[1] )
+        #
+        return None
 
 
 # Characterize the START of a time domain waveform (PRE INSPIRAL)
