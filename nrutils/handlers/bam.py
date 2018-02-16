@@ -42,7 +42,15 @@ def validate( metadata_file_location, config = None, verbose = False ):
 def learn_metadata( metadata_file_location ):
 
     # Try to load the related par file as well as the metadata file
-    par_file_location = metadata_file_location[:-3]+'par'
+    from glob import glob as find
+    from os.path import dirname
+
+    ## NOTE that some people (I mean you Chinmay!) don't always use the run name
+    ## for their par files, so here we will find and use the first par file reported
+    ## by the OS. NOTE that the approach commented out below is prefered.
+    # par_file_location = metadata_file_location[:-3]+'par'
+
+    par_file_location = find(dirname(metadata_file_location)+'/*.par')[0]
     raw_metadata = smart_object( [metadata_file_location,par_file_location] )
 
     # shortand

@@ -148,7 +148,7 @@ def intrp_wfarr(wfarr,delta=None,domain=None,verbose = False):
 
 
 # Fucntion to pad wfarr with zeros. NOTE that this should only be applied to a time domain waveform that already begins and ends with zeros.
-def pad_wfarr(wfarr,new_length,where=None,verbose=None,extend=False):
+def pad_wfarr(wfarr,new_length,where=None,verbose=None,extend=True):
 
     #
     from numpy import hstack,zeros,arange,pad,unwrap,angle,cos,sin
@@ -166,6 +166,11 @@ def pad_wfarr(wfarr,new_length,where=None,verbose=None,extend=False):
     #
     if isinstance(where,str):
         where = where.lower()
+
+    # Warn the user if extend is false
+    if not extend:
+        msg = 'You have disabled the extend option. As a result the input padding length will be interpreted as the desired total length of the new waveform array. This course is discouraged in favor of e.g. using the fftlength option when taking fouorier transforms, OR simply inputting the desired pad amount.'
+        warning(msg)
 
     #
     if where is None:
@@ -239,8 +244,8 @@ def pad_wfarr(wfarr,new_length,where=None,verbose=None,extend=False):
         _wfarr = wfarr
 
         # Warn the user that nothing has happened.
-        msg = 'The desired new length is <= the current array length (i.e. number of time domain points). Nothing will be padded.'
-        warning( msg,fname='pad_wfarr'+cyan('@%i'%linenum()) )
+        msg = 'The desired new length is <= the current array length (i.e. number of time domain points). Nothing will be padded. Perhaps you want to set extend=True, and then input the amount which you wish to pad? <3 '
+        error( msg,fname='pad_wfarr'+cyan('@%i'%linenum()) )
 
     #
     if _wfarr.shape[0] != new_length:
@@ -251,6 +256,8 @@ def pad_wfarr(wfarr,new_length,where=None,verbose=None,extend=False):
         alert('The shape was %s. Now the shape is %s.'%(wfarr.shape,_wfarr.shape) )
 
     # Return padded array
+    # print _wfarr.shape[0],new_length
+    # print wfarr.shape, _wfarr.shape
     return _wfarr
 
 
@@ -264,15 +271,15 @@ def plot_wfarr(wfarr,domain=None,show=False,labels=None):
     warning('Method under development.')
 
     # Plot time domain
-    figure()
+    # figure()
     plot( wfarr[:,0], wfarr[:,1] )
     plot( wfarr[:,0], wfarr[:,2] )
-    show()
+    # show()
 
     # Plot frequency domain
 
 # Shift a waveform arra by some "shift" amount in time
-def tshift_wfarr( _wfarr, shift ):
+def tshift_wfarr( _wfarr, shift, method=None, verbose=False ):
     '''Shift a waveform array by some "shift" amount in time'''
     # Import useful things
     from numpy import array
@@ -280,7 +287,7 @@ def tshift_wfarr( _wfarr, shift ):
     t,p,c = _wfarr[:,0],_wfarr[:,1],_wfarr[:,2]
     _y = p + 1j*c
     # Shift the waveform array data using tshift
-    y = tshift( t,_y,shift )
+    y = tshift( t,_y,shift,method=method,verbose=verbose )
     # Repack the input array
     wfarr = array(_wfarr)
     wfarr[:,0] = t

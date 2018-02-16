@@ -275,18 +275,18 @@ class scentry:
             this.log += ' This entry\'s metadata file is valid.'
 
             # i.e. learn the meta_data_file
-            # this.learn_metadata(); raise(TypeError,'This line should only be uncommented when debugging.')
-            # this.label = sclabel( this )
+            this.learn_metadata(); # raise(TypeError,'This line should only be uncommented when debugging.')
+            this.label = sclabel( this )
 
-            try:
-                this.learn_metadata()
-                this.label = sclabel( this )
-            except:
-                emsg = sys.exc_info()[1].message
-                this.log += '%80s'%' [FATALERROR] The metadata failed to be read. There may be an external formatting inconsistency. It is being marked as invalid with None. The system says: %s'%emsg
-                if this.verbose: warning( 'The following error message will be logged: '+red(emsg),'scentry')
-                this.isvalid = None # An external program may use this to do something
-                this.label = 'invalid!'
+            # try:
+            #     this.learn_metadata()
+            #     this.label = sclabel( this )
+            # except:
+            #     emsg = sys.exc_info()[1].message
+            #     this.log += '%80s'%' [FATALERROR] The metadata failed to be read. There may be an external formatting inconsistency. It is being marked as invalid with None. The system says: %s'%emsg
+            #     if this.verbose: warning( 'The following error message will be logged: '+red(emsg),'scentry')
+            #     this.isvalid = None # An external program may use this to do something
+            #     this.label = 'invalid!'
 
         elif this.isvalid is False:
             if config_obj:
@@ -1872,7 +1872,7 @@ class gwf:
         this.setfields(wfarr)
 
     # Pad this waveform object in the time domain with zeros
-    def pad(this,new_length=None,where=None,apply=False,extend=False):
+    def pad(this,new_length=None,where=None,apply=False,extend=True):
         #
         where = 'right' if where is None else where
         # Pad this waveform object to the left and right with zeros
@@ -1883,16 +1883,21 @@ class gwf:
             # Confer to the current object
             ans.setfields(wfarr)
 
+        #
+        if extend==False:
+            if len(ans.t)!=new_length:
+                error('!!!')
+
         return ans
 
     # Shift this waveform object in the time domain
-    def tshift(this,shift=None,apply=False):
+    def tshift(this,shift=None,apply=False,method=None, verbose=False):
 
         # Pad this waveform object to the left and right with zeros
         ans = this.copy() if not apply else this
         if shift is not None:
             # Create the new wfarr
-            wfarr = tshift_wfarr( this.wfarr, shift )
+            wfarr = tshift_wfarr( this.wfarr, shift, method=method, verbose=verbose )
             # Confer to the current object
             ans.setfields(wfarr)
 
@@ -2456,9 +2461,8 @@ class gwylm:
             if not isinstance(pad,(int,float)):
                 old_data_length = len(wfarr[:,0])
                 default_pad = 2 + mod(len(wfarr[:,0]),2) + 1
-                new_data_length = old_data_length + default_pad
                 if this.verbose: alert('Imposing a default padding of %i to the data.'%default_pad)
-                wfarr = pad_wfarr(wfarr,new_data_length,verbose=this.verbose)
+                wfarr = pad_wfarr(wfarr,default_pad,verbose=this.verbose)
 
             # Pad the waveform array
             if (this.fftfactor != 0) and (this.fftfactor is not None):
@@ -2728,7 +2732,15 @@ class gwylm:
             # Create the core waveform information
             t       =  y.t
             h_plus  =  ffintegrate( y.t, y.plus,  w0, 2 )
-            h_cross =  ffintegrate( y.t, y.cross, w0, 2 )
+            h_cross =  ffintegrate( y.t, y.cross, w0, 2 )\
+
+            ## NOTE that interpolative intregration has been tried below.
+            ## This does not appear to correct for the low frequency drift, so
+            ## the above fixed frequency aproach is kept.
+            # h_plus  = spline_antidiff(t,y.plus, n=2)
+            # h_cross = spline_antidiff(t,y.cross,n=2)
+
+
             #%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%.%%#
             # NOTE that there is NOT a minus sign above which is INconsistent with equation 3.4 of
             # arxiv:0707.4654v3. Here we choose to be consistent with eq 4 of arxiv:1006.1632 and not add a
@@ -3056,7 +3068,10 @@ class gwylm:
                     ans.t = ans.lm[z][k].t
                     treset = False
         #
-        if not apply: return ans
+        if not apply:
+            if len(ans.t)!=new_length:
+                error('!!!')
+            return ans
 
     # shift the time series
     def tshift( this, shift=0, apply=True ):
