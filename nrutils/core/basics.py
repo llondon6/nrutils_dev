@@ -820,8 +820,17 @@ def dict2gwylm( multipole_dictionary ):
 #Determine if input is a memeber of the gwf class
 def isgwf( obj ):
     '''Determine if input is a memeber of the gwf class'''
-    return obj.__class__.__name__=='gwf'
-
+    if isinstance(obj,object):
+        return obj.__class__.__name__=='gwf'
+    else:
+        return False
+#Determine if input is a memeber of the gwylm class
+def isgwylm( obj ):
+    '''Determine if input is a memeber of the gwylm class'''
+    if isinstance(obj,object):
+        return obj.__class__.__name__=='gwylm'
+    else:
+        return False
 
 #00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%#
 ''' Low level functions for rotating waveforms '''
