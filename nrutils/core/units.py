@@ -199,6 +199,20 @@ def m1m2q(m1,m2): return float(max([m1,m2]))/min([m1,m2])
 # Convert q to eta
 def q2eta(q): return q/((1.0+q)*(1.0+q))
 
+# Function to convert eta to mass ratio
+def eta2q(eta):
+    from numpy import sqrt
+    b = 2.0 - 1.0/eta
+    q  = (-b + sqrt( b*b - 4.0 ))/2.0
+    return q
+
+# Function to convert masses to symmetric mass ratio
+def q2m1m2(q):
+    #q = max(q,1.0/q)
+    m2 = 1.0/(1.0+q)
+    m1 = q*m2
+    return m1,m2
+
 # Convert eta to q
 def eta2q(eta):
     from numpy import sqrt
@@ -210,3 +224,10 @@ def eta2q(eta):
     if q_plus.imag:
         warning( 'eta = %1.4f> 0.25, eta must be <= 0.25'%eta )
     return q_plus
+
+# Convert eta to m1 and m2
+def eta2m1m2(eta):
+    '''Function to convert eta to m1 and m2'''
+    q = eta2q(eta)
+    m1,m2 = q2m1m2(q)
+    return m1,m2

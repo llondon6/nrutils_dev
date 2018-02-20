@@ -8,6 +8,8 @@ class make_pnnr_hybrid:
     # The class constructor
     def __init__( this,             # The current object
                   gwylmo,           # An instance of gwylm class containing initial system params and NR data (psi4)
+                  pn_w_orb_min = None, # Min Orbital freq for PN generation
+                  pn_w_orb_max = None, # Max Orbital freq for PN generation
                   verbose = False,  # Toggle for letting the people know
                   **kwargs          # Args for PN generation
                 ):
@@ -17,14 +19,14 @@ class make_pnnr_hybrid:
 
         # Validate inputs
         if verbose: alert('Validating inputs',cname,header=True)
-        this.__validate_inputs__(gwylmo,verbose)
+        this.__validate_inputs__(gwylmo,pn_w_orb_min,pn_w_orb_max,verbose)
 
         # Access or generate PN waveform
         if verbose: alert('Generating PN multipoles',cname,header=True)
         this.__generate_pn__()
 
         # Determine hybridization parameters for the l=m=2 multipole
-        if verbose: alert('Generating PN multipoles',cname,header=True)
+        if verbose: alert('Calculating l=m=2 hybrid parameters',cname,header=True)
         this.__calc_l2m2_hybrid_params__()
 
         # Apply optimal hybrid parameters to all multipoles
@@ -48,7 +50,7 @@ class make_pnnr_hybrid:
         this.__guess_hybrid_params__ = {'T':T,'phi':phi,'psi':psi}
 
         # Given the initial guess , find the optimal values
-        this.optimal_hybrid_params = 0# a dictionary
+        this.optimal_hybrid_params = 0 # a dictionary
 
 
     # Create an instance of the PN class
@@ -63,8 +65,8 @@ class make_pnnr_hybrid:
 
         # Initiate PN object
         pno = pn( m1,m2,X1,X2,
-                  wM_max=1.05*y.lm[2,2]['strain'].dphi[y.remnant['mask']][0],
-                  wM_min=0.7*y.lm[2,2]['strain'].dphi[y.remnant['mask']][0]/2,
+                  wM_min=this.pn_w_orb_min,
+                  wM_max=this.pn_w_orb_max,
                   sceo = y.__scentry__ )
 
         # Store to current obejct
@@ -94,7 +96,7 @@ class make_pnnr_hybrid:
 
 
     # Validative constructor for class workflow
-    def __validate_inputs__(this,gwylmo,verbose):
+    def __validate_inputs__(this,gwylmo,pn_w_orb_min,pn_w_orb_max,verbose):
 
         # Let the people know
         this.verbose = verbose
@@ -109,6 +111,23 @@ class make_pnnr_hybrid:
 
         # Calculate radiated quantities for the input gwylmo
         gwylmo.__calc_radiated_quantities__()
+
+        # Store ,min and max orbital frequency for PN generation
+        if pn_w_orb_min is None:
+            strain_w_orb_min = gwylmo.lm[2,2]['strain'].dphi[gwylmo.remnant['mask']][0]/2
+            pn_w_orb_min = 0.65 * strain_w_orb_min
+            if this.verbose: alert('Using default values for PN w_orb starting frequency based on strain waveform: %s'%(yellow('%f'%pn_w_orb_min)))
+        if pn_w_orb_max is None:
+            strain_w_orb_max = gwylmo.lm[2,2]['strain'].dphi[gwylmo.remnant['mask']][0]/2
+            pn_w_orb_max = 4.0 * strain_w_orb_max
+            if this.verbose: alert('Using default values for PN w_orb end frequency based on strain waveform: %s'%(yellow('%f'%pn_w_orb_max)))
+
+        # Store PN start and end frequency
+        this.pn_w_orb_min = pn_w_orb_min
+        this.pn_w_orb_max = pn_w_orb_max
+        if this.verbose:
+            alert('PN w_orb MIN frequency is %s (i.e. w_orb*M_init)'%(yellow('%f'%pn_w_orb_min)))
+            alert('PN w_orb MAX frequency is %s (i.e. w_orb*M_init)'%(yellow('%f'%pn_w_orb_max)))
 
         # Store select inputs
         this.gwylmo = gwylmo

@@ -2737,6 +2737,7 @@ class gwylm:
             ## NOTE that interpolative intregration has been tried below.
             ## This does not appear to correct for the low frequency drift, so
             ## the above fixed frequency aproach is kept.
+            # alert('Using spline!')
             # h_plus  = spline_antidiff(t,y.plus, n=2)
             # h_cross = spline_antidiff(t,y.cross,n=2)
 
@@ -3828,11 +3829,14 @@ def lswfafd( apx      ='IMRPhenomPv2',    # Approximant name; must be compatible
            verbose  = False ):        # boolean toggle for verbosity
 
     #
-    from nrutils.tools.unit.conversion import codef
+    from nrutils.core.units import codef
     from numpy import array,linspace,double
     import lalsimulation as lalsim
     from nrutils import eta2q
     import lal
+
+    #
+    error('This function is in dev/incomplete.')
 
     # Standardize input mass ratio and convert to component masses
     M = 70.0
