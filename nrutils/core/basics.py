@@ -244,8 +244,9 @@ def pad_wfarr(wfarr,new_length,where=None,verbose=None,extend=True):
         _wfarr = wfarr
 
         # Warn the user that nothing has happened.
-        msg = 'The desired new length is <= the current array length (i.e. number of time domain points). Nothing will be padded. Perhaps you want to set extend=True, and then input the amount which you wish to pad? <3 '
-        error( msg,fname='pad_wfarr'+cyan('@%i'%linenum()) )
+        if extend and (new_length!=length):
+            msg = 'The desired new length is <= the current array length (i.e. number of time domain points). Nothing will be padded. Perhaps you want to set extend=True, and then input the amount which you wish to pad? <3 '
+            error( msg,fname='pad_wfarr'+cyan('@%i'%linenum()) )
 
     #
     if _wfarr.shape[0] != new_length:

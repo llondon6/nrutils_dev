@@ -2764,7 +2764,7 @@ class gwylm:
         # NOTE that this is the end of the calchlm method
 
     # Characterise the start of the waveform using the l=m=2 psi4 multipole
-    def characterize_start_end(this):
+    def characterize_start_end(this,turnon_width_in_cylcles=3):
 
         # Look for the l=m=2 psi4 multipole
         if len( this.ylm ):
@@ -2780,7 +2780,7 @@ class gwylm:
         #%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&#
         # Use the l=m=2 psi4 multipole to determine the waveform start
         # store information about the start of the waveform to the current object
-        this.preinspiral = gwfcharstart( y22 )
+        this.preinspiral = gwfcharstart( y22, shift=turnon_width_in_cylcles )
         # store the expected min frequency in the waveform to this object as:
         this.wstart = this.preinspiral.left_dphi
         this.startindex = this.preinspiral.left_index
@@ -3058,7 +3058,7 @@ class gwylm:
 
 
     # pad each mode to a new_length
-    def pad(this,new_length=None, apply=True, extend=False ):
+    def pad(this,new_length=None, apply=True, extend=True ):
         # Pad each mode
         ans = this if apply else this.copy()
         treset=True
