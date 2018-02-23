@@ -4110,8 +4110,11 @@ def lvcnr5_to_gwylm(h5dir,lm=None,verbose=True,dt=0.25,lmax=6,clean=True):
 
     #
     from scipy.interpolate import InterpolatedUnivariateSpline as spline
-    from numpy import array,arange,exp,inf,sqrt
+    from scipy.stats.mstats import mode
+    from scipy.version import version as scipy_version
+    from numpy import array,arange,exp,inf,sqrt, nan,sign,amax
     from nrutils import scentry,gwylm,gwf
+
     import h5py
 
     #
@@ -4127,15 +4130,28 @@ def lvcnr5_to_gwylm(h5dir,lm=None,verbose=True,dt=0.25,lmax=6,clean=True):
     chi2 = array([f.attrs['spin2x'],f.attrs['spin2y'],f.attrs['spin2z']])
     e.X1,e.X2 = chi1,chi2
     e.S1,e.S2 = chi1*e.m1**2,chi2*e.m1**2
-    e.mf = f['remnant-mass-vs-time']['Y'][-1]
-    #
-    e.R1 = array( [f['position1x-vs-time']['Y'][0],f['position1y-vs-time']['Y'][0],f['position1z-vs-time']['Y'][0]] )
-    #
-    e.R2 = array( [f['position2x-vs-time']['Y'][0],f['position2y-vs-time']['Y'][0],f['position2z-vs-time']['Y'][0]] )
-    #
-    R = e.R2-e.R1
-    e.b = sqrt(sum( R*R ))
-    #
+
+    if f.attrs['Format'] == 2:
+        e.R1 = array( [f['position1x-vs-time']['Y'][0],f['position1y-vs-time']['Y'][0],f['position1z-vs-time']['Y'][0]] )
+        e.R2 = array( [f['position2x-vs-time']['Y'][0],f['position2y-vs-time']['Y'][0],f['position2z-vs-time']['Y'][0]] )
+        R = e.R2-e.R1
+        e.b = sqrt(sum( R*R ))
+    else:
+        e.R1 = nan
+        e.R2 = nan
+        R = nan
+        e.b = nan
+
+    if f.attrs['Format'] == 3:
+        Xf = array( [f['remnant-spinx-vs-time']['Y'][-1],f['remnant-spiny-vs-time']['Y'][-1],f['remnant-spinz-vs-time']['Y'][-1]] )
+        e.xf = sqrt( sum( Xf*Xf ) )
+        e.mf = f['remnant-mass-vs-time']['Y'][-1]
+    else:
+        e.mf = nan
+        Xf = nan
+        e.xf = nan
+
+
     e.default_extraction_par = inf
     e.default_level = None
     e.config = None
@@ -4143,13 +4159,14 @@ def lvcnr5_to_gwylm(h5dir,lm=None,verbose=True,dt=0.25,lmax=6,clean=True):
     e.setname = f.attrs['NR-group']+'-'+f.attrs['type']
     e.label = 'unknown-label'
     e.eta = e.m1*e.m2 / ( (e.m1+e.m2)**2 )
-    Xf = array( [f['remnant-spinx-vs-time']['Y'][-1],f['remnant-spiny-vs-time']['Y'][-1],f['remnant-spinz-vs-time']['Y'][-1]] )
-    e.xf = sqrt( sum( Xf*Xf ) )
-    e.mf = f['remnant-mass-vs-time']['Y'][-1]
+
     #
     y = gwylm(e,load=False)
 
-    nrtimes = f['NRtimes']
+    try:
+        nrtimes = f['NRtimes']
+    except:
+        nrtimes = f['amp_l2_m2']['X'][:]
     t = arange( min(nrtimes),max(nrtimes)+dt,dt )
     #
     done = False
@@ -4164,7 +4181,23 @@ def lvcnr5_to_gwylm(h5dir,lm=None,verbose=True,dt=0.25,lmax=6,clean=True):
             amp = spline(f['amp_l%i_m%i'%(l,m)]['X'],f['amp_l%i_m%i'%(l,m)]['Y'])(t)
             pha = spline(f['phase_l%i_m%i'%(l,m)]['X'],f['phase_l%i_m%i'%(l,m)]['Y'])(t)
         except:
+            if verbose: alert("couldn't load (l,m)=({0},{1})".format(l,m))
             break
+
+        # Enforce internal sign convention for time domain hlm
+        msk_ = amp > 0.01*amax(amp)
+        if int(scipy_version.split('.')[1])<16:
+            # Account for old scipy functionality
+            external_sign_convention = sign(m) * mode( sign( pha ) )[0][0]
+        else:
+            # Account for modern scipy functionality
+            external_sign_convention = sign(m) * mode( sign( pha ) ).mode[0]
+        if M_RELATIVE_SIGN_CONVENTION != external_sign_convention:
+            pha = -pha
+            msg = yellow('Re-orienting waveform phase')+' to be consistent with internal sign convention for Psi4, where sign(dPhi/dt)=%i*sign(m).' % M_RELATIVE_SIGN_CONVENTION + ' Note that the internal sign convention is defined in ... nrutils/core/__init__.py as "M_RELATIVE_SIGN_CONVENTION". This message has appeared becuase the waveform is determioned to obey and sign convention: sign(dPhi/dt)=%i*sign(m).'%(external_sign_convention)
+            thisfun=inspect.stack()[0][3]
+            if verbose: alert( msg )
+
         z = amp * exp(1j*pha)
         wfarr = array([ t, z.real, z.imag ]).T
         y.hlm.append(  gwf( wfarr,l=l,m=m,kind='$rh_{%i%i}/M$'%(l,m) )  )
