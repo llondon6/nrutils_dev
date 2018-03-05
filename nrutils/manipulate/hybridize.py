@@ -11,6 +11,8 @@ class make_pnnr_hybrid:
                   pn_w_orb_min = None, # Min Orbital freq for PN generation
                   pn_w_orb_max = None, # Max Orbital freq for PN generation
                   verbose = False,  # Toggle for letting the people know
+                  plot = False,     # Toggle for plotting
+                  kind = None,      # psi4,strain -- kind of data that will be used for hybridization
                   **kwargs          # Args for PN generation
                 ):
 
@@ -19,7 +21,7 @@ class make_pnnr_hybrid:
 
         # Validate inputs
         if verbose: alert('Validating inputs',cname,header=True)
-        this.__validate_inputs__(gwylmo,pn_w_orb_min,pn_w_orb_max,verbose)
+        this.__validate_inputs__(gwylmo,pn_w_orb_min,pn_w_orb_max,kind,verbose)
 
         # Access or generate PN waveform
         if verbose: alert('Generating PN multipoles',cname,header=True)
@@ -27,30 +29,137 @@ class make_pnnr_hybrid:
 
         # Determine hybridization parameters for the l=m=2 multipole
         if verbose: alert('Calculating l=m=2 hybrid parameters',cname,header=True)
-        this.__calc_l2m2_hybrid_params__()
+        # this.__calc_l2m2_hybrid_params__()
 
         # Apply optimal hybrid parameters to all multipoles
         # this.__calc_multipole_hybrids__()
 
 
     # Determine hybridization parameters for the l=m=2 multipole
-    def __calc_l2m2_hybrid_params__(this):
+    def __calc_l2m2_hybrid_params__(this,plot=False):
 
-        #-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~#
-        # Estimate optimal params -- Initial guesses
-        #-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~#
+        # Import usefuls
+        from scipy.optimize import minimize
+        from numpy import pi,linspace,mean,std,unwrap,angle,exp
 
-        # Estimate time shift (T) from frequency content
-        T = 0
-        # Given T, optimize orbital phase (handle polarization shift simulteneously)
-        phi,psi = 0,0
-        # Do not optimize amplitude
+        # Setup plotting
+        __plot__ = plot
+        if __plot__:
+            # Import usefuls
+            from matplotlib.pyplot import plot,ylim,xlim,xlabel,ylabel,\
+            figure,figaspect,yscale,xscale,axvline,axhline,show,title
+            alert('Plots will be generated.',verbose=this.verbose)
 
-        # Store initial guess
-        this.__guess_hybrid_params__ = {'T':T,'phi':phi,'psi':psi}
+        # ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~ #
+        # Extract domain and range values of interest
+        # ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~ #
+        kind = this.__kind__
+        pno = this.__pn__
+        nro = this.gwylmo
+        pn_t,pn_y,nr_t,nr_y = pno.pn_gwylmo.t,pno.pn_gwylmo[2,2][kind].y,nro.t,nro[2,2][kind].y
+        alert('The l=m=2 %s will be used for determining (initial) optimal hybrid params.'%cyan(kind),verbose=this.verbose)
 
-        # Given the initial guess , find the optimal values
-        this.optimal_hybrid_params = 0 # a dictionary
+        # ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~ #
+        # Format data in a common way
+        # ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~ #
+        alert('Aligning formats of NR and PN data',verbose=this.verbose)
+        t,pn_y,nr_y = format_align(pn_t,pn_y,nr_t,nr_y,center_domains=True)
+
+        # ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~ #
+        # Align data for initial guesses
+        # ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~ #
+        t,pn_,t,nr_,foo = corr_align(t,pn_y,t,nr_y)
+        alert('Storing hybrid time series.',verbose=this.verbose)
+        this.t = t
+
+        # ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~ #
+        # Calculate time resolution
+        # ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~ #
+        dt = t[1]-t[0]
+        this.dt = dt
+
+        # ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~ #
+        # Define limits of fitting region
+        # ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~ #
+        N = 1 # Width of hybrid region in number of cycles (approx)
+        alert('We will use %i cycles for the hybridization region\'s width.'%N,verbose=this.verbose)
+        T1 = (nro.t-nro.t[0])[ nro.startindex ]
+        T2 = (nro.t-nro.t[0])[ nro.startindex + int(N*(2*pi)/(nro.wstart_pn/2)) ]
+        mask = (t>=T1) & (t<=T2)
+
+        # ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~ #
+        # Define methods for additional alignment
+        # ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~ #
+        # Method: Time shift the PN data
+        pn_time_shift = lambda TSHIFT: tshift( t, pn_y, TSHIFT ) # roll( pn_y, int(t0/dt) )
+        # Method: Align in phase using average phase difference
+        def pn_phi_align(PN,NR,return_phi=False):
+            # Apply an optimal phase shift
+            getphi = lambda X: unwrap(angle(X))
+            phi0 = mean( (getphi(PN)-getphi(NR))[mask] )
+            if return_phi:
+                return PN*exp(-1j*phi0), phi0
+            else:
+                return PN*exp(-1j*phi0)
+        # Method: Calculate estimator
+        estimartor_fun = lambda PN: abs( std(PN[mask]-nr_y[mask])/std(nr_y[mask]) )
+
+        # ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~ #
+        # Define work function for optimizer
+        # ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~ #
+        def work( t0 ):
+            # Shift the PN waveform by t0
+            pn_y_ = pn_time_shift(t0)
+            # Apply an optimal phase shift
+            pn_y_ = pn_phi_align(pn_y_,nr_y)
+            # Compute a residual error statistic
+            frmse = estimartor_fun( pn_y_ )
+            # Return estimator
+            return frmse
+
+        # ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~ #
+        # Numerically Determine Optimal Tims Shift
+        # ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~ #
+
+        alert('Finding optimal time-shift using scipy.optimize.minimize',verbose=this.verbose)
+        t0_guess = len(t)-foo['domain_shift']
+        bear = minimize( work, t0_guess )
+        est0 = bear.fun
+        t0 = bear.x[0]
+
+        if __plot__:
+            t0_space = linspace(t0-100*dt,t0+100*dt,21)
+            figure()
+            plot( t0_space, map(work,t0_space) )
+            xlim(lim(t0_space))
+            axvline(t0,color='r',ls='--')
+            axvline(t0_guess,color='k',ls='-',alpha=0.3)
+            title('(%f,%f)'%(t0,t0_guess))
+
+        # ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~ #
+        # Apply optimal parameters
+        # ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~ #
+        # Apply optimal time shift
+        pn_y_ = pn_time_shift( t0 )
+        # Apply an optimal phase shift
+        pn_y_,phi0 = pn_phi_align(pn_y_,nr_y,return_phi=True)
+
+        if __plot__:
+            figure( figsize=1*figaspect(1.0/7) )
+            plot( t, pn_y_.real )
+            plot( t, nr_y.real )
+            plot( t, abs(nr_y) )
+            plot( t, abs(pn_y_) )
+            xlim( [100,2500] )
+            axvline(T1,color='b')
+            axvline(T2,color='b')
+            yscale('log',nonposy='clip')
+            ylim([1e-6,5e-3])
+
+        # Store optimals
+        alert('Storing optimal params to this.optimal_hybrid_params',verbose=this.verbose)
+        this.optimal_hybrid_params = { 't0':t0, 'phi0':phi0, 'mask':mask }
+        print this.optimal_hybrid_params
 
 
     # Create an instance of the PN class
@@ -69,7 +178,7 @@ class make_pnnr_hybrid:
                   wM_max=this.pn_w_orb_max,
                   sceo = y.__scentry__ )
 
-        # Store to current obejct
+        # Store to current object
         this.__pn__ = pno
 
         #
@@ -96,7 +205,7 @@ class make_pnnr_hybrid:
 
 
     # Validative constructor for class workflow
-    def __validate_inputs__(this,gwylmo,pn_w_orb_min,pn_w_orb_max,verbose):
+    def __validate_inputs__(this,gwylmo,pn_w_orb_min,pn_w_orb_max,kind,verbose):
 
         # Let the people know
         this.verbose = verbose
@@ -111,6 +220,10 @@ class make_pnnr_hybrid:
 
         # Calculate radiated quantities for the input gwylmo
         gwylmo.__calc_radiated_quantities__()
+
+        # Handle kind
+        if kind is None: kind = 'psi4'
+        this.__kind__ = kind
 
         # Store ,min and max orbital frequency for PN generation
         if pn_w_orb_min is None:
