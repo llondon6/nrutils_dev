@@ -47,6 +47,16 @@ def physhf( harr, M, D ):
 
     code_hf_array = physhf( geometric_hf_array, M_solar, D_Mpc )
 
+    INPUTS
+    ---
+    harr,       array,float of GW strain
+    M,          System initial total mass in SOLAR MASSES
+    D           System luminosity distance in Mpc
+
+    OUTPUT
+    ---
+    harr        in same format as input, but in physical units
+
     '''
     # Import useful things
     from numpy import ndarray
@@ -84,7 +94,20 @@ def physhf( harr, M, D ):
 # Given TIME DOMAIN strain in code units, convert to Physical units
 # --------------------------------------------------------------- #
 def physh( harr, M, D, verbose=False ):
-    '''Given TIME DOMAIN strain (waveform array OR number) in code units, convert to Physical units'''
+    '''
+    Given TIME DOMAIN strain (waveform array OR number) in code units, convert to Physical units
+
+    INPUTS
+    ---
+    harr,       array,float of GW strain
+    M,          System initial total mass in SOLAR MASSES
+    D           System luminosity distance in Mpc
+
+    OUTPUT
+    ---
+    harr        in same format as input, but in physical units
+
+    '''
     # Import useful things
     from numpy import ndarray
     # Calculate unit conversion factor for strain amplitude
@@ -121,21 +144,65 @@ def physh( harr, M, D, verbose=False ):
 # Given TIME DOMAIN strain in physical units, convert to Code units
 # --------------------------------------------------------------- #
 def codeh( harr, M, D ):
-    '''Given TIME DOMAIN strain in physical units, convert to Code units'''
-    # convert time series to physical units
-    harr[:,0] = codet( harr[:,0], M )
 
-    # scale wave amplitude for mass and distance
-    harr[:,1:] =  harr[:,1:] / (mass_mpc( M )/D)
+    '''
+    Given TIME DOMAIN strain in physical units, convert to Code units
+
+    INPUTS
+    ---
+    harr,       array,float of GW strain
+    M,          System initial total mass in SOLAR MASSES
+    D           System luminosity distance in Mpc
+
+    OUTPUT
+    ---
+    harr        in same format as input, but in geometric units
+
+    '''
+    # Import useful things
+    from numpy import ndarray
 
     #
+    K =  1.0 / (mass_mpc( M )/D)
+
+    if isinstance(harr,ndarray):
+        # Here we will asusme that input is numpy ndarray
+        if 3 == harr.shape[-1]:
+            # convert time series to physical units
+            harr[:,0] = codet( harr[:,0], M )
+            # scale wave amplitude for mass and distance
+            harr[:,1:] *= K
+        elif 1==len(harr.shape):
+            harr *= K
+        else:
+            error('Unhandled input format. Input shape is %s'%len(harr.shape))
+    elif isinstance(harr,(float,int,complex)):
+        # Convert strain data to physical units and return
+        return harr*K
+    else:
+        error('Unknown input type')
+
+    # Return answer
     return harr
 
 # --------------------------------------------------------------- #
 # Given FREQUENCY DOMAIN strain in physical units, convert to Code units
 # --------------------------------------------------------------- #
 def codehf( fd_harr, M, D ):
-    '''Given FREQUENCY DOMAIN strain in physical units, convert to Code units'''
+    '''
+    Given FREQUENCY DOMAIN strain in physical units, convert to Code units
+
+    INPUTS
+    ---
+    fd_harr,       array,float of GW strain
+    M,          System initial total mass in SOLAR MASSES
+    D           System luminosity distance in Mpc
+
+    OUTPUT
+    ---
+    fd_harr        in same format as input, but in geometric units
+
+    '''
     #
     K  = D/mass_mpc( M )    # scale wave amplitude for mass and distance
     K /= mass_sec(M)        # convert the differential dt to M

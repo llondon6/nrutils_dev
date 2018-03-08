@@ -1998,6 +1998,23 @@ class gwf:
         if not apply:
             return ans
 
+    #
+    def __rotate_frame_at_all_times__(this,like_l_multipoles,euler_angles):
+
+        #
+        that = this.copy()
+
+        #
+        like_l_multipoles_dict = { (y.l,y.m):y.wfarr for y in like_l_multipoles }
+
+        #
+        rotated_wfarr = rotate_wfarrs_at_all_times( this.l,this.m, like_l_multipoles_dict, euler_angles )
+
+        # Reset related fields using the new data
+        that.setfields( rotated_wfarr )
+
+        #
+        return that
 
     # frequency domain filter the waveform given a window state for the frequency domain
     def fdfilter(this,window):
@@ -2202,6 +2219,38 @@ class gwylm:
         # Create a dictionary representation of the mutlipoles
         if scentry_obj.config:
             this.__curate__()
+
+
+    # Allow class to be indexed
+    def __getitem__(this,index):
+        # Import usefuls
+        from numpy import ndarray
+        # Define validation message
+        msg = 'Note that gwylm objects can only be indexed with (l,m) pairs corresponding to the data loaded upon its creation. The attempted index is %s.'%(str(index))
+        #
+        if isinstance(index,int): index = this.__lmlist__[index]
+        # Return the l,m dictionary
+        if isinstance(index,(tuple,list,ndarray)):
+            if len(index) != 2:
+                error(msg+' Length of reference must be 2; one for spherical harmonic l another for m.')
+        else:
+            error(msg)
+        return this.lm[index]
+    # Allow "in" to look for l,m content
+    def __contains__(this,query):
+        print query
+        return query in this.__lmlist__
+    # Allow class to be iterable as its __lmlist__
+    def __iter__(this):
+        return this.__lmlist__
+    # def next(this):
+    #     k = this.__lmlist__.index(this.__iterLM__)
+    #     N = len(this.__lmlist__)
+    #     print k
+    #     if k > (N-1):
+    #         raise StopIteration
+    #     else:
+    #         return this.__lmlist__[k+1]
 
 
     # Create a dictionary representation of the mutlipoles
@@ -3098,11 +3147,11 @@ class gwylm:
         # Validate the inputs
         if kind is None:
             msg = 'no kind specified for recompose calculation. We will proceed assuming that you desire recomposed strain. Please specify the desired kind (e.g. strain, psi4 or news) you wish to be output as a keyword (e.g. kind="news")'
-            warning( msg, 'gwylm.recompose' )
+            # warning( msg, 'gwylm.recompose' )
             kind = 'strain'
         if domain is None:
             msg = 'no domain specified for recompose calculation. We will proceed assuming that you desire recomposed time domain data. Please specify the desired domain (e.g. time or freq) you wish to be output as a keyword (e.g. domain="freq")'
-            warning( msg, 'gwylm.recompose' )
+            # warning( msg, 'gwylm.recompose' )
             domain = 'time'
 
         # if it is desired to work with arrays
@@ -3494,6 +3543,58 @@ class gwylm:
 
         return None
 
+    #
+    def rotate_frame(this):
+
+        return None
+
+    # Given some time and set of euler angles, rotate all multipole data ... and possibly initial position, spin, and final spin.
+    def __rotate_frame_at_all_times__(this,
+                                        reference_time,
+                                        euler_angles):
+
+        '''
+        Given some time and set of euler angles, rotate all multipole data ... and possibly initial position, spin, and final spin.
+        '''
+
+        # Perform roations for all kinds
+        kinds = ['strain','psi4','news']
+
+        # Create the output object -- its multipole data (and other?) will be replaced by rotated versions
+        that = this.copy()
+
+        # ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~- #
+        # Rotate multipole data
+        # ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~- #
+
+        # For all kinds
+        for kind in kinds:
+
+            # For all multipoles
+            for lm in this.lm:
+
+                # Create list of this objects gwfs with the same kind and the same l
+                like_l_multipoles = []
+                for lp,mp in this.lm:
+                    if lp == l:
+                        like_l_multipoles.append( this.lm[lp,mp][kind] )
+
+                # Rotate the curent multipole
+                rotated_gwf = this.lm[lm][kind].__rotate_frame_at_all_times__( like_l_multipoles, euler_angles )
+
+                # Store it to the output gwylm object
+                this.lm[lm][kind] = rotated_gwf
+
+        # ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~- #
+        # Rotate related metadata??
+        # ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~- #
+        # * final spin vector / spin timeseries
+        # * initial spins
+        # * initial positions / position time series / maybe velocities
+        alert('Note that only waveform data is rotated ... for now?')
+
+        # Return answer
+        return that
 
     # Estimate Remnant BH mass and spin from gwylm object. This is done by "brute" force here (i.e. an actual calculation), but NOTE that values for final mass and spin are Automatically loaded within each scentry; However!, some of these values may be incorrect -- especially for BAM sumulations. Here we make a rough estimate of the remnant mass and spin based on a ringdown fit.
     def brute_masspin( this,              # IMR gwylm object
@@ -3958,6 +4059,7 @@ class gwfcharstart:
     def __init__( this,                 # the object to be created
                   y,                    # input gwf object who'se start behavior will be characterised
                   shift     = 3,        # The size of the turn on region in units of waveform cycles.
+                  __smooth__ = True,
                   verbose   = False ):
 
         #
@@ -3979,7 +4081,7 @@ class gwfcharstart:
         # 1. Find the pre-peak portion of the waveform.
         val_mask = arange( y.k_amp_max )
         # 2. Find the peak locations of the plus part. NOTE that smooth() is defined in positive.maths
-        pks,pk_mask = findpeaks( smooth( y.cross[ val_mask ], 20 ).answer )
+        pks,pk_mask = findpeaks( smooth( y.cross[ val_mask ], 20 ).answer if __smooth__ else y.cross[ val_mask ] )
         # pks,pk_mask = findpeaks( y.cross[ val_mask ] )
         pk_mask = pk_mask[ pks > y.amp[y.k_amp_max]*5e-4 ]
 
@@ -3997,7 +4099,7 @@ class gwfcharstart:
 
         else:
 
-            # 4. Find location of the first peak that is separated from its adjacent by greater than the largest value. This location is stored to start_map.
+            # 4. Find location of the first peak that is separated from its adjacent by greater/equal than the largest value. This location is stored to start_map.
             start_map = find(  D >= max(D)  )[0]
 
             # 5. Determine the with of waveform turn on in indeces based on the results above. NOTE that the width is bound below by half the difference betwen the wf start and the wf peak locations.

@@ -91,18 +91,23 @@ class make_pnnr_hybrid:
         # Define methods for additional alignment
         # ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~ #
         # Method: Time shift the PN data
-        pn_time_shift = lambda TSHIFT: tshift( t, pn_y, TSHIFT ) # roll( pn_y, int(t0/dt) )
+        pn_time_shift = lambda TSHIFT,PN=pn_y,METH=None: tshift( t, PN, TSHIFT,method=METH ) # roll( pn_y, int(t0/dt) )
         # Method: Align in phase using average phase difference
-        def pn_phi_align(PN,NR,return_phi=False):
+        def pn_phi_align(PN,NR,return_phi=False,MSK=mask):
             # Apply an optimal phase shift
             getphi = lambda X: unwrap(angle(X))
-            phi0 = mean( (getphi(PN)-getphi(NR))[mask] )
+            phi0 = mean( (getphi(PN)-getphi(NR))[MSK] )
             if return_phi:
                 return PN*exp(-1j*phi0), phi0
             else:
                 return PN*exp(-1j*phi0)
         # Method: Calculate estimator
-        estimartor_fun = lambda PN: abs( std(PN[mask]-nr_y[mask])/std(nr_y[mask]) )
+        estimartor_fun = lambda PN,NR=nr_y,MSK=mask: abs( std(PN[MSK]-NR[MSK])/std(NR[MSK]) )
+        # Store usefuls
+        alert('Storing shifting functions for future reference.',verbose=this.verbose)
+        this.__pn_time_shift__ = pn_time_shift
+        this.__estimator_fun__ = estimartor_fun
+        this.__pn_phi_align__ = pn_phi_align
 
         # ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~ #
         # Define work function for optimizer
@@ -128,7 +133,7 @@ class make_pnnr_hybrid:
         t0 = bear.x[0]
 
         if __plot__:
-            t0_space = linspace(t0-100*dt,t0+100*dt,21)
+            t0_space = linspace(t0-200*dt,t0+200*dt,21)
             figure()
             plot( t0_space, map(work,t0_space) )
             xlim(lim(t0_space))
@@ -139,10 +144,20 @@ class make_pnnr_hybrid:
         # ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~ #
         # Apply optimal parameters
         # ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~ #
+
+        # Define general functoin for applying hybrid params
+        def apply_hyb_params_to_pn(PN,NR,T0,MSK=mask,TSMETH=None):
+            # Apply optimal time shift
+            PN_ = this.__pn_time_shift__( T0,PN=PN,METH=TSMETH )
+            # Compute and apply an optimal phase shift
+            PN_,phi0 = pn_phi_align(PN_,NR,MSK=mask,return_phi=True)
+            # Return deliverables
+            return PN_,phi0
+        # Store method
+        this.__apply_hyb_params_to_pn__ = apply_hyb_params_to_pn
+
         # Apply optimal time shift
-        pn_y_ = pn_time_shift( t0 )
-        # Apply an optimal phase shift
-        pn_y_,phi0 = pn_phi_align(pn_y_,nr_y,return_phi=True)
+        pn_y_,phi0 = this.__apply_hyb_params_to_pn__(pn_y,nr_y,t0,MSK=mask)
 
         if __plot__:
             figure( figsize=1*figaspect(1.0/7) )
@@ -158,8 +173,8 @@ class make_pnnr_hybrid:
 
         # Store optimals
         alert('Storing optimal params to this.optimal_hybrid_params',verbose=this.verbose)
-        this.optimal_hybrid_params = { 't0':t0, 'phi0':phi0, 'mask':mask }
-        print this.optimal_hybrid_params
+        this.optimal_hybrid_params = { 't0':t0, 'phi0':phi0, 'mask':mask, 'T1':T1, 'T2':T2 }
+        if this.verbose: print this.optimal_hybrid_params
 
 
     # Create an instance of the PN class

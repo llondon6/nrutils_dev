@@ -56,7 +56,6 @@ def wdelement( ll,         # polar index (eigenvalue) of multipole to be rotated
             A *= cos(beta/2)**(2*ll+mm-mp-2*ss)  *  sin(beta/2)**(mp-mm+2*ss)
             B = factorial(ll+mm-ss) * factorial(ss) * factorial(mp-mm+ss) * factorial(ll-mp-ss)
             total += A/B
-            # total += (-1)**(mp-mm+ss) / ( factorial(ll+mm-ss) * factorial(ss) * factorial(mp-mm+ss) * factorial(ll-mp-ss) ) * cos(beta/2)**(2*ll+mm-mp-2*ss) * sin(beta/2)**(mp-mm+2*ss)
 
     #
     element = coefficient*total
