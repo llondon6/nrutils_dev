@@ -274,19 +274,19 @@ class scentry:
             if this.verbose: print '## Working: %s' % cyan(metadata_file_location)
             this.log += ' This entry\'s metadata file is valid.'
 
-            # i.e. learn the meta_data_file
-            this.learn_metadata(); # raise(TypeError,'This line should only be uncommented when debugging.')
-            this.label = sclabel( this )
+            # # i.e. learn the meta_data_file
+            # this.learn_metadata(); # raise(TypeError,'This line should only be uncommented when debugging.')
+            # this.label = sclabel( this )
 
-            # try:
-            #     this.learn_metadata()
-            #     this.label = sclabel( this )
-            # except:
-            #     emsg = sys.exc_info()[1].message
-            #     this.log += '%80s'%' [FATALERROR] The metadata failed to be read. There may be an external formatting inconsistency. It is being marked as invalid with None. The system says: %s'%emsg
-            #     if this.verbose: warning( 'The following error message will be logged: '+red(emsg),'scentry')
-            #     this.isvalid = None # An external program may use this to do something
-            #     this.label = 'invalid!'
+            try:
+                this.learn_metadata()
+                this.label = sclabel( this )
+            except:
+                emsg = sys.exc_info()[1].message
+                this.log += '%80s'%' [FATALERROR] The metadata failed to be read. There may be an external formatting inconsistency. It is being marked as invalid with None. The system says: %s'%emsg
+                if this.verbose: warning( 'The following error message will be logged: '+red(emsg),'scentry')
+                this.isvalid = None # An external program may use this to do something
+                this.label = 'invalid!'
 
         elif this.isvalid is False:
             if config_obj:
@@ -3549,9 +3549,7 @@ class gwylm:
         return None
 
     # Given some time and set of euler angles, rotate all multipole data ... and possibly initial position, spin, and final spin.
-    def __rotate_frame_at_all_times__(this,
-                                        reference_time,
-                                        euler_angles):
+    def __rotate_frame_at_all_times__(this, euler_angles):
 
         '''
         Given some time and set of euler angles, rotate all multipole data ... and possibly initial position, spin, and final spin.
@@ -3576,6 +3574,7 @@ class gwylm:
                 # Create list of this objects gwfs with the same kind and the same l
                 like_l_multipoles = []
                 for lp,mp in this.lm:
+                    l,m = lm
                     if lp == l:
                         like_l_multipoles.append( this.lm[lp,mp][kind] )
 

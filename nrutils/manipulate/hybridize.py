@@ -81,7 +81,7 @@ class make_pnnr_hybrid:
         # ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~ #
         # Define limits of fitting region
         # ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~ #
-        N = 1 # Width of hybrid region in number of cycles (approx)
+        N = 2 # Width of hybrid region in number of cycles (approx)
         alert('We will use %i cycles for the hybridization region\'s width.'%N,verbose=this.verbose)
         T1 = (nro.t-nro.t[0])[ nro.startindex ]
         T2 = (nro.t-nro.t[0])[ nro.startindex + int(N*(2*pi)/(nro.wstart_pn/2)) ]
@@ -93,10 +93,10 @@ class make_pnnr_hybrid:
         # Method: Time shift the PN data
         pn_time_shift = lambda TSHIFT,PN=pn_y,METH=None: tshift( t, PN, TSHIFT,method=METH ) # roll( pn_y, int(t0/dt) )
         # Method: Align in phase using average phase difference
-        def pn_phi_align(PN,NR,return_phi=False,MSK=mask):
+        def pn_phi_align(PN,NR,return_phi=False,MSK=mask,phi0=None):
             # Apply an optimal phase shift
             getphi = lambda X: unwrap(angle(X))
-            phi0 = mean( (getphi(PN)-getphi(NR))[MSK] )
+            if phi0 == None: phi0 = mean( (getphi(PN)-getphi(NR))[MSK] )
             if return_phi:
                 return PN*exp(-1j*phi0), phi0
             else:
@@ -146,18 +146,18 @@ class make_pnnr_hybrid:
         # ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~ #
 
         # Define general functoin for applying hybrid params
-        def apply_hyb_params_to_pn(PN,NR,T0,MSK=mask,TSMETH=None):
+        def apply_hyb_params_to_pn(PN,NR,T0,MSK=mask,TSMETH=None,phi0=None):
             # Apply optimal time shift
             PN_ = this.__pn_time_shift__( T0,PN=PN,METH=TSMETH )
             # Compute and apply an optimal phase shift
-            PN_,phi0 = pn_phi_align(PN_,NR,MSK=mask,return_phi=True)
+            PN_,phi0 = pn_phi_align(PN_,NR,MSK=mask,phi0=phi0,return_phi=True)
             # Return deliverables
             return PN_,phi0
         # Store method
         this.__apply_hyb_params_to_pn__ = apply_hyb_params_to_pn
 
         # Apply optimal time shift
-        pn_y_,phi0 = this.__apply_hyb_params_to_pn__(pn_y,nr_y,t0,MSK=mask)
+        pn_y_,phi0_22 = this.__apply_hyb_params_to_pn__(pn_y,nr_y,t0,MSK=mask)
 
         if __plot__:
             figure( figsize=1*figaspect(1.0/7) )
@@ -173,7 +173,7 @@ class make_pnnr_hybrid:
 
         # Store optimals
         alert('Storing optimal params to this.optimal_hybrid_params',verbose=this.verbose)
-        this.optimal_hybrid_params = { 't0':t0, 'phi0':phi0, 'mask':mask, 'T1':T1, 'T2':T2 }
+        this.optimal_hybrid_params = { 't0':t0, 'phi0_22':phi0_22, 'mask':mask, 'T1':T1, 'T2':T2 }
         if this.verbose: print this.optimal_hybrid_params
 
 
