@@ -1073,7 +1073,7 @@ def rotate_wfarrs_at_all_times( l,                          # the l of the new m
 
     # Import usefuls
     from numpy import exp, pi
-    from nrutils.rotate import wdelement
+    from nrutils.manipulate.rotate import wdelement
 
     #
     alpha,beta,gamma = euler_angles
