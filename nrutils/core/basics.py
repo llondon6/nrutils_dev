@@ -1072,7 +1072,7 @@ def rotate_wfarrs_at_all_times( l,                          # the l of the new m
     '''
 
     # Import usefuls
-    from numpy import exp, pi
+    from numpy import exp, pi, array
     from nrutils.manipulate.rotate import wdelement
 
     #
