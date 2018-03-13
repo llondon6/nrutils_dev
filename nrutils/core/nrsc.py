@@ -3582,7 +3582,7 @@ class gwylm:
                 rotated_gwf = this.lm[lm][kind].__rotate_frame_at_all_times__( like_l_multipoles, euler_angles )
 
                 # Store it to the output gwylm object
-                this.lm[lm][kind] = rotated_gwf
+                that.lm[lm][kind] = rotated_gwf
 
         # ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~- #
         # Rotate related metadata??
