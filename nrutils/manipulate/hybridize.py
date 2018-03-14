@@ -213,10 +213,90 @@ class make_pnnr_hybrid:
             _psi.append( _y )
 
         #
-
-
-        #
         return None
+
+
+    # Given optimal hybrid params for l=m=2, begin to estimate optimal phase alignment for PN
+    def __align_pn_multipole_phase__(this,lm,plot=False,verbose=False):
+        '''
+        Given optimal hybrid params for l=m=2, begin to estimate optimal phase alignment for PN
+        '''
+        # Import usefuls
+        from numpy import argmax,array,unwrap,angle,pi,mean
+        # Unpack l and m
+        l,m = lm
+        # Create shorthand for useful information
+        t0 = this.optimal_hybrid_params['t0']
+        mask = this.optimal_hybrid_params['mask']
+        T1 = this.optimal_hybrid_params['T1']
+        T2 = this.optimal_hybrid_params['T2']
+        phi22 = this.optimal_hybrid_params['phi0_22']
+        kind = this.__kind__
+        # Find the peak location for l=m=2 to be used for masking below
+        k_amp_max_22 = argmax( this.__unpacklm__((2,2))[1] )
+        # Get the format aligned data for this multipole
+        t,nr_y,pn_y = this.__unpacklm__(lm)
+        # Apply optimal time shift, NOTE the rescaling of phi22
+        pn_y,phi0 = this.__apply_hyb_params_to_pn__(pn_y,nr_y,t0,MSK=mask,TSMETH='index',phi0=m*phi22/2)
+        # Begin phase alignment
+        __getphi__= lambda X: unwrap(angle(X))
+        # Get phases aligned in mask region
+        def get_aligned_phi(a,b,__mask__):
+            '''Get phases aligned in mask region'''
+            A = __getphi__(a)
+            B = __getphi__(b)
+            L = pi/2
+            n = round(  mean(B[__mask__]-A[__mask__]) / L  )
+            B -= n*L
+            return A,B
+        # Get NR phase
+        nr_phi = __getphi__( nr_y )
+        # Find a mask for the smoothest part
+        lamp = smoothest_part( nr_phi[:k_amp_max_22] )
+        # Get the aligned phases (NOTE that nr_phi should not have changed)
+        nr_phi,pn_phi = get_aligned_phi( nr_y, pn_y, lamp[:10] )
+        # Plotting
+        if plot:
+            # Import usefuls
+            from matplotlib.pyplot import figure,figaspect,plot,xlim,ylim,xscale
+            from matplotlib.pyplot import yscale,axvline,axvspan,xlabel,ylabel,title
+            # Create figure
+            fig = figure( figsize=figaspect(2.0/7) )
+            # Plot phases
+            plot( t[lamp], nr_phi[lamp], color='k', lw=3, alpha=0.4, ls='--' )
+            plot( t, nr_phi )
+            plot( t, pn_phi, lw=1 )
+            # Set plot limits
+            ylim( min(pn_phi),max(lim( nr_phi[lamp], dilate=0.1)) )
+            xlim( 0,max(t[lamp]) )
+            # Highlight the hybridization region
+            axvspan( T1,T2, alpha=0.15, color='cyan' )
+            axvline( T1,color='c',ls='--' )
+            axvline( T2,color='c',ls='--' )
+            # Set axis labels
+            xlabel(r'$t/M$'); ylabel(r'$\phi_{%i%i}=\arg(\psi_{%i%i})$'%(l,m,l,m))
+        # Return aligned phases 
+        return nr_phi,pn_phi
+
+    # Get the format aligned data
+    def __unpacklm__(this,lm):
+        '''Get the format aligned data NR and PN data for a single multipole'''
+        # Import usefuls
+        from numpy import allclose
+        # Create shorthand for useful information
+        t = this.t
+        pno = this.__pn__
+        nro = this.gwylmo
+        kind = this.__kind__
+        pn_t,pn_y,nr_t,nr_y = pno.pn_gwylmo.t,pno.pn_gwylmo[lm][kind].y,nro.t,nro[lm][kind].y
+        # Format align multipole data
+        t_,_,nr_y = format_align(t,t*t,nr_t,nr_y,center_domains=True,verbose=False)
+        if not allclose(t_,t): error('bad formatting!')
+        t_,_,pn_y = format_align(t,t*t,pn_t,pn_y,center_domains=True,verbose=False)
+        if not allclose(t_,t): error('bad formatting!')
+        # Return answer
+        return (t,nr_y,pn_y)
+
 
 
     # Validative constructor for class workflow
