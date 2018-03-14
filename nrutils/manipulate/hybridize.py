@@ -216,8 +216,82 @@ class make_pnnr_hybrid:
         return None
 
 
+    # Generate a model trained to pn at low freqs and nr at high freqs
+    def __calc_bridge_model__(this,lm,plot=False):
+
+        # Import usefuls
+        from numpy import zeros_like,argmax
+
+        # Create shorthand for useful information
+        l,m = lm
+        mask = this.optimal_hybrid_params['mask']
+        T1 = this.optimal_hybrid_params['T1']
+        T2 = this.optimal_hybrid_params['T2']
+
+        # Get the phase aligned waveforms
+        foo = this.__get_nr_pn_amp_phase__( lm )
+        nr_amp = foo['nr_amp']
+        nr_phi = foo['nr_phi']
+        pn_amp = foo['pn_amp']
+        pn_phi = foo['pn_phi']
+        t = foo['t']
+        pn_t_amp_max = t[ argmax(pn_amp) ]
+
+        #
+        stride = 4*(T2-T1)
+        pnmask = (t>=max(T1-stride,0)) & (t<=T2)
+        nrmask = (t>=t[foo['nr_smoothest_mask']][0]) & (t<=min(pn_t_amp_max,t[foo['nr_smoothest_mask']][0]+stride))
+
+        #
+        bridge_t = t.copy()
+        bridge_t   = bridge_t[ pnmask | nrmask ]
+        #
+        bridge_amp = zeros_like(t)
+        bridge_amp[ pnmask ] = pn_amp[ pnmask ]
+        bridge_amp[ nrmask ] = nr_amp[ nrmask ]
+        bridge_amp = bridge_amp[ pnmask | nrmask ]
+        #
+        bridge_phi = zeros_like(t)
+        bridge_phi[ pnmask ] = pn_phi[ pnmask ]
+        bridge_phi[ nrmask ] = nr_phi[ nrmask ]
+        bridge_phi = bridge_phi[ pnmask | nrmask ]
+
+        # Plotting
+        fig,(ax1,ax2) = None,(None,None)
+        if plot:
+            # Import usefuls
+            from matplotlib.pyplot import figure,figaspect,plot,xlim,ylim,xscale,subplot,show
+            from matplotlib.pyplot import yscale,axvline,axvspan,xlabel,ylabel,title,yscale
+            # Setup plotting backend
+            import matplotlib as mpl
+            mpl.rcParams['axes.labelsize'] = 24
+            # Create figure
+            fig = figure( figsize=2*figaspect(4.0/7) )
+            #
+            ax1 = subplot(2,1,1)
+            plot( t, nr_amp, label='NR' )
+            plot( bridge_t, bridge_amp, 'ok', label='PN+NR: Training Region' )
+            # Set plot limits
+            yscale('log')
+            ylim( min(pn_amp[pn_amp>0]),max(lim( nr_amp[foo['nr_smoothest_mask']], dilate=0.1)) )
+            xlim( 0,max(t[foo['nr_smoothest_mask']]) )
+            # Set axis labels
+            ylabel(r'$|\psi_{%i%i}|$'%(l,m))
+            #
+            ax2 = subplot(2,1,2)
+            plot( t, nr_phi, label='NR' )
+            plot( bridge_t, bridge_phi, 'ok', label='PN+NR: Training Region' )
+            # Set plot limits
+            ylim( min(pn_phi),max(lim( nr_phi[foo['nr_smoothest_mask']], dilate=0.1)) )
+            xlim( 0,max(t[foo['nr_smoothest_mask']]) )
+            # Set axis labels
+            xlabel(r'$t/M$'); ylabel(r'$\phi_{%i%i}=\arg(\psi_{%i%i})$'%(l,m,l,m))
+
+        #
+        return t,bridge_t,bridge_amp,bridge_phi,(fig,[ax1,ax2])
+
     # Given optimal hybrid params for l=m=2, begin to estimate optimal phase alignment for PN
-    def __align_pn_multipole_phase__(this,lm,plot=False,verbose=False):
+    def __get_nr_pn_amp_phase__(this,lm,plot=False,verbose=False):
         '''
         Given optimal hybrid params for l=m=2, begin to estimate optimal phase alignment for PN
         '''
@@ -255,14 +329,17 @@ class make_pnnr_hybrid:
         lamp = smoothest_part( nr_phi[:k_amp_max_22] )
         # Get the aligned phases (NOTE that nr_phi should not have changed)
         nr_phi,pn_phi = get_aligned_phi( nr_y, pn_y, lamp[:10] )
+        # Get Amplitudes
+        nr_amp,pn_amp = abs(nr_y),abs(pn_y)
         # Plotting
         if plot:
             # Import usefuls
-            from matplotlib.pyplot import figure,figaspect,plot,xlim,ylim,xscale
-            from matplotlib.pyplot import yscale,axvline,axvspan,xlabel,ylabel,title
+            from matplotlib.pyplot import figure,figaspect,plot,xlim,ylim,xscale,subplot,show
+            from matplotlib.pyplot import yscale,axvline,axvspan,xlabel,ylabel,title,yscale
             # Create figure
-            fig = figure( figsize=figaspect(2.0/7) )
+            fig = figure( figsize=1.5*figaspect(4.0/7) )
             # Plot phases
+            subplot(2,1,2)
             plot( t[lamp], nr_phi[lamp], color='k', lw=3, alpha=0.4, ls='--' )
             plot( t, nr_phi )
             plot( t, pn_phi, lw=1 )
@@ -275,8 +352,33 @@ class make_pnnr_hybrid:
             axvline( T2,color='c',ls='--' )
             # Set axis labels
             xlabel(r'$t/M$'); ylabel(r'$\phi_{%i%i}=\arg(\psi_{%i%i})$'%(l,m,l,m))
-        # Return aligned phases 
-        return nr_phi,pn_phi
+            # Plot amplitudes
+            subplot(2,1,1)
+            yscale('log')
+            plot( t[lamp], nr_amp[lamp], color='k', lw=3, alpha=0.4, ls='--' )
+            plot( t, nr_amp )
+            plot( t, pn_amp, lw=1 )
+            # Set plot limits
+            ylim( min(pn_amp[pn_amp>0]),max(lim( nr_amp[lamp], dilate=0.1)) )
+            xlim( 0,max(t[lamp]) )
+            # Highlight the hybridization region
+            axvspan( T1,T2, alpha=0.15, color='cyan' )
+            axvline( T1,color='c',ls='--' )
+            axvline( T2,color='c',ls='--' )
+            # Set axis labels
+            ylabel(r'$|\psi_{%i%i}|$'%(l,m))
+            # xlabel(r'$t/M$')
+            # show()
+        # Package output
+        foo = {}
+        foo['nr_amp'] = nr_amp
+        foo['nr_phi'] = nr_phi
+        foo['pn_amp'] = pn_amp
+        foo['pn_phi'] = pn_phi
+        foo['nr_smoothest_mask'] = lamp
+        foo['t'] = t
+        # Return aligned phases
+        return foo
 
     # Get the format aligned data
     def __unpacklm__(this,lm):
