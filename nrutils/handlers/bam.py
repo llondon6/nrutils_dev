@@ -155,7 +155,7 @@ def learn_metadata( metadata_file_location ):
     # Estimate the initial biary separation (afterjunk), and warn the user if this value is significantly different than the bbh file
     x.b = norm(R1-R2) # float( y.initial_separation )
     if abs( y.initial_separation - norm(R1-R2) ) > 1e-1:
-        msg = cyan('Warning:')+' The estimated after junk binary separation is significantly different than the value stored in the bbh file: '+yellow('x from calculation = %f, x from bbh file=%f' % (norm(R1-R2),y.initial_separation) )+'. The user should understand whether this is an erorr or not.'
+        msg = cyan('Warning:')+' The estimated after junk binary separation is significantly different than the value stored in the bbh file: '+yellow('x from calculation = %f, x from bbh file=%f' % (norm(R1-R2),y.initial_separation) )+'. The user should understand whether this is an error or not.'
         x.note += msg
         warning(msg,'bam.py')
     # Let the use know that the binary separation is possibly bad

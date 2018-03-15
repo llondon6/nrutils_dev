@@ -131,6 +131,7 @@ class make_pnnr_hybrid:
         bear = minimize( work, t0_guess )
         est0 = bear.fun
         t0 = bear.x[0]
+        k0 = round(t0/dt)
 
         if __plot__:
             t0_space = linspace(t0-200*dt,t0+200*dt,21)
@@ -173,7 +174,7 @@ class make_pnnr_hybrid:
 
         # Store optimals
         alert('Storing optimal params to this.optimal_hybrid_params',verbose=this.verbose)
-        this.optimal_hybrid_params = { 't0':t0, 'phi0_22':phi0_22, 'mask':mask, 'T1':T1, 'T2':T2 }
+        this.optimal_hybrid_params = { 't0':t0, 'dt':dt, 'k0':k0, 'phi0_22':phi0_22, 'mask':mask, 'T1':T1, 'T2':T2 }
         if this.verbose: print this.optimal_hybrid_params
 
 
@@ -197,6 +198,13 @@ class make_pnnr_hybrid:
         this.__pn__ = pno
 
         #
+        alert('Determining multipole to consider for hybridization by taking the set intersection of those present in NR and PN data.',verbose=this.verbose)
+        this.lmlist = sorted( list(set( this.gwylmo.lm.keys() ).intersection( pno.pn_gwylmo.lm.keys() )) )
+        if this.verbose:
+            alert('Hybrid waveforms will be constructed for the following multipoles:')
+            print this.lmlist
+
+        #
         return None
 
 
@@ -204,11 +212,9 @@ class make_pnnr_hybrid:
     def __calc_multipole_hybrids__(this):
 
         #
-        psi = this.gwylmo.psi
-        _psi = []
-        for y in psi:
+        for lm in this.lmlist:
             #
-            _y = this.__calc_pnnr_gwf__( y, this.optimal_hybrid_params )
+            wfarr = this.__calc_single_multipole_hybrid__(lm)
             # Store the new
             _psi.append( _y )
 
@@ -217,19 +223,18 @@ class make_pnnr_hybrid:
 
 
     # Generate a model trained to pn at low freqs and nr at high freqs
-    def __calc_bridge_model__(this,lm,plot=False):
+    def __calc_single_multipole_hybrid__(this,lm,plot=False):
 
         # Import usefuls
-        from numpy import zeros_like,argmax
+        from numpy import zeros_like,argmax,arange,diff,roll,unwrap,mod,exp
 
         # Create shorthand for useful information
         l,m = lm
-        mask = this.optimal_hybrid_params['mask']
         T1 = this.optimal_hybrid_params['T1']
         T2 = this.optimal_hybrid_params['T2']
 
-        # Get the phase aligned waveforms
-        foo = this.__get_nr_pn_amp_phase__( lm )
+        # Get the time and phase aligned waveforms
+        foo = this.__get_aligned_nr_pn_amp_phase__( lm )
         nr_amp = foo['nr_amp']
         nr_phi = foo['nr_phi']
         pn_amp = foo['pn_amp']
@@ -243,64 +248,145 @@ class make_pnnr_hybrid:
         nrmask = (t>=t[foo['nr_smoothest_mask']][0]) & (t<=min(pn_t_amp_max,t[foo['nr_smoothest_mask']][0]+stride))
 
         #
-        bridge_t = t.copy()
-        bridge_t   = bridge_t[ pnmask | nrmask ]
+        __bridge_t = t.copy()
+        __bridge_t   = __bridge_t[ pnmask | nrmask ]
         #
-        bridge_amp = zeros_like(t)
-        bridge_amp[ pnmask ] = pn_amp[ pnmask ]
-        bridge_amp[ nrmask ] = nr_amp[ nrmask ]
-        bridge_amp = bridge_amp[ pnmask | nrmask ]
+        __bridge_amp = zeros_like(t)
+        __bridge_amp[ pnmask ] = pn_amp[ pnmask ]
+        __bridge_amp[ nrmask ] = nr_amp[ nrmask ]
+        __bridge_amp = __bridge_amp[ pnmask | nrmask ]
         #
-        bridge_phi = zeros_like(t)
-        bridge_phi[ pnmask ] = pn_phi[ pnmask ]
-        bridge_phi[ nrmask ] = nr_phi[ nrmask ]
-        bridge_phi = bridge_phi[ pnmask | nrmask ]
+        __bridge_phi = zeros_like(t)
+        __bridge_phi[ pnmask ] = pn_phi[ pnmask ]
+        __bridge_phi[ nrmask ] = nr_phi[ nrmask ]
+        __bridge_phi = __bridge_phi[ pnmask | nrmask ]
+
+        # Model the amplitude with fixed symbols
+        rope = mvrfit( __bridge_t, __bridge_amp, numerator_symbols=[('000')], denominator_symbols=['00','0000'] )
+        # Model the phase with fixed symbols
+        plank =mvpolyfit( __bridge_t, __bridge_phi, basis_symbols=['K','0','000'] )
+
+        # Create blending window towards connecting models with NR
+        bridge_amp = rope.eval(t)
+        bridge_phi = plank.eval(t)
+        bridge_state = lim( arange(len(t))[ nrmask ] )
+        window = maketaper( t, bridge_state )
+
+        # Extend NR towards PN using models
+        u = window
+        extended_nr_amp = (1-u)*bridge_amp + u*nr_amp
+        extended_nr_phi = (1-u)*bridge_phi + u*nr_phi
+
+        # ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~- #
+        # Create final hybrid multipole by repeating the process above for the extended nr and pn
+        # ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~- #
+        # Select hybridization region & make related taper
+        mask = (t>=T1) & (t<=T2)
+        hybrid_state = lim( arange(len(t))[ mask ] )
+        u = maketaper( t, hybrid_state )
+        # Currently, the taper removes PN data that may be to the right of NR data due to wrapping around when time shifting, so we correct for this by turning the taper off
+        k_pn_start = mod(this.optimal_hybrid_params['k0'],len(t))
+        u[k_pn_start:] = 0
+        hybrid_amp = (1-u)*pn_amp + u*extended_nr_amp
+        hybrid_phi = (1-u)*pn_phi + u*extended_nr_phi
+        # hybrid_amp = roll(hybrid_amp,k_pn_start)
+        # hybrid_phi = unwrap(roll(hybrid_phi,k_pn_start))
 
         # Plotting
         fig,(ax1,ax2) = None,(None,None)
         if plot:
             # Import usefuls
             from matplotlib.pyplot import figure,figaspect,plot,xlim,ylim,xscale,subplot,show
-            from matplotlib.pyplot import yscale,axvline,axvspan,xlabel,ylabel,title,yscale
-            # Setup plotting backend
-            import matplotlib as mpl
-            mpl.rcParams['axes.labelsize'] = 24
+            from matplotlib.pyplot import yscale,axvline,axvspan,xlabel,ylabel,title,yscale,legend
+            # ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~- #
+            # Informative plots of intermediate information
+            # ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~- #
             # Create figure
-            fig = figure( figsize=2*figaspect(4.0/7) )
+            fig = figure( figsize=1.5*figaspect(4.0/7) )
             #
             ax1 = subplot(2,1,1)
-            plot( t, nr_amp, label='NR' )
-            plot( bridge_t, bridge_amp, 'ok', label='PN+NR: Training Region' )
+            # Show training regions
+            axvspan( min(t[pnmask]),max(t[pnmask]), color='cyan', alpha = 0.15, label='Bridge Training Region' )
+            axvspan( min(t[nrmask]),max(t[nrmask]), color='cyan', alpha = 0.15 )
+            axvline(min(t[pnmask]),color='c',ls='--')
+            axvline(max(t[pnmask]),color='c',ls='--')
+            axvline(min(t[nrmask]),color='c',ls='--')
+            axvline(max(t[nrmask]),color='c',ls='--')
+            # Plot amplitudes
+            plot( t, nr_amp, label='NR', alpha=0.2, lw=4, ls='--' )
+            plot( t,rope.eval(t), lw=2,label='Bridge Model' )
+            plot( t, extended_nr_amp, '-' )
             # Set plot limits
             yscale('log')
             ylim( min(pn_amp[pn_amp>0]),max(lim( nr_amp[foo['nr_smoothest_mask']], dilate=0.1)) )
             xlim( 0,max(t[foo['nr_smoothest_mask']]) )
-            # Set axis labels
+            # Set axis labels and legend
             ylabel(r'$|\psi_{%i%i}|$'%(l,m))
+            legend(frameon=True,framealpha=1,edgecolor='k',fancybox=False)
             #
             ax2 = subplot(2,1,2)
-            plot( t, nr_phi, label='NR' )
-            plot( bridge_t, bridge_phi, 'ok', label='PN+NR: Training Region' )
+            # Show training regions
+            axvspan( min(t[pnmask]),max(t[pnmask]), color='cyan', alpha = 0.15, label='Bridge Training Region' )
+            axvspan( min(t[nrmask]),max(t[nrmask]), color='cyan', alpha = 0.15 )
+            axvline(min(t[pnmask]),color='c',ls='--')
+            axvline(max(t[pnmask]),color='c',ls='--')
+            axvline(min(t[nrmask]),color='c',ls='--')
+            axvline(max(t[nrmask]),color='c',ls='--')
+            # Plot phases
+            plot( t, nr_phi, label='NR', alpha=0.2, lw=4, ls='--' )
+            plot( t,plank.eval(t), lw=2,label='Bridge Model' )
+            plot( t, extended_nr_phi, '-' )
             # Set plot limits
             ylim( min(pn_phi),max(lim( nr_phi[foo['nr_smoothest_mask']], dilate=0.1)) )
             xlim( 0,max(t[foo['nr_smoothest_mask']]) )
+            # plot( t, window*diff(ylim())+min(ylim()), color='k',alpha=0.3 )
+            # plot( t, (1-window)*diff(ylim())+min(ylim()), color='k',alpha=0.3 )
+            # Set axis labels
+            xlabel(r'$t/M$'); ylabel(r'$\phi_{%i%i}=\arg(\psi_{%i%i})$'%(l,m,l,m))
+            # ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~- #
+            # Informative plots of final hybrid and original pn+nr
+            # ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~- #
+            # Create figure
+            fig = figure( figsize=1.5*figaspect(4.0/7) )
+            #
+            ax1 = subplot(2,1,1)
+            # plot( t, nr_amp, label='NR', alpha = 0.5 )
+            plot( t, hybrid_amp, label='Hybrid' )
+            plot( t, pn_amp, label='PN' )
+            # Set plot limits
+            yscale('log')
+            # ylim( min(pn_amp[pn_amp>0]),max(lim( nr_amp[foo['nr_smoothest_mask']], dilate=0.1)) )
+            # xlim( 0,max(t[foo['nr_smoothest_mask']]) )
+            # Set axis labels and legend
+            ylabel(r'$|\psi_{%i%i}|$'%(l,m))
+            legend()
+            #
+            ax2 = subplot(2,1,2)
+            # plot( t, nr_phi, label='NR', alpha = 0.5 )
+            plot( t, hybrid_phi, label='Hybrid' )
+            plot( t, pn_phi, label='PN' )
+            # Set plot limits
+            # ylim( min(pn_phi),max(lim( nr_phi[foo['nr_smoothest_mask']], dilate=0.1)) )
+            # xlim( 0,max(t[foo['nr_smoothest_mask']]) )
             # Set axis labels
             xlabel(r'$t/M$'); ylabel(r'$\phi_{%i%i}=\arg(\psi_{%i%i})$'%(l,m,l,m))
 
-        #
-        return t,bridge_t,bridge_amp,bridge_phi,(fig,[ax1,ax2])
+        # Output data for further processing
+        return t,hybrid_amp,hybrid_phi
+
 
     # Given optimal hybrid params for l=m=2, begin to estimate optimal phase alignment for PN
-    def __get_nr_pn_amp_phase__(this,lm,plot=False,verbose=False):
+    def __get_aligned_nr_pn_amp_phase__(this,lm,plot=False,verbose=False):
         '''
         Given optimal hybrid params for l=m=2, begin to estimate optimal phase alignment for PN
         '''
         # Import usefuls
-        from numpy import argmax,array,unwrap,angle,pi,mean
+        from numpy import argmax,array,unwrap,angle,pi,mean,exp
         # Unpack l and m
         l,m = lm
         # Create shorthand for useful information
-        t0 = this.optimal_hybrid_params['t0']
+        k0 = this.optimal_hybrid_params['k0']
+        dt = this.optimal_hybrid_params['dt']
         mask = this.optimal_hybrid_params['mask']
         T1 = this.optimal_hybrid_params['T1']
         T2 = this.optimal_hybrid_params['T2']
@@ -311,7 +397,7 @@ class make_pnnr_hybrid:
         # Get the format aligned data for this multipole
         t,nr_y,pn_y = this.__unpacklm__(lm)
         # Apply optimal time shift, NOTE the rescaling of phi22
-        pn_y,phi0 = this.__apply_hyb_params_to_pn__(pn_y,nr_y,t0,MSK=mask,TSMETH='index',phi0=m*phi22/2)
+        pn_y,phi0 = this.__apply_hyb_params_to_pn__(pn_y,nr_y,k0*dt,MSK=mask,TSMETH='index',phi0=m*phi22/2)
         # Begin phase alignment
         __getphi__= lambda X: unwrap(angle(X))
         # Get phases aligned in mask region
@@ -380,11 +466,12 @@ class make_pnnr_hybrid:
         # Return aligned phases
         return foo
 
+
     # Get the format aligned data
     def __unpacklm__(this,lm):
         '''Get the format aligned data NR and PN data for a single multipole'''
         # Import usefuls
-        from numpy import allclose
+        from numpy import allclose,roll
         # Create shorthand for useful information
         t = this.t
         pno = this.__pn__
@@ -398,7 +485,6 @@ class make_pnnr_hybrid:
         if not allclose(t_,t): error('bad formatting!')
         # Return answer
         return (t,nr_y,pn_y)
-
 
 
     # Validative constructor for class workflow

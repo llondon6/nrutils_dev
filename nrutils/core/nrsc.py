@@ -2668,7 +2668,7 @@ class gwylm:
 
 
     #
-    def mollweide_plot(this,time=None,kind=None,ax=None,form=None,colorbar_shrink=1.0,N=120):
+    def mollweide_plot(this,time=None,kind=None,ax=None,form=None,colorbar_shrink=1.0,N=120,use_time_relative_to_peak = True):
 
         '''
         Make mollweide plot for waveform at a specified time instance relative to peak.
@@ -2703,7 +2703,10 @@ class gwylm:
             error('kind can only be "strain" or "psi4", not %s'%(str(kind)))
         # Define the mask which selects for time
         # NOTE that this is an index value, not a time value
-        k = find( peak_relative_time >= time )[0]
+        if use_time_relative_to_peak:
+            k = find( peak_relative_time >= time )[0]
+        else:
+            k = find( this.t >= time )[0]
         # Store actual time referened for waveform
         real_time = this.lm[2,2][kind].t[k]
 
