@@ -505,7 +505,8 @@ class make_pnnr_hybrid(gwylm):
         nr_phi = __getphi__( nr_y )
         # Find a mask for the smoothest part
         nr_smoothest_mask_amp = smoothest_part( abs(nr_y)[:k_amp_max_22] )
-        nr_smoothest_mask_pha = smoothest_part( nr_phi[:k_amp_max_22] )
+        # nr_smoothest_mask_pha = smoothest_part( nr_phi[:k_amp_max_22] )
+        nr_smoothest_mask_pha = nr_smoothest_mask_amp
         # Take the union of the amplitude and phase masks
         nr_smoothest_mask = arange( min(min(nr_smoothest_mask_amp),min(nr_smoothest_mask_pha)), min(max(nr_smoothest_mask_amp),max(nr_smoothest_mask_pha)) )
         # Get the aligned phases (NOTE that nr_phi should not have changed)
