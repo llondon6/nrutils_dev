@@ -7,15 +7,15 @@ from nrutils.core.basics import *
 class make_pnnr_hybrid(gwylm):
 
     # The class constructor
-    def __init__( this,             # The current object
-                  gwylmo,           # An instance of gwylm class containing initial system params and NR data (psi4)
-                  pn_w_orb_min = None, # Min Orbital freq for PN generation
-                  pn_w_orb_max = None, # Max Orbital freq for PN generation
-                  verbose = False,  # Toggle for letting the people know
-                  plot = False,     # Toggle for plotting
-                  kind = None,      # psi4,strain -- kind of data that will be used for hybridization
-                  aggressive = True,# Toggle for agressiveness of hybridization workflow; see doc
-                  **kwargs          # Args for PN generation
+    def __init__( this,                 # The current object
+                  gwylmo,               # An instance of gwylm class containing initial system params and NR data (psi4)
+                  pn_w_orb_min = None,  # Min Orbital freq for PN generation
+                  pn_w_orb_max = None,  # Max Orbital freq for PN generation
+                  verbose = False,      # Toggle for letting the people know
+                  plot = False,         # Toggle for plotting
+                  kind = None,          # psi4,strain -- kind of data that will be used for hybridization
+                  aggressive = True,    # Toggle for agressiveness of hybridization workflow; see doc
+                  **kwargs              # Args for PN generation
                 ):
 
         '''
@@ -30,12 +30,9 @@ class make_pnnr_hybrid(gwylm):
         #
         cname = 'make_pnnr_hybrid'
 
-        # Toggle for agressiveness of workflow. See doc.
-        this.aggressive = aggressive
-
         # Validate inputs
         if verbose: alert('Validating inputs',cname,header=True)
-        this.__validate_inputs__(gwylmo,pn_w_orb_min,pn_w_orb_max,kind,verbose)
+        this.__validate_inputs__(gwylmo,pn_w_orb_min,pn_w_orb_max,kind,aggressive,verbose)
 
         # Access or generate PN waveform
         if verbose: alert('Generating PN multipoles',cname,header=True)
@@ -505,8 +502,8 @@ class make_pnnr_hybrid(gwylm):
         nr_phi = __getphi__( nr_y )
         # Find a mask for the smoothest part
         nr_smoothest_mask_amp = smoothest_part( abs(nr_y)[:k_amp_max_22] )
-        # nr_smoothest_mask_pha = smoothest_part( nr_phi[:k_amp_max_22] )
-        nr_smoothest_mask_pha = nr_smoothest_mask_amp
+        nr_smoothest_mask_pha = smoothest_part( nr_phi[:k_amp_max_22] )
+        # nr_smoothest_mask_pha = nr_smoothest_mask_amp
         # Take the union of the amplitude and phase masks
         nr_smoothest_mask = arange( min(min(nr_smoothest_mask_amp),min(nr_smoothest_mask_pha)), min(max(nr_smoothest_mask_amp),max(nr_smoothest_mask_pha)) )
         # Get the aligned phases (NOTE that nr_phi should not have changed)
@@ -614,12 +611,15 @@ class make_pnnr_hybrid(gwylm):
 
 
     # Validative constructor for class workflow
-    def __validate_inputs__(this,gwylmo,pn_w_orb_min,pn_w_orb_max,kind,verbose):
+    def __validate_inputs__(this,gwylmo,pn_w_orb_min,pn_w_orb_max,kind,aggressive,verbose):
 
         # Let the people know
         this.verbose = verbose
         if verbose:
             alert('Verbose mode ON.')
+
+        # Toggle for agressiveness of workflow. See doc.
+        this.aggressive = aggressive
 
         # Validate gwylmo type
         if not isgwylm( gwylmo ):
@@ -637,11 +637,12 @@ class make_pnnr_hybrid(gwylm):
         # Store ,min and max orbital frequency for PN generation
         if pn_w_orb_min is None:
             strain_w_orb_min = gwylmo.lm[2,2]['strain'].dphi[gwylmo.remnant['mask']][0]/2
-            pn_w_orb_min = 0.65 * strain_w_orb_min
+            pn_w_orb_min = 0.8 * strain_w_orb_min
             if this.verbose: alert('Using default values for PN w_orb starting frequency based on strain waveform: %s'%(yellow('%f'%pn_w_orb_min)))
         if pn_w_orb_max is None:
-            strain_w_orb_max = gwylmo.lm[2,2]['strain'].dphi[gwylmo.remnant['mask']][0]/2
-            pn_w_orb_max = 4.0 * strain_w_orb_max
+            w_orb_min = gwylmo.wstart_pn/2
+            w_orb_merger = gwylmo[2,2]['psi4'].dphi[ gwylmo[2,2]['psi4'].k_amp_max ]/2
+            pn_w_orb_max = (w_orb_merger+4*w_orb_min)/5
             if this.verbose: alert('Using default values for PN w_orb end frequency based on strain waveform: %s'%(yellow('%f'%pn_w_orb_max)))
 
         # Store PN start and end frequency

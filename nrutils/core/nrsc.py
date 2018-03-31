@@ -2627,7 +2627,7 @@ class gwylm:
             elif kind in ['hlm','h','strain']:
                 # Determine whether to calc strain here. If so, then let the people know.
                 if len(this.hlm) == 0:
-                    msg = '(**) You have requested that strain be plotted before having explicitelly called MMRDNSlm.calchlm(). I will now call calchlm() for you.'
+                    msg = '(**) You have requested that strain be plotted before having explicitelly called gwylm.calchlm(). I will now call calchlm() for you.'
                     print magenta(msg)
                     this.calchlm()
                 # Assign strain to the general placeholder.
@@ -3802,6 +3802,32 @@ class gwylm:
         ans = -vstack([Jx,Jy,Jz]).T
         return ans
 
+    # Create hybrid multipoles
+    def hybridize( this, pn_w_orb_min=None, pn_w_orb_max=None, verbose=True, plot=None, aggressive=1 ):
+        '''
+        Create hybrid multipoles: This is effectively a wrapper for the make_pnnr_hybrid workflow.
+        '''
+        # Import hybrid class from nrutils
+        from nrutils.manipulate.hybridize import make_pnnr_hybrid
+
+        #
+        w_orb_min = this.wstart_pn/2
+        w_orb_merger = this[2,2]['psi4'].dphi[ this[2,2]['psi4'].k_amp_max ]/2
+
+        #
+        if pn_w_orb_min is None: pn_w_orb_min = 0.8*w_orb_min
+        if pn_w_orb_max is None: pn_w_orb_max = (4*w_orb_merger+6*w_orb_min)/10
+
+        # Initiate class instance
+        hybo = make_pnnr_hybrid( this,                      # gwylm obj
+                                 pn_w_orb_min=pn_w_orb_min, # start of PN freq
+                                 pn_w_orb_max=pn_w_orb_max, #   end of PN freq
+                                 kind = 'psi4',
+                                 plot = plot,
+                                 aggressive=aggressive,     # 2: force alignment of multipole phases
+                                 verbose=verbose)
+        # Return hyrbid object as well as related hybridized gwylm object
+        return hybo.hybrid_gwylmo, hybo
 
     # Los pass filter using romline in basics.py to determine window region
     def lowpass(this):
@@ -3840,13 +3866,13 @@ class gwylm:
             plot( lf[knots], lamp[knots], 'o', mfc='none', ms=12 )
             axvline(x=lf[knots[a]],color='r')
             axvline(x=lf[knots[b]],color='r')
-            show()
+            # show()
             # plot(y.f,y.fd_amp)
             # show()
             plot( window )
             axvline(x=knots[a],color='r')
             axvline(x=knots[b],color='r')
-            show()
+            # show()
             y.fdfilter( window )
 
         #
