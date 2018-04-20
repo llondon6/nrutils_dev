@@ -1052,7 +1052,8 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
 
     # Return answer
     if return_xyz:
-        return array(X),array(Y),array(Z)
+        # Note that the negative sign for Y is to enforce consistency with NR conventions (e.g. BAM)
+        return array(X),-array(Y),array(Z)
     else:
         return alpha,beta,gamma
 
@@ -1095,4 +1096,3 @@ def rotate_wfarrs_at_all_times( l,                          # the l of the new m
 
     # Return the answer
     return ans
-

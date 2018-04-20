@@ -186,6 +186,10 @@ def learn_metadata( metadata_file_location ):
     x.Xf = array([xfx,xfy,xfz])
     x.xf = sign(x.Sf[-1])*norm(x.Sf)/(x.mf*x.mf)
 
+    # Store relaxed fields for spins ()
+    x.S1_relaxed = S1
+    x.S2_relaxed = S2
+
     #
     x.valid = True
 

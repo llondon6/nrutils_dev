@@ -2271,6 +2271,8 @@ class gwylm:
         # Seed the dictionary with strain gwf objects
         for f in this.flm:
             this.lm[(f.l,f.m)]['news'] = f
+        #
+        this.t = this[2,2]['psi4'].t
 
     # Validate inputs to constructor
     def __valinputs__(this,thisfun,lm=None,lmax=None,scentry_obj=None):
@@ -3668,13 +3670,15 @@ class gwylm:
     def __calc_radiated_quantities__(this,verbose=False):
         ''' Reference: https://arxiv.org/pdf/0707.4654.pdf '''
         # Import usefuls
-        from numpy import trapz,pi,arange,isfinite,vstack
+        from numpy import trapz,pi,arange,isfinite,vstack,array
         # Do not use this function for cleaned waveforms
         # if this.__isclean__: error('Calculation of radiated quantities should be performed only on unleaned datasets. Perhaps you have set clean=True in a call to gwylm?')
         # Construct a mask of usueable data
         mask = arange(this.startindex,this.endindex_by_frequency+1)
         # Energy Raditated (Eq. 3.8)
         if verbose: alert('Calculating radiated energy, E.')
+        if len(this.hlm)==0: this.calchlm()
+        if len(this.flm)==0: this.calcflm()
         dE = (1.0/(16*pi)) * sum( [ f.amp**2 for f in this.flm ] )
         E0 = 1-this.madm # NOTE: this assumes unit norm for intial space-time energy
         if not isfinite(this.madm):
@@ -3702,8 +3706,11 @@ class gwylm:
         this.remnant['M'] = 1 - this.radiated['E']
         this.remnant['Mw'] = this.remnant['M'] * this.lm[2,2]['psi4'].dphi[ mask ]/2
         this.remnant['J'] = -this.radiated['J']
-        this.remnant['J'] = this.remnant['J'] - this.remnant['J'][-1] + this.Sf # Enforce consistency with final spin vector
-        this.remnant['S'] = this.remnant['J'] # The remnant has no orbital angular momentum. Is this rig?
+
+        this.remnant['J'][:,1] *= -1
+        this.remnant['J'] = this.remnant['J'] - this.remnant['J'][-1,:] + this.Sf # Enforce consistency with final spin vector
+
+        this.remnant['S'] = this.remnant['J'] # The remnant has no orbital angular momentum. Is this right?
         this.remnant['P'] = -this.radiated['P'] # Assumes zero linear momentum at integration region start
         this.remnant['X'] = vstack([ this.remnant['J'][:,k]/(this.remnant['M']**2) for k in range(3) ]).T
         #
