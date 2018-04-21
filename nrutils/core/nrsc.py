@@ -1999,7 +1999,7 @@ class gwf:
             return ans
 
     #
-    def __rotate_frame_at_all_times__(this,like_l_multipoles,euler_angles):
+    def __rotate_frame_at_all_times__(this,like_l_multipoles,euler_alpha_beta_gamma):
 
         #
         that = this.copy()
@@ -2008,7 +2008,7 @@ class gwf:
         like_l_multipoles_dict = { (y.l,y.m):y.wfarr for y in like_l_multipoles }
 
         #
-        rotated_wfarr = rotate_wfarrs_at_all_times( this.l,this.m, like_l_multipoles_dict, euler_angles )
+        rotated_wfarr = rotate_wfarrs_at_all_times( this.l,this.m, like_l_multipoles_dict, euler_alpha_beta_gamma )
 
         # Reset related fields using the new data
         that.setfields( rotated_wfarr )
@@ -3554,11 +3554,14 @@ class gwylm:
         return None
 
     # Given some time and set of euler angles, rotate all multipole data ... and possibly initial position, spin, and final spin.
-    def __rotate_frame_at_all_times__(this, euler_angles):
+    def __rotate_frame_at_all_times__(this, euler_alpha_beta_gamma):
 
         '''
         Given some time and set of euler angles, rotate all multipole data ... and possibly initial position, spin, and final spin.
         '''
+
+        # Import usefuls
+        from numpy import arccos,dot
 
         # Perform roations for all kinds
         kinds = ['strain','psi4','news']
@@ -3584,7 +3587,7 @@ class gwylm:
                         like_l_multipoles.append( this.lm[lp,mp][kind] )
 
                 # Rotate the curent multipole
-                rotated_gwf = this.lm[lm][kind].__rotate_frame_at_all_times__( like_l_multipoles, euler_angles )
+                rotated_gwf = this.lm[lm][kind].__rotate_frame_at_all_times__( like_l_multipoles, euler_alpha_beta_gamma )
 
                 # Store it to the output gwylm object
                 that.lm[lm][kind] = rotated_gwf
@@ -3592,10 +3595,23 @@ class gwylm:
         # ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~- #
         # Rotate related metadata??
         # ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~- #
-        # * final spin vector / spin timeseries
+
+        # * final spin vector
+        alpha,beta,gamma = euler_alpha_beta_gamma
+        R = lambda X: rotate3( X, alpha, beta, gamma )
+        that.Sf = R( this.Sf ); that.Xf = R( this.Xf )
+        print this.Sf
+        print that.Sf
+
         # * initial spins
+        that.S1 = R( this.S1 ); that.S2 = R( this.S2 )
+        that.X1 = R( this.X1 ); that.X2 = R( this.X2 )
+
         # * initial positions / position time series / maybe velocities
-        alert('Note that only waveform data is rotated ... for now?')
+        that.R1 = R( this.R1 ); that.R2 = R( this.R2 )
+
+        #
+        alert('Note that metadata at the scentry level (i.e. this.__scentry__) hs not been rotated, but this.Sf, this.R1 and others have been rotated.')
 
         # Return answer
         return that

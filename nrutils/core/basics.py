@@ -1063,7 +1063,7 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
 def rotate_wfarrs_at_all_times( l,                          # the l of the new multipole (everything should have the same l)
                                 m,                          # the m of the new multipole
                                 like_l_multipoles_dict,     # dictionary in the format { (l,m): array([t_column,Re,Im]) }
-                                euler_angles ):             #
+                                euler_alpha_beta_gamma ):             #
 
     '''
     Given dictionary of multipoles all with the same l, calculate the roated multipole with (l,mp).
@@ -1077,7 +1077,7 @@ def rotate_wfarrs_at_all_times( l,                          # the l of the new m
     from nrutils.manipulate.rotate import wdelement
 
     #
-    alpha,beta,gamma = euler_angles
+    alpha,beta,gamma = euler_alpha_beta_gamma
 
     #
     new_ylm = 0
@@ -1086,7 +1086,7 @@ def rotate_wfarrs_at_all_times( l,                          # the l of the new m
         l,mp = lm
         old_wfarr = like_l_multipoles_dict[lm]
         y_mp = old_wfarr[:,1] + 1j*old_wfarr[:,2]
-        new_ylm += wdelement(l,m,mp,alpha,-beta,gamma) * y_mp
+        new_ylm += wdelement(l,m,mp,alpha,beta,gamma) * y_mp
 
     # Construct the new waveform array
     t = old_wfarr[:,0]
