@@ -3600,18 +3600,19 @@ class gwylm:
         alpha,beta,gamma = euler_alpha_beta_gamma
         R = lambda X: rotate3( X, alpha, beta, gamma )
         that.Sf = R( this.Sf ); that.Xf = R( this.Xf )
-        print this.Sf
-        print that.Sf
 
         # * initial spins
         that.S1 = R( this.S1 ); that.S2 = R( this.S2 )
         that.X1 = R( this.X1 ); that.X2 = R( this.X2 )
 
+        # * initial angular momenta
+        that.L1 = R( this.L1 ); that.L2 = R( this.L2 )
+
         # * initial positions / position time series / maybe velocities
         that.R1 = R( this.R1 ); that.R2 = R( this.R2 )
 
         #
-        alert('Note that metadata at the scentry level (i.e. this.__scentry__) hs not been rotated, but this.Sf, this.R1 and others have been rotated.')
+        alert('Note that metadata at the scentry level (i.e. this.__scentry__) have not been rotated, but this.Sf, this.R1 and others have been rotated.')
 
         # Return answer
         return that
