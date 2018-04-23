@@ -3684,14 +3684,24 @@ class gwylm:
 
 
     # Estimate the energy radiated for the current collection of GW multipoles
-    def __calc_radiated_quantities__(this,verbose=False):
+    def __calc_radiated_quantities__(this,              # The current object
+                                     use_mask = True,   # Toggle for chopping of noisey data. NOTE use_mask = False is useful if you need radiated quantities of the same length as the original waveforms
+                                     verbose=False):    # Toggle for letting the people know
+
         ''' Reference: https://arxiv.org/pdf/0707.4654.pdf '''
+
         # Import usefuls
         from numpy import trapz,pi,arange,isfinite,vstack,array
-        # Do not use this function for cleaned waveforms
-        # if this.__isclean__: error('Calculation of radiated quantities should be performed only on unleaned datasets. Perhaps you have set clean=True in a call to gwylm?')
-        # Construct a mask of usueable data
-        mask = arange(this.startindex,this.endindex_by_frequency+1)
+
+        # Construct a mask of useable data (OPTIONAL)
+        if use_mask:
+            mask = arange(this.startindex,this.endindex_by_frequency+1)
+        else:
+            mask = arange( len(this.t) )
+
+        # Since the mask will be optinal, let's use the hypothtical end value of the mask as a reference for the end of the waveform (i.e. before noise dominates)
+        end_index = -1 if use_mask else this.endindex_by_frequency
+
         # Energy Raditated (Eq. 3.8)
         if verbose: alert('Calculating radiated energy, E.')
         if len(this.hlm)==0: this.calchlm()
@@ -3702,7 +3712,7 @@ class gwylm:
             E0 = 0
             warning('non-finite ADM mass given for this object; therefore, an initial radiated energy of 0 will be assumed to be valid for the start of the simulation.')
         E = E0 + spline_antidiff( this.t[mask],dE[mask],k=3 )
-        E = E - E[-1] + (1-this.mf) # Enforce consistency with final mass
+        E = E - E[end_index] + (1-this.mf) # Enforce consistency with final mass
         # Store radiated Quantities
         this.radiated = {}
         this.radiated['dE/dt'] = dE
@@ -3712,7 +3722,7 @@ class gwylm:
         if verbose: alert('Calculating radiated angular momentum, J.')
         this.radiated['J0'] = (this.S1 + this.S2) + (this.L1 + this.L2)
         this.radiated['J'] = this.__calc_radiated_angular_momentum__(mask)
-        this.radiated['J_sim_start'] = this.Sf - this.radiated['J'][-1,:]
+        this.radiated['J_sim_start'] = this.Sf - this.radiated['J'][end_index,:]
         if verbose: alert('Calculating radiated linear momentum, P.')
         this.radiated['P'] = this.__calc_radiated_linear_momentum__(mask)
         # Store remant Quantities
@@ -3723,9 +3733,7 @@ class gwylm:
         this.remnant['M'] = 1 - this.radiated['E']
         this.remnant['Mw'] = this.remnant['M'] * this.lm[2,2]['psi4'].dphi[ mask ]/2
         this.remnant['J'] = -this.radiated['J']
-
-        this.remnant['J'][:,1] *= -1
-        this.remnant['J'] = this.remnant['J'] - this.remnant['J'][-1,:] + this.Sf # Enforce consistency with final spin vector
+        this.remnant['J'] = this.remnant['J'] - this.remnant['J'][end_index,:] + this.Sf # Enforce consistency with final spin vector
 
         this.remnant['S'] = this.remnant['J'] # The remnant has no orbital angular momentum. Is this right?
         this.remnant['P'] = -this.radiated['P'] # Assumes zero linear momentum at integration region start
@@ -3813,9 +3821,9 @@ class gwylm:
             dJz += hlm * m * flm.conj()
 
         # Apply overall operations
-        dJx =  dJx.imag / ( 32*pi )
-        dJy = -dJy.real / ( 32*pi )
-        dJz =  dJz.imag / ( 16*pi )
+        dJx = dJx.imag / ( 32*pi )
+        dJy = dJy.real / ( 32*pi )
+        dJz = dJz.imag / ( 16*pi )
 
         # Integrate to get angular momentum
         Jx = spline_antidiff( this.t[mask],dJx[mask],k=3 )
