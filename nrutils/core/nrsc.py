@@ -3561,7 +3561,7 @@ class gwylm:
         '''
 
         # Import usefuls
-        from numpy import arccos,dot
+        from numpy import arccos,dot,ndarray
 
         # Perform roations for all kinds
         kinds = ['strain','psi4','news']
@@ -3598,18 +3598,29 @@ class gwylm:
 
         # * final spin vector
         alpha,beta,gamma = euler_alpha_beta_gamma
-        R = lambda X: rotate3( X, alpha, beta, gamma )
-        that.Sf = R( this.Sf ); that.Xf = R( this.Xf )
+
+        # Test for arrays
+        angles_are_arrays = isinstance( alpha, ndarray ) and isinstance( beta, ndarray ) and isinstance( gamma, ndarray )
+
+        # Enforce arrays
+        if not angles_are_arrays:
+            alpha = array([alpha])
+            beta = array([beta])
+            gamma = array([gamma])
+
+
+        R = lambda X,k: rotate3( X, alpha[k], beta[k], gamma[k] )
+        that.Sf = R( this.Sf, -1 ); that.Xf = R( this.Xf, -1 )
 
         # * initial spins
-        that.S1 = R( this.S1 ); that.S2 = R( this.S2 )
-        that.X1 = R( this.X1 ); that.X2 = R( this.X2 )
+        that.S1 = R( this.S1, 0 ); that.S2 = R( this.S2, 0 )
+        that.X1 = R( this.X1, 0 ); that.X2 = R( this.X2, 0 )
 
         # * initial angular momenta
-        that.L1 = R( this.L1 ); that.L2 = R( this.L2 )
+        that.L1 = R( this.L1, 0 ); that.L2 = R( this.L2, 0 )
 
         # * initial positions / position time series / maybe velocities
-        that.R1 = R( this.R1 ); that.R2 = R( this.R2 )
+        that.R1 = R( this.R1, 0 ); that.R2 = R( this.R2, 0 )
 
         #
         alert('Note that metadata at the scentry level (i.e. this.__scentry__) have not been rotated, but this.Sf, this.R1 and others have been rotated.')
