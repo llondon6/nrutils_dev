@@ -23,11 +23,14 @@ def wdelement( ll,         # polar index (eigenvalue) of multipole to be rotated
     # Specifically, this the formula located here: https://wikimedia.org/api/rest_v1/media/math/render/svg/53fd7befce1972763f7f53f5bcf4dd158c324b55
 
     #
-    from numpy import sqrt,exp,cos,sin
+    from numpy import sqrt,exp,cos,sin, ndarray
     from scipy.misc import factorial
 
     #
-    alpha,beta,gamma = float(alpha),float(beta),float(gamma)
+    if ( (type(alpha) is ndarray) and (type(beta) is ndarray) and (type(gamma) is ndarray) ):
+        alpha,beta,gamma = alpha.astype(float), beta.astype(float), gamma.astype(float)
+    else:
+        alpha,beta,gamma = float(alpha),float(beta),float(gamma)
 
     #
     coefficient = sqrt( factorial(ll+mp)*factorial(ll-mp)*factorial(ll+mm)*factorial(ll-mm))*exp( 1j*(mp*alpha+mm*gamma) )
