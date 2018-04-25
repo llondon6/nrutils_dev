@@ -3561,7 +3561,7 @@ class gwylm:
         '''
 
         # Import usefuls
-        from numpy import arccos,dot,ndarray
+        from numpy import arccos,dot,ndarray,array
 
         # Perform roations for all kinds
         kinds = ['strain','psi4','news']
