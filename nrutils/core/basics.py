@@ -1008,6 +1008,12 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
         # Extract the components of the dominant eigenvector
         _x,_y,_z = dominant_vec
 
+        if _x.imag == 0 and _y.imag == 0:
+            _x = _x.real
+            _y = _y.real
+        else:
+            print _x, _y
+
         # Find alpha and beta
         _alpha = arctan2(_y,_x)
 
