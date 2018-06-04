@@ -1335,17 +1335,9 @@ class gwf:
         # Handle larger junk radiation
         this.intrp_t_amp_max = intrp_argmax(this.amp,domain=this.t) # Interpolated time coordinate of max
 
-        ## Diagnostic code
-        # print '** ', __dt__, max(this.amp[:__k__]), max(this.amp[__k__:])
-        # from matplotlib.pyplot import plot,show,xlim
-        # plot( this.t[:__k__],this.amp[:__k__] )
-        # plot( this.t[__k__:],this.amp[__k__:] )
-        # xlim([0,2*start_chunk])
-        # show()
-
         # If the junk radiation has a higher amplitude than the "merger", then we must take care:
         # NOTE, here will use a simple heuristic
-        start_chunk = 200 # (M)
+        start_chunk = this.t[find(this.amp>0)[0]] + 200 # (M)
         __t__ = this.t
         __t__ -= __t__[0]
         __dt__ = __t__[1]-__t__[0]
@@ -1355,6 +1347,15 @@ class gwf:
             if diff(lim(this.t))>start_chunk:
                 this.intrp_t_amp_max = this.t[__k__] + intrp_argmax( this.amp[(__k__+1):], domain=this.t )
                 this.k_amp_max = __k__ + argmax(this.amp[ __k__+1 : ])
+
+
+        # ## Diagnostic code
+        # print '** ', __dt__, max(this.amp[:__k__]), max(this.amp[__k__:])
+        # from matplotlib.pyplot import plot,show,xlim
+        # plot( this.t[:__k__],this.amp[:__k__] )
+        # plot( this.t[__k__:],this.amp[__k__:] )
+        # xlim([0,2*start_chunk])
+        # show()
 
         #
         this.n      = len(this.t)                                   # Number of time samples

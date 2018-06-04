@@ -1010,10 +1010,17 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
 
         # # There is a z axis degeneracy that we will break here
         # # by imposing that the z component is always positive
+
         if not flip_z_convention:
-            if dominant_vec[-1]<0: dominant_vec *= -1
-        else:
             if dominant_vec[-1]>0: dominant_vec *= -1
+        else:
+            if dominant_vec[-1]<=0: dominant_vec *= -1
+
+        # if not flip_z_convention:
+        #     if dominant_vec[-1]<=0: dominant_vec *= -1
+        # else:
+        #     if dominant_vec[-1]>0: dominant_vec *= -1
+
         # from numpy import sign
         # if sign(dominant_vec[-1]) != -sign(dominant_vec[0])*sign(dominant_vec[1]):
         #     dominant_vec *= -1
@@ -1045,8 +1052,7 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
         # Find alpha and beta
         _alpha = arctan2(_y,_x)
 
-
-        #
+        # Store unit components for reference in the next iternation
         ref_x = _x
         ref_y = _y
         ref_z = _z
