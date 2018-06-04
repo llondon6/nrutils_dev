@@ -988,6 +988,8 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
     old_dom_dex = None
 
     # For all multipole instances
+    ref_x,ref_y,ref_z = None,None,None
+    flip_z_convention = False
     for k in range( len(L[0,0,:]) ):
 
         # Select the emission matrix for this instance, k
@@ -1008,29 +1010,46 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
 
         # # There is a z axis degeneracy that we will break here
         # # by imposing that the z component is always positive
-        if dominant_vec[-1]<0: dominant_vec *= -1
-
-        # if reference_z_scale is None:
-        #     if dominant_vec[-1]<0:
-        #         reference_z_scale = -1
-        #     else:
-        #         reference_z_scale = 1
-        # dominant_vec *= reference_z_scale
-
-        # Given this vector, calculate the related Euler angles
-        # NOTE Eq. A3 of arxiv:1304.3176
+        if not flip_z_convention:
+            if dominant_vec[-1]<0: dominant_vec *= -1
+        else:
+            if dominant_vec[-1]>0: dominant_vec *= -1
+        # from numpy import sign
+        # if sign(dominant_vec[-1]) != -sign(dominant_vec[0])*sign(dominant_vec[1]):
+        #     dominant_vec *= -1
 
         # Extract the components of the dominant eigenvector
         _x,_y,_z = dominant_vec
 
-        if _x.imag == 0 and _y.imag == 0:
-            _x = _x.real
-            _y = _y.real
+        # if _x.imag == 0 and _y.imag == 0:
+        #     _x = _x.real
+        #     _y = _y.real
+        # else:
+        #     print _x, _y
+
+        # Store reference values if they are None
+        if ref_x==None:
+            ref_x = _x
+            ref_y = _y
+            ref_z = _z
         else:
-            print _x, _y
+            if (ref_x*_x < 0) and (ref_y*_y < 0):
+                _x *= -1
+                _y *= -1
+                _x *= -1
+                flip_z_convention = not flip_z_convention
+
+        # Given this vector, calculate the related Euler angles
+        # NOTE Eq. A3 of arxiv:1304.3176
 
         # Find alpha and beta
         _alpha = arctan2(_y,_x)
+
+
+        #
+        ref_x = _x
+        ref_y = _y
+        ref_z = _z
 
         # NOTE that the commeted method below imposes that sin(beta)>0, and is therefore not general
         # _beta = arctan2( sqrt(_y*_y+_x*_x), _z )
