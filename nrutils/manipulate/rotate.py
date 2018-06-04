@@ -23,7 +23,7 @@ def wdelement( ll,         # polar index (eigenvalue) of multipole to be rotated
     # Specifically, this the formula located here: https://wikimedia.org/api/rest_v1/media/math/render/svg/53fd7befce1972763f7f53f5bcf4dd158c324b55
 
     #
-    from numpy import sqrt,exp,cos,sin, ndarray
+    from numpy import sqrt,exp,cos,sin,ndarray
     from scipy.misc import factorial
 
     #

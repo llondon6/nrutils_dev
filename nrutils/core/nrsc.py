@@ -627,6 +627,7 @@ def scbuild(keyword=None,save=True):
         for mdfile in mdfile_list:
 
             # Create tempoary scentry object
+            # NOTE add code to look for previously processed scentry obejct in the same dir as the metadata file; if exists or not overwrite, load it; else create a new one
             entry = scentry(config,mdfile,verbose=True)
 
             # Write to the master log file
@@ -636,6 +637,7 @@ def scbuild(keyword=None,save=True):
             # If the obj is valid, add it to the catalog list, else ignore
             if entry.isvalid:
                 catalog.append( entry )
+                # NOTE: add code to store scentry object to metadata file location
             else:
                 del entry
 
@@ -1328,7 +1330,31 @@ class gwf:
         # this.dphi   = diff( this.phi )/this.dt                # Derivative of phase, last point interpolated to preserve length
 
         this.k_amp_max = argmax(this.amp)                           # index location of max ampitude
+
+
+        # Handle larger junk radiation
         this.intrp_t_amp_max = intrp_argmax(this.amp,domain=this.t) # Interpolated time coordinate of max
+
+        ## Diagnostic code
+        # print '** ', __dt__, max(this.amp[:__k__]), max(this.amp[__k__:])
+        # from matplotlib.pyplot import plot,show,xlim
+        # plot( this.t[:__k__],this.amp[:__k__] )
+        # plot( this.t[__k__:],this.amp[__k__:] )
+        # xlim([0,2*start_chunk])
+        # show()
+
+        # If the junk radiation has a higher amplitude than the "merger", then we must take care:
+        # NOTE, here will use a simple heuristic
+        start_chunk = 200 # (M)
+        __t__ = this.t
+        __t__ -= __t__[0]
+        __dt__ = __t__[1]-__t__[0]
+        __k__ = int( start_chunk/__dt__ )
+        if max(this.amp[:__k__]) > max(this.amp[__k__:]):
+            warning(red('The junk radiation appears to have a larger amplitude than that of merger, so we are going to be careful about how we characterize where the peak is.'))
+            if diff(lim(this.t))>start_chunk:
+                this.intrp_t_amp_max = this.t[__k__] + intrp_argmax( this.amp[(__k__+1):], domain=this.t )
+                this.k_amp_max = __k__ + argmax(this.amp[ __k__+1 : ])
 
         #
         this.n      = len(this.t)                                   # Number of time samples
@@ -1895,9 +1921,9 @@ class gwf:
 
         # Pad this waveform object to the left and right with zeros
         ans = this.copy() if not apply else this
-        if shift is not None:
+        if not (shift is None):
             # Create the new wfarr
-            wfarr = tshift_wfarr( this.wfarr, shift, method=method, verbose=verbose )
+            wfarr = tshift_wfarr( ans.wfarr, shift, method=method, verbose=verbose )
             # Confer to the current object
             ans.setfields(wfarr)
 
@@ -3132,8 +3158,8 @@ class gwylm:
     def tshift( this, shift=0, apply=True ):
         # shift each mode
         ans = this if apply else this.copy()
-        for z in this.lm:
-            for k in this.lm[z]:
+        for z in ans.lm:
+            for k in ans.lm[z]:
                 ans.lm[z][k].tshift( shift=shift, apply=apply )
         #
         if not apply: return ans
@@ -3584,6 +3610,8 @@ class gwylm:
                 for lp,mp in this.lm:
                     l,m = lm
                     if lp == l:
+                        # print '>> (l,m)=(%i,%i)'%(l,m)
+                        # print '>> (lp,mp)=(%i,%i)\n'%(lp,mp)
                         like_l_multipoles.append( this.lm[lp,mp][kind] )
 
                 # Rotate the curent multipole

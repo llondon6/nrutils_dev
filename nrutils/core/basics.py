@@ -983,6 +983,10 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
     alpha,beta = [],[]
     if return_xyz: X,Y,Z = [],[],[]
 
+    #
+    # reference_z_scale = None
+    old_dom_dex = None
+
     # For all multipole instances
     for k in range( len(L[0,0,:]) ):
 
@@ -994,13 +998,24 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
 
         # Find the dominant direction's index
         dominant_dex = argmax( vals )
+        if old_dom_dex is None: old_dom_dex = dominant_dex
+        if old_dom_dex != dominant_dex:
+            print dominant_dex
+            old_dom_dex = dominant_dex
 
         # Select the corresponding vector
         dominant_vec = vec[ :, dominant_dex ]
 
-        # There is a z axis degeneracy that we will break here
-        # by imposing that the z component is always positive
+        # # There is a z axis degeneracy that we will break here
+        # # by imposing that the z component is always positive
         if dominant_vec[-1]<0: dominant_vec *= -1
+        
+        # if reference_z_scale is None:
+        #     if dominant_vec[-1]<0:
+        #         reference_z_scale = -1
+        #     else:
+        #         reference_z_scale = 1
+        # dominant_vec *= reference_z_scale
 
         # Given this vector, calculate the related Euler angles
         # NOTE Eq. A3 of arxiv:1304.3176
