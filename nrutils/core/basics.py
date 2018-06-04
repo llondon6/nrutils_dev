@@ -1000,7 +1000,7 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
         dominant_dex = argmax( vals )
         if old_dom_dex is None: old_dom_dex = dominant_dex
         if old_dom_dex != dominant_dex:
-            print dominant_dex
+            # print dominant_dex
             old_dom_dex = dominant_dex
 
         # Select the corresponding vector
@@ -1009,7 +1009,7 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
         # # There is a z axis degeneracy that we will break here
         # # by imposing that the z component is always positive
         if dominant_vec[-1]<0: dominant_vec *= -1
-        
+
         # if reference_z_scale is None:
         #     if dominant_vec[-1]<0:
         #         reference_z_scale = -1
