@@ -923,6 +923,7 @@ def calc_Lab_tensor( multipole_dict ):
 # Given a dictionary of multipole data, calculate the Euler angles corresponding to a co-precessing frame
 def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l,m:data_lm ... }
                               domain_vals = None,   # The time or freq series for multipole data
+                              ref_orientation = None, # e.g. initial J; used for breaking degeneracies in calculation
                               return_xyz = False,
                               verbose = None ):
 
@@ -951,8 +952,11 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
     # Import usefuls
     from scipy.linalg import eig
     from scipy.integrate import cumtrapz
-    from numpy import arctan2,sin,arcsin,pi
-    from numpy import unwrap,argmax,cos,array,sqrt
+    from numpy import arctan2,sin,arcsin,pi,ones,arccos
+    from numpy import unwrap,argmax,cos,array,sqrt,sign
+
+    # Handle optional input
+    if ref_orientation is None: ref_orientation = ones(3)
 
     #-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-#
     # Enforce that multipole data is array typed with a well defined length
@@ -1008,13 +1012,18 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
         # Select the corresponding vector
         dominant_vec = vec[ :, dominant_dex ]
 
-        # # There is a z axis degeneracy that we will break here
-        # # by imposing that the z component is always positive
+        # There is a z axis degeneracy that we will break here
+        # by imposing that the z component is always positive
 
         if not flip_z_convention:
-            if dominant_vec[-1]>0: dominant_vec *= -1
+            if sign(dominant_vec[-1]) == -sign(ref_orientation[-1]): dominant_vec *= -1
         else:
-            if dominant_vec[-1]<=0: dominant_vec *= -1
+            if sign(dominant_vec[-1]) ==  sign(ref_orientation[-1]): dominant_vec *= -1
+
+        # if not flip_z_convention:
+        #     if dominant_vec[-1]>=0: dominant_vec *= -1
+        # else:
+        #     if dominant_vec[-1]<0: dominant_vec *= -1
 
         # if not flip_z_convention:
         #     if dominant_vec[-1]<=0: dominant_vec *= -1
@@ -1061,7 +1070,10 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
         # _beta = arctan2( sqrt(_y*_y+_x*_x), _z )
 
         # The below method for finding beta uses only odd functions and so has no sign ambiguity
-        _beta  = arcsin( _y / (sin(_alpha) if sin(_alpha)!=0 else 1e-8 ) )
+        # _beta  = arcsin( _y / (sin(_alpha) if sin(_alpha)!=0 else 1e-8 ) )
+
+        #
+        _beta = arccos(_z)
 
         # Look for and handle trivial cases
         if abs(_x)+abs(_y) < 1e-8 :
@@ -1098,8 +1110,8 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
 
     # Return answer
     if return_xyz:
-        # Note that the negative sign for Y is to enforce consistency with NR conventions (e.g. BAM)
-        return array(X),-array(Y),array(Z)
+        #
+        return array(X),-array(Y)*sign(ref_orientation[-1]),array(Z)
     else:
         return alpha,beta,gamma
 
@@ -1109,7 +1121,8 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
 def rotate_wfarrs_at_all_times( l,                          # the l of the new multipole (everything should have the same l)
                                 m,                          # the m of the new multipole
                                 like_l_multipoles_dict,     # dictionary in the format { (l,m): array([t_column,Re,Im]) }
-                                euler_alpha_beta_gamma ):             #
+                                euler_alpha_beta_gamma,
+                                ref_orientation = None ):             #
 
     '''
     Given dictionary of multipoles all with the same l, calculate the roated multipole with (l,mp).
@@ -1119,11 +1132,18 @@ def rotate_wfarrs_at_all_times( l,                          # the l of the new m
     '''
 
     # Import usefuls
-    from numpy import exp, pi, array
+    from numpy import exp, pi, array, ones, sign
     from nrutils.manipulate.rotate import wdelement
 
     #
     alpha,beta,gamma = euler_alpha_beta_gamma
+
+    # Handle the default behavior for the reference orientation
+    if ref_orientation is None:
+        ref_orientation = ones(3)
+
+    # Apply the desired offecrt for the reference orientation. NOTE that this is primarily useful for BAM run which have an atypical coordinate setup if Jz<0
+    gamma *= sign( ref_orientation[-1] )
 
     #
     new_ylm = 0

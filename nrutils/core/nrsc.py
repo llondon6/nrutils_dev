@@ -2026,7 +2026,10 @@ class gwf:
             return ans
 
     #
-    def __rotate_frame_at_all_times__(this,like_l_multipoles,euler_alpha_beta_gamma):
+    def __rotate_frame_at_all_times__( this,                        # The current object
+                                       like_l_multipoles,           # List of available multipoles with same l
+                                       euler_alpha_beta_gamma,      # List of euler angles
+                                       ref_orientation = None ):    # A reference orienation (useful for BAM)
 
         #
         that = this.copy()
@@ -2035,7 +2038,7 @@ class gwf:
         like_l_multipoles_dict = { (y.l,y.m):y.wfarr for y in like_l_multipoles }
 
         #
-        rotated_wfarr = rotate_wfarrs_at_all_times( this.l,this.m, like_l_multipoles_dict, euler_alpha_beta_gamma )
+        rotated_wfarr = rotate_wfarrs_at_all_times( this.l,this.m, like_l_multipoles_dict, euler_alpha_beta_gamma, ref_orientation=ref_orientation )
 
         # Reset related fields using the new data
         that.setfields( rotated_wfarr )
@@ -2540,7 +2543,8 @@ class gwylm:
                 old_data_length = len(wfarr[:,0])
                 default_pad = 2 + mod(len(wfarr[:,0]),2) + 1
                 if this.verbose: alert('Imposing a default padding of %i to the data.'%default_pad)
-                wfarr = pad_wfarr(wfarr,default_pad,verbose=this.verbose)
+                # NOTE that the optional "where" input below has important implications for many algorithms used for processing. In short, padding to the right only ensures that the original "start" of the waveform data series is unchanged.
+                wfarr = pad_wfarr(wfarr,default_pad,where='right',verbose=this.verbose)
 
             # Pad the waveform array
             if (this.fftfactor != 0) and (this.fftfactor is not None):
@@ -3575,13 +3579,10 @@ class gwylm:
 
         return None
 
-    #
-    def rotate_frame(this):
-
-        return None
-
     # Given some time and set of euler angles, rotate all multipole data ... and possibly initial position, spin, and final spin.
-    def __rotate_frame_at_all_times__(this, euler_alpha_beta_gamma):
+    def __rotate_frame_at_all_times__( this,                        # The current object
+                                       euler_alpha_beta_gamma,      # List of euler angles
+                                       ref_orientation = None ):    # A reference orienation (useful for BAM)
 
         '''
         Given some time and set of euler angles, rotate all multipole data ... and possibly initial position, spin, and final spin.
@@ -3616,7 +3617,7 @@ class gwylm:
                         like_l_multipoles.append( this.lm[lp,mp][kind] )
 
                 # Rotate the curent multipole
-                rotated_gwf = this.lm[lm][kind].__rotate_frame_at_all_times__( like_l_multipoles, euler_alpha_beta_gamma )
+                rotated_gwf = this.lm[lm][kind].__rotate_frame_at_all_times__( like_l_multipoles, euler_alpha_beta_gamma, ref_orientation )
 
                 # Store it to the output gwylm object
                 that.lm[lm][kind] = rotated_gwf
@@ -3772,8 +3773,18 @@ class gwylm:
         this.remnant['time_used'] = this.radiated['time_used']
         this.remnant['M'] = 1 - this.radiated['E']
         this.remnant['Mw'] = this.remnant['M'] * this.lm[2,2]['psi4'].dphi[ mask ]/2
+
+        # Calculate the internal angular momentum by using either the final or initial angular momentum values
         this.remnant['J'] = -this.radiated['J']
-        this.remnant['J'] = this.remnant['J'] - this.remnant['J'][end_index,:] + this.Sf # Enforce consistency with final spin vector
+
+        # # Use the final spin value to set the integration constant
+        # this.remnant['J'] = this.remnant['J'] - this.remnant['J'][end_index,:] + this.Sf # Enforce consistency with final spin vector
+
+        # Use the initial J value to set the integration constant
+        initial_index = 0 # index location where we expect the simulation data to NATURALLY start. For example, we expect that if the waveform data has been padded upon loading that this padding happens to the right of the data series, and not to the left.
+        J_initial = this.L1+this.L2+this.S1+this.S2
+        warning('The L and S used to estimate the initial J here may not be exactly time coincident. In most cases this will not matter significantly as both quantities evolve very slowly (relative to one orbit in inspiral).')
+        this.remnant['J'] = this.remnant['J'] - this.remnant['J'][initial_index,:] + J_initial # Enforce consistency with final spin vector
 
         this.remnant['S'] = this.remnant['J'] # The remnant has no orbital angular momentum. Is this right?
         this.remnant['P'] = -this.radiated['P'] # Assumes zero linear momentum at integration region start

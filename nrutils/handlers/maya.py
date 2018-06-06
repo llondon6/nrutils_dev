@@ -148,6 +148,11 @@ def learn_metadata( metadata_file_location ):
     #
     x.L1 = L1; x.L2 = L2
 
+    #
+    x.L = L1+L2
+    S = S1+S2
+    x.J = L+S
+
     # Load Final Mass and Spin Data  hn_mass_spin_2
     hn_file_bin = [ f for f in hn_file_list if 'hn_mass_spin_2' in f ]
     proceed = len(hn_file_bin)==1
@@ -186,9 +191,12 @@ def learn_metadata( metadata_file_location ):
     x.Xf = array([xfx,xfy,xfz])
     x.xf = sign(x.Sf[-1])*norm(x.Sf)/(x.mf*x.mf)
 
-    # Store relaxed fields for spins ()
-    x.S1_relaxed = S1
-    x.S2_relaxed = S2
+    # Store relaxed (after-junk) fields
+    x.S1_afterjunk,x.S_afterjunk2,x.S_afterjunk = None,None,None
+    x.L1_afterjunk,x.L2_afterjunk,x.L_afterjunk = None,None,None
+    x.R1_afterjunk,x.R2_afterjunk = None,None
+    x.P1_afterjunk,x.P2_afterjunk = None,None
+    x.J_afterjunk = None
 
     #
     x.valid = True
