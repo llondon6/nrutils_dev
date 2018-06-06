@@ -149,8 +149,9 @@ def learn_metadata( metadata_file_location ):
     x.L1 = L1; x.L2 = L2
 
     #
-    x.L = L1+L2
+    L = L1+L2
     S = S1+S2
+    x.L = L
     x.J = L+S
 
     # Load Final Mass and Spin Data  hn_mass_spin_2
