@@ -8,16 +8,22 @@
 3. [Usage Examples](#examples)
 
 # Installation (OSX+Linux)
-### Please do NOT do this:
+
+There are several ways you can install **nrutils**
+
+### Install direct from GitHub:
+If you just want to start using **nrutils**
 ```bash
 pip install git+https://github.com/llondon6/nrutils_dev.git
 ```
-### Recommended: Clone, then install:
+### Or clone, then install:
+If you want to have local copies of examples and workflows
 ```bash
 git clone https://github.com/llondon6/nrutils_dev.git
 pip install .
 ```
-### Or clone, then install in editable mode (useful if installing in a virtual environment):
+### Or clone, then install in editable mode:
+If you want to develop **nrutils** and useful if installing in a virtual environment
 ```bash
 git clone https://github.com/llondon6/nrutils_dev.git
 pip install -e .
