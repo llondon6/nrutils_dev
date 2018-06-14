@@ -2035,6 +2035,10 @@ class gwf:
         that = this.copy()
 
         #
+        if not ( ref_orientation is None ) :
+            error('The use of "ref_orientation" has been depreciated for this function.')
+
+        #
         like_l_multipoles_dict = { (y.l,y.m):y.wfarr for y in like_l_multipoles }
 
         #
@@ -2376,6 +2380,11 @@ class gwylm:
             warning(msg,'gwylm')
             this.__lmlist__.append( (2,2) )
 
+        # Always put (2,2) at the front of the list
+        a = list(this.__lmlist__)
+        a.pop( a.index((2,2)) )
+        this.__lmlist__ = [(2,2)] + a
+
         # Let the people know
         if this.verbose:
             alert('The following spherical multipoles will be loaded:%s'%cyan(str(this.__lmlist__)))
@@ -2397,6 +2406,7 @@ class gwylm:
         this.__make_lmlist__( lm, lmax )
 
         # Load all values in __lmlist__
+        this.external_sign_convention = None
         for lm in this.__lmlist__:
             this.load(lm=lm,dt=dt,extraction_parameter=extraction_parameter,level=level,pad=pad,verbose=verbose)
 
@@ -2450,6 +2460,9 @@ class gwylm:
         from scipy.stats.mstats import mode
         from scipy.version import version as scipy_version
         thisfun=inspect.stack()[0][3]
+
+        # Handle the verbose input. NOTE that this toggle is possibly not used. See "this.verbose".
+        if verbose is None: verbose = this.verbose
 
         # Default multipolar values
         if lm is None:
@@ -2604,21 +2617,25 @@ class gwylm:
             symmetries of the radiation (e.g. Ylm = -1^l * conj(Yl,-m) ).
             '''
             # ---------------------------------------------------- #
-            msk_ = y_.amp > 0.01*amax(y_.amp)
-            if int(scipy_version.split('.')[1])<16:
-                # Account for old scipy functionality
-                external_sign_convention = sign(m) * mode( sign( y_.dphi[msk_] ) )[0][0]
-            else:
-                # Account for modern scipy functionality
-                external_sign_convention = sign(m) * mode( sign( y_.dphi[msk_] ) ).mode[0]
 
-            if M_RELATIVE_SIGN_CONVENTION != external_sign_convention:
+            # Try to determine the sign convention used to define phase. Note that this will be determined only once for the current object based on the l=m=2 multipole.
+            if this.external_sign_convention is None:
+                msk_ = y_.amp > 0.01*amax(y_.amp)
+                if int(scipy_version.split('.')[1])<16:
+                    # Account for old scipy functionality
+                    external_sign_convention = sign(this.L[-1]) * sign(m) * mode( sign( y_.dphi[msk_] ) )[0][0]
+                else:
+                    # Account for modern scipy functionality
+                    external_sign_convention = sign(this.L[-1]) * sign(m) * mode( sign( y_.dphi[msk_] ) ).mode[0]
+                this.external_sign_convention = external_sign_convention
+
+            if M_RELATIVE_SIGN_CONVENTION != this.external_sign_convention:
                 wfarr[:,2] = -wfarr[:,2]
                 y_ = mkgwf(wfarr)
                 # Let the people know what is happening.
-                msg = yellow('Re-orienting waveform phase')+' to be consistent with internal sign convention for Psi4, where sign(dPhi/dt)=%i*sign(m).' % M_RELATIVE_SIGN_CONVENTION + ' Note that the internal sign convention is defined in ... nrutils/core/__init__.py as "M_RELATIVE_SIGN_CONVENTION". This message has appeared becuase the waveform is determioned to obey and sign convention: sign(dPhi/dt)=%i*sign(m).'%(external_sign_convention)
+                msg = yellow('Re-orienting waveform phase')+' to be consistent with internal sign convention for Psi4, where sign(dPhi/dt)=%i*sign(m)*sign(this.L[-1]).' % M_RELATIVE_SIGN_CONVENTION + ' Note that the internal sign convention is defined in ... nrutils/core/__init__.py as "M_RELATIVE_SIGN_CONVENTION". This message has appeared becuase the waveform is determioned to obey and sign convention: sign(dPhi/dt)=%i*sign(m)*sign(this.L[-1]). Note the appearance of the initial z angular momentum, this.L[-1].'%(this.external_sign_convention)
                 thisfun=inspect.stack()[0][3]
-                if verbose: alert( msg )
+                warning( msg, verbose=this.verbose )
 
             # use array data to construct gwf object with multipolar fields
             if not output:
@@ -3597,6 +3614,10 @@ class gwylm:
         # Create the output object -- its multipole data (and other?) will be replaced by rotated versions
         that = this.copy()
 
+        #
+        if not ( ref_orientation is None ) :
+            error('The use of "ref_orientation" has been depreciated for this function.')
+
         # ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~- #
         # Rotate multipole data
         # ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~- #
@@ -3645,12 +3666,13 @@ class gwylm:
         # * initial spins
         that.S1 = R( this.S1, 0 ); that.S2 = R( this.S2, 0 )
         that.X1 = R( this.X1, 0 ); that.X2 = R( this.X2, 0 )
-
         # * initial angular momenta
         that.L1 = R( this.L1, 0 ); that.L2 = R( this.L2, 0 )
-
         # * initial positions / position time series / maybe velocities
         that.R1 = R( this.R1, 0 ); that.R2 = R( this.R2, 0 )
+        # * others
+        that.S = R( this.S, 0 ); that.J = R( this.J, 0 );
+        that.L = R( this.L, 0 )
 
         #
         alert('Note that metadata at the scentry level (i.e. this.__scentry__) have not been rotated, but this.Sf, this.R1 and others have been rotated.')
@@ -3727,18 +3749,22 @@ class gwylm:
     # Estimate the energy radiated for the current collection of GW multipoles
     def __calc_radiated_quantities__(this,              # The current object
                                      use_mask = True,   # Toggle for chopping of noisey data. NOTE use_mask = False is useful if you need radiated quantities of the same length as the original waveforms
+                                     ref_orientation = None,
                                      verbose=False):    # Toggle for letting the people know
 
         ''' Reference: https://arxiv.org/pdf/0707.4654.pdf '''
 
         # Import usefuls
-        from numpy import trapz,pi,arange,isfinite,vstack,array
+        from numpy import trapz,pi,arange,isfinite,vstack,array,ones,sign
 
         # Construct a mask of useable data (OPTIONAL)
         if use_mask:
             mask = arange(this.startindex,this.endindex_by_frequency+1)
         else:
             mask = arange( len(this.t) )
+
+        #
+        if ref_orientation is None: ref_orientation = ones(3)
 
         # Since the mask will be optinal, let's use the hypothtical end value of the mask as a reference for the end of the waveform (i.e. before noise dominates)
         end_index = -1 if use_mask else this.endindex_by_frequency
@@ -3766,6 +3792,13 @@ class gwylm:
         this.radiated['J_sim_start'] = this.Sf - this.radiated['J'][end_index,:]
         if verbose: alert('Calculating radiated linear momentum, P.')
         this.radiated['P'] = this.__calc_radiated_linear_momentum__(mask)
+
+        #
+        if not ( ref_orientation is None ):
+            #
+            this.radiated['J'][:,1] *= sign(ref_orientation[-1])
+            this.radiated['P'][:,1] *= sign(ref_orientation[-1])
+
         # Store remant Quantities
         if verbose: alert('Using radiated quantity time series to calculate remnant quantity time series.')
         this.remnant = {}
@@ -3782,9 +3815,7 @@ class gwylm:
 
         # Use the initial J value to set the integration constant
         initial_index = 0 # index location where we expect the simulation data to NATURALLY start. For example, we expect that if the waveform data has been padded upon loading that this padding happens to the right of the data series, and not to the left.
-        J_initial = this.L1+this.L2+this.S1+this.S2
-        warning('The L and S used to estimate the initial J here may not be exactly time coincident. In most cases this will not matter significantly as both quantities evolve very slowly (relative to one orbit in inspiral).')
-        this.remnant['J'] = this.remnant['J'] - this.remnant['J'][initial_index,:] + J_initial # Enforce consistency with final spin vector
+        this.remnant['J'] = this.remnant['J'] - this.remnant['J'][initial_index,:] + this.J # Enforce consistency with initial spin vector
 
         this.remnant['S'] = this.remnant['J'] # The remnant has no orbital angular momentum. Is this right?
         this.remnant['P'] = -this.radiated['P'] # Assumes zero linear momentum at integration region start
@@ -4401,10 +4432,10 @@ def lvcnr5_to_gwylm(h5dir,lm=None,verbose=True,dt=0.25,lmax=6,clean=True):
         msk_ = amp > 0.01*amax(amp)
         if int(scipy_version.split('.')[1])<16:
             # Account for old scipy functionality
-            external_sign_convention = sign(m) * mode( sign( pha ) )[0][0]
+            external_sign_convention = sign(this.L[-1]) * sign(m) * mode( sign( pha ) )[0][0]
         else:
             # Account for modern scipy functionality
-            external_sign_convention = sign(m) * mode( sign( pha ) ).mode[0]
+            external_sign_convention = sign(this.L[-1]) * sign(m) * mode( sign( pha ) ).mode[0]
         if M_RELATIVE_SIGN_CONVENTION != external_sign_convention:
             pha = -pha
             msg = yellow('Re-orienting waveform phase')+' to be consistent with internal sign convention for Strain, where sign(dPhi/dt)=%i*sign(m).' % M_RELATIVE_SIGN_CONVENTION + ' Note that the internal sign convention is defined in ... nrutils/core/__init__.py as "M_RELATIVE_SIGN_CONVENTION". This message has appeared becuase the waveform is determioned to obey and sign convention: sign(dPhi/dt)=%i*sign(m).'%(external_sign_convention)

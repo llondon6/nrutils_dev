@@ -1109,9 +1109,12 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
         gamma = 0
 
     # Return answer
-    if return_xyz:
+    if return_xyz == 'all':
         #
-        return array(X),-array(Y)*sign(ref_orientation[-1]),array(Z)
+        return alpha,beta,gamma,array(X),-array(Y),array(Z)
+    elif return_xyz:
+        #
+        return array(X),-array(Y),array(Z)
     else:
         return alpha,beta,gamma
 
@@ -1138,12 +1141,17 @@ def rotate_wfarrs_at_all_times( l,                          # the l of the new m
     #
     alpha,beta,gamma = euler_alpha_beta_gamma
 
+    #
+    if not ( ref_orientation is None ) :
+        warning('The use of "ref_orientation" has been depreciated for this function.')
+
     # Handle the default behavior for the reference orientation
     if ref_orientation is None:
         ref_orientation = ones(3)
 
     # Apply the desired offecrt for the reference orientation. NOTE that this is primarily useful for BAM run which have an atypical coordinate setup if Jz<0
     gamma *= sign( ref_orientation[-1] )
+    alpha *= sign( ref_orientation[-1] )
 
     #
     new_ylm = 0
