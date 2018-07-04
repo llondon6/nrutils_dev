@@ -1020,28 +1020,8 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
         else:
             if sign(dominant_vec[-1]) ==  sign(ref_orientation[-1]): dominant_vec *= -1
 
-        # if not flip_z_convention:
-        #     if dominant_vec[-1]>=0: dominant_vec *= -1
-        # else:
-        #     if dominant_vec[-1]<0: dominant_vec *= -1
-
-        # if not flip_z_convention:
-        #     if dominant_vec[-1]<=0: dominant_vec *= -1
-        # else:
-        #     if dominant_vec[-1]>0: dominant_vec *= -1
-
-        # from numpy import sign
-        # if sign(dominant_vec[-1]) != -sign(dominant_vec[0])*sign(dominant_vec[1]):
-        #     dominant_vec *= -1
-
         # Extract the components of the dominant eigenvector
         _x,_y,_z = dominant_vec
-
-        # if _x.imag == 0 and _y.imag == 0:
-        #     _x = _x.real
-        #     _y = _y.real
-        # else:
-        #     print _x, _y
 
         # Store reference values if they are None
         if ref_x==None:
@@ -1055,44 +1035,29 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
                 _x *= -1
                 flip_z_convention = not flip_z_convention
 
-        # Given this vector, calculate the related Euler angles
-        # NOTE Eq. A3 of arxiv:1304.3176
-
-        # Find alpha and beta
-        _alpha = arctan2(_y,_x)
-
         # Store unit components for reference in the next iternation
         ref_x = _x
         ref_y = _y
         ref_z = _z
 
-        # NOTE that the commeted method below imposes that sin(beta)>0, and is therefore not general
-        # _beta = arctan2( sqrt(_y*_y+_x*_x), _z )
-
-        # The below method for finding beta uses only odd functions and so has no sign ambiguity
-        # _beta  = arcsin( _y / (sin(_alpha) if sin(_alpha)!=0 else 1e-8 ) )
-
-        #
-        _beta = arccos(_z)
-
         # Look for and handle trivial cases
         if abs(_x)+abs(_y) < 1e-8 :
             _x = _y = 0
-            _alpha = 0
 
-        # Store positions if output is desired
-        if return_xyz:
-            X.append(_x);Y.append(_y);Z.append(_z)
+        #
+        X.append(_x);Y.append(_y);Z.append(_z)
 
-        # NOTE that gamma may be found once all values of alpha and beta are found
+    #
+    X = reflect_unwrap(array(X))
+    Y = array(Y)
+    Z = array(Z)
 
-        # Store values of rotation angles
-        alpha.append( _alpha )
-        beta.append( _beta )
+    # Given the optimal unit vector time series, calculate the related Euler angles
+    # NOTE Eq. A3 of arxiv:1304.3176
 
-    # Convert alpha and beta to arrays in prep for finding gamma
-    alpha = array( alpha )
-    beta = array( beta )
+    #
+    alpha = arctan2(Y,X)
+    beta  = arccos(Z)
 
     # Make sure that angles are unwrapped
     alpha = unwrap( alpha )
@@ -1111,10 +1076,10 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
     # Return answer
     if return_xyz == 'all':
         #
-        return alpha,beta,gamma,array(X),-array(Y),array(Z)
+        return alpha,beta,gamma,X,-Y,Z
     elif return_xyz:
         #
-        return array(X),-array(Y),array(Z)
+        return X,-Y,Z
     else:
         return alpha,beta,gamma
 

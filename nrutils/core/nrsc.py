@@ -2100,6 +2100,7 @@ class gwylm:
                   enforce_polarization_convention = None, # If true, polarization will be adjusted according to initial separation vectors
                   fftfactor = None,                   # Option for padding wfarr to next fftfactor powers of two
                   pad = None,                       # Optional padding length in samples of wfarr upon loading; not used if fftfactor is present; 'pad' samples dwill be added to the wfarr rows
+                  __M_RELATIVE_SIGN_CONVENTION__ = None,
                   verbose               = None ):   # be verbose
 
         '''
@@ -2150,6 +2151,14 @@ class gwylm:
 
         #
         this.fftfactor = fftfactor
+
+        #
+        if this.verbose:
+            if __M_RELATIVE_SIGN_CONVENTION__ is None:
+                alert('Using default M_RELATIVE_SIGN_CONVENTION of %i'%M_RELATIVE_SIGN_CONVENTION)
+            else:
+                alert('Using default input M_RELATIVE_SIGN_CONVENTION of %i'%__M_RELATIVE_SIGN_CONVENTION__)
+        this.M_RELATIVE_SIGN_CONVENTION = M_RELATIVE_SIGN_CONVENTION if __M_RELATIVE_SIGN_CONVENTION__ is None else __M_RELATIVE_SIGN_CONVENTION__
 
         # Store the scentry object to optionally access its methods
         this.__scentry__ = scentry_obj
@@ -2624,16 +2633,19 @@ class gwylm:
                 if int(scipy_version.split('.')[1])<16:
                     # Account for old scipy functionality
                     external_sign_convention = sign(this.L[-1]) * sign(m) * mode( sign( y_.dphi[msk_] ) )[0][0]
+                    initially_msign_matches_wsign = sign(m) == mode( sign( y_.dphi[msk_] ) )[0][0]
                 else:
                     # Account for modern scipy functionality
                     external_sign_convention = sign(this.L[-1]) * sign(m) * mode( sign( y_.dphi[msk_] ) ).mode[0]
+                    initially_msign_matches_wsign = sign(m) == mode( sign( y_.dphi[msk_] ) ).mode[0]
+                if initially_msign_matches_wsign: alert('## initall, m and td freq have same sign.')
                 this.external_sign_convention = external_sign_convention
 
-            if M_RELATIVE_SIGN_CONVENTION != this.external_sign_convention:
+            if this.M_RELATIVE_SIGN_CONVENTION != this.external_sign_convention:
                 wfarr[:,2] = -wfarr[:,2]
                 y_ = mkgwf(wfarr)
                 # Let the people know what is happening.
-                msg = yellow('Re-orienting waveform phase')+' to be consistent with internal sign convention for Psi4, where sign(dPhi/dt)=%i*sign(m)*sign(this.L[-1]).' % M_RELATIVE_SIGN_CONVENTION + ' Note that the internal sign convention is defined in ... nrutils/core/__init__.py as "M_RELATIVE_SIGN_CONVENTION". This message has appeared becuase the waveform is determioned to obey and sign convention: sign(dPhi/dt)=%i*sign(m)*sign(this.L[-1]). Note the appearance of the initial z angular momentum, this.L[-1].'%(this.external_sign_convention)
+                msg = yellow('Re-orienting waveform phase')+' to be consistent with internal sign convention for Psi4, where sign(dPhi/dt)=%i*sign(m)*sign(this.L[-1]).' % this.M_RELATIVE_SIGN_CONVENTION + ' Note that the internal sign convention is defined in ... nrutils/core/__init__.py as "M_RELATIVE_SIGN_CONVENTION". This message has appeared becuase the waveform is determioned to obey and sign convention: sign(dPhi/dt)=%i*sign(m)*sign(this.L[-1]). Note the appearance of the initial z angular momentum, this.L[-1].'%(this.external_sign_convention)
                 thisfun=inspect.stack()[0][3]
                 warning( msg, verbose=this.verbose )
 
