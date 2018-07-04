@@ -2316,6 +2316,7 @@ class gwylm:
             this.lm[(f.l,f.m)]['news'] = f
         #
         this.t = this[2,2]['psi4'].t
+        this.f = this[2,2]['psi4'].f
 
     # Validate inputs to constructor
     def __valinputs__(this,thisfun,lm=None,lmax=None,scentry_obj=None):
@@ -2629,7 +2630,8 @@ class gwylm:
 
             # Try to determine the sign convention used to define phase. Note that this will be determined only once for the current object based on the l=m=2 multipole.
             if this.external_sign_convention is None:
-                msk_ = y_.amp > 0.01*amax(y_.amp)
+                msk_ = y_.amp > 0.0001*amax(y_.amp)
+                # msk_ = y_.amp > 0.01*amax(y_.amp)
                 if int(scipy_version.split('.')[1])<16:
                     # Account for old scipy functionality
                     external_sign_convention = sign(this.L[-1]) * sign(m) * mode( sign( y_.dphi[msk_] ) )[0][0]
