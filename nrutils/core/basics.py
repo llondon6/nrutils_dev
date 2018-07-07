@@ -1014,11 +1014,23 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
 
         # There is a z axis degeneracy that we will break here
         # by imposing that the z component is always positive
+        # NOTE the following exceptions:
+        #  * The optimal emission direction crosses the x-y plane
+        #  * Data is processed in a frequency-like domain where f<0 may have z<0
+
+        # if not flip_z_convention:
+        #     if sign(dominant_vec[-1]) == -sign(ref_orientation[-1]): dominant_vec *= -1
+        # else:
+        #     if sign(dominant_vec[-1]) ==  sign(ref_orientation[-1]): dominant_vec *= -1
+
+        # dominant_vec *= sign(domain_vals[k])*sign(ref_orientation[-1])
 
         if not flip_z_convention:
             if sign(dominant_vec[-1]) == -sign(ref_orientation[-1]): dominant_vec *= -1
         else:
             if sign(dominant_vec[-1]) ==  sign(ref_orientation[-1]): dominant_vec *= -1
+
+        # dominant_vec *= sign(domain_vals[k])
 
         # Extract the components of the dominant eigenvector
         _x,_y,_z = dominant_vec
@@ -1033,7 +1045,8 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
                 _x *= -1
                 _y *= -1
                 _x *= -1
-                flip_z_convention = not flip_z_convention
+                # if sign(_domain) == sign(domain[k]):
+                #     flip_z_convention = not flip_z_convention
 
         # Store unit components for reference in the next iternation
         ref_x = _x
@@ -1051,6 +1064,12 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
     X = reflect_unwrap(array(X))
     Y = array(Y)
     Z = array(Z)
+
+    #
+    reflect_mask = domain_vals<0
+    X[reflect_mask] *= -1
+    Y[reflect_mask] *= -1
+    Z[reflect_mask] *= -1
 
     # Given the optimal unit vector time series, calculate the related Euler angles
     # NOTE Eq. A3 of arxiv:1304.3176

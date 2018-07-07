@@ -2731,7 +2731,7 @@ class gwylm:
         return ax
 
 
-    #
+    # Make sky-plot for waveform at fixed time
     def mollweide_plot(this,time=None,kind=None,ax=None,form=None,colorbar_shrink=1.0,N=120,use_time_relative_to_peak = True):
 
         '''
@@ -2816,6 +2816,49 @@ class gwylm:
 
         #
         return ax,real_time
+
+
+    # Save multipoles to ascii files
+    def saveto( this, outdir=None, kind = None, verbose = None ):
+
+        # Import usefuls
+        from os.path import expanduser,isfile,isdir,join
+        from numpy import zeros,savetxt
+
+        # Handle optional inputs
+        if verbose is None: verbose = this.verbose
+        if kind is None: kind = 'psi4'
+        # Validate kind of data to save
+        if not ( kind in this.lm[2,2] ):
+            error('Unknown "kind" given: %s. Must be in %s.'%(kind,this.lm[2,2].keys()))
+        # Handle default output dir
+        if outdir is None: outdir = expanduser('~/Desktop/')
+
+        # Automatically add simulation name to output dir
+        outdir = join( outdir, this.simname )
+
+        # Check for existance of output directory, and make if needed
+        mkdir( outdir, verbose=verbose )
+
+        # For all multipole indeces
+        for lm in this.lm:
+
+            # Open file for writing
+            filename = kind+'_%s_l%im%i.asc'%((this.__scentry__.config.institute,)+lm)
+            ascii_file = join( outdir, filename )
+            f = open( ascii_file,'w')
+            f.write('# Written by nrutils.gwylm.saveto() ~ gotta heart koalas\n')
+            f.write('# t \t\t Re(%s) \t\t Im(%s)\n'%(kind,kind))
+            data_array = zeros( (len(this.t),3) )
+            data_array[:,0] = this.t
+            data_array[:,1] = this[lm][kind].plus
+            data_array[:,2] = this[lm][kind].cross
+            savetxt( f, data_array )
+            # close the file
+            alert('ascii data stored to "%s"'%cyan(ascii_file),verbose=verbose)
+            f.close()
+
+
 
 
     # Strain via ffi method
