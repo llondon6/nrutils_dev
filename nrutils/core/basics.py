@@ -1045,8 +1045,6 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
                 _x *= -1
                 _y *= -1
                 _x *= -1
-                # if sign(_domain) == sign(domain[k]):
-                #     flip_z_convention = not flip_z_convention
 
         # Store unit components for reference in the next iternation
         ref_x = _x
@@ -1065,7 +1063,7 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
     Y = array(Y)
     Z = array(Z)
 
-    #
+    # In the case of FD data, where domain values are split between pos and negative frequencies, flip the z convention for f<0 data
     reflect_mask = domain_vals<0
     X[reflect_mask] *= -1
     Y[reflect_mask] *= -1
