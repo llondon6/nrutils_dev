@@ -1544,9 +1544,9 @@ class gwf:
         from matplotlib.pyplot import title as ttl
         from numpy import ones,sqrt,hstack,array,sign
 
-        from matplotlib import rc
-        rc('font', **{'family': 'serif', 'serif': ['Computer Modern']})
-        rc('text', usetex=True)
+        #from matplotlib import rc
+        #rc('font', **{'family': 'serif', 'serif': ['Computer Modern']})
+        #rc('text', usetex=True)
 
         #
         if ref_gwf:
