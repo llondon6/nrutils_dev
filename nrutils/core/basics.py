@@ -985,7 +985,7 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
 
     # Initialize idents for angles. NOTE that gamma will be handled below
     alpha,beta = [],[]
-    if return_xyz: X,Y,Z = [],[],[]
+    X,Y,Z = [],[],[]
 
     #
     # reference_z_scale = None
