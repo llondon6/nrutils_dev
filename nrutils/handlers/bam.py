@@ -128,6 +128,7 @@ def learn_metadata( metadata_file_location ):
 
     #%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%#
     # NOTE that sometimes the afterjunk spins may not be stored correctely or at all in the bbh files. Therefore an additional validation step is needed here.
+    # -- NOTE the lines below need to be fixed --
     S1bool = S1.astype(list).astype(bool)
     S2bool = S2.astype(list).astype(bool)
     x.has_valid_relaxed_intial_parameters = S1bool.all() and S2bool.all()

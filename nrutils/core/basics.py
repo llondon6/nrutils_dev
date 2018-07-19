@@ -1105,7 +1105,7 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
 # Given dictionary of multipoles all with the same l, calculate the roated multipole with (l,mp)
 def rotate_wfarrs_at_all_times( l,                          # the l of the new multipole (everything should have the same l)
                                 m,                          # the m of the new multipole
-                                like_l_multipoles_dict,     # dictionary in the format { (l,m): array([t_column,Re,Im]) }
+                                like_l_multipoles_dict,     # dictionary in the format { (l,m): array([t_column,+,x]) }
                                 euler_alpha_beta_gamma,
                                 ref_orientation = None ):             #
 

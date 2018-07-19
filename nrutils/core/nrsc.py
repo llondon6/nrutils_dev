@@ -2263,6 +2263,9 @@ class gwylm:
         if scentry_obj.config:
             this.__curate__()
 
+        #
+        this.__enforce_m_relative_phase_orientation__()
+
 
     # Allow class to be indexed
     def __getitem__(this,index):
@@ -3277,7 +3280,72 @@ class gwylm:
         # Return the answer
         return ans
 
+    # Enforce M_RELATIVE_SIGN_CONVENTION
+    def __enforce_m_relative_phase_orientation__(this):
 
+        # Import usefuls
+        from numpy import arange,sign,diff,unwrap,angle,amax,isnan,amin,log,exp,std,median,mod,mean
+        from scipy.stats.mstats import mode
+        from scipy.version import version as scipy_version
+        thisfun=inspect.stack()[0][3]
+
+        # Use the 2,2, multipole just after wstart to determine initial phase direction
+        mask = arange(this.startindex,this.startindex+50)
+        dphi = this[2,2]['psi4'].dphi[mask]
+        m=2
+
+        if int(scipy_version.split('.')[1])<16:
+            # Account for old scipy functionality
+            external_sign_convention = sign(this.L[-1]) * sign(m) * mode( sign( dphi ) )[0][0]
+            initially_msign_matches_wsign = sign(m) == mode( sign( dphi ) )[0][0]
+        else:
+            # Account for modern scipy functionality
+            external_sign_convention = sign(this.L[-1]) * sign(m) * mode( sign( dphi ) ).mode[0]
+            initially_msign_matches_wsign = sign(m) == mode( sign( dphi ) ).mode[0]
+        if initially_msign_matches_wsign: alert('## initall, m and td freq have same sign.')
+        this.external_sign_convention = external_sign_convention
+
+        if this.M_RELATIVE_SIGN_CONVENTION != this.external_sign_convention:
+            # Let the people know what is happening.
+            msg = yellow('[Verify stage] Re-orienting waveform phase')+' to be consistent with internal sign convention for Psi4, where sign(dPhi/dt)=%i*sign(m)*sign(this.L[-1]).' % this.M_RELATIVE_SIGN_CONVENTION + ' Note that the internal sign convention is defined in ... nrutils/core/__init__.py as "M_RELATIVE_SIGN_CONVENTION". This message has appeared becuase the waveform is determioned to obey and sign convention: sign(dPhi/dt)=%i*sign(m)*sign(this.L[-1]). Note the appearance of the initial z angular momentum, this.L[-1].'%(this.external_sign_convention)
+            thisfun=inspect.stack()[0][3]
+            warning( msg, verbose=this.verbose )
+            #
+            for l,m in this.lm:
+                for kind in this[l,m]:
+                    y = this[l,m][kind]
+                    wfarr = y.wfarr
+                    wfarr[:,2] *= -1
+                    y.setfields( wfarr )
+                    this[l,m][kind] = y
+
+        # # Try to determine the sign convention used to define phase. Note that this will be determined only once for the current object based on the l=m=2 multipole.
+        # if this.external_sign_convention is None:
+        #     msk_ = y_.amp > 0.0001*amax(y_.amp)
+        #     # msk_ = y_.amp > 0.01*amax(y_.amp)
+        #     if int(scipy_version.split('.')[1])<16:
+        #         # Account for old scipy functionality
+        #         external_sign_convention = sign(this.L[-1]) * sign(m) * mode( sign( y_.dphi[msk_] ) )[0][0]
+        #         initially_msign_matches_wsign = sign(m) == mode( sign( y_.dphi[msk_] ) )[0][0]
+        #     else:
+        #         # Account for modern scipy functionality
+        #         external_sign_convention = sign(this.L[-1]) * sign(m) * mode( sign( y_.dphi[msk_] ) ).mode[0]
+        #         initially_msign_matches_wsign = sign(m) == mode( sign( y_.dphi[msk_] ) ).mode[0]
+        #     if initially_msign_matches_wsign: alert('## initall, m and td freq have same sign.')
+        #     this.external_sign_convention = external_sign_convention
+        #
+        # if this.M_RELATIVE_SIGN_CONVENTION != this.external_sign_convention:
+        #     wfarr[:,2] = -wfarr[:,2]
+        #     y_ = mkgwf(wfarr)
+        #     # Let the people know what is happening.
+        #     msg = yellow('Re-orienting waveform phase')+' to be consistent with internal sign convention for Psi4, where sign(dPhi/dt)=%i*sign(m)*sign(this.L[-1]).' % this.M_RELATIVE_SIGN_CONVENTION + ' Note that the internal sign convention is defined in ... nrutils/core/__init__.py as "M_RELATIVE_SIGN_CONVENTION". This message has appeared becuase the waveform is determioned to obey and sign convention: sign(dPhi/dt)=%i*sign(m)*sign(this.L[-1]). Note the appearance of the initial z angular momentum, this.L[-1].'%(this.external_sign_convention)
+        #     thisfun=inspect.stack()[0][3]
+        #     warning( msg, verbose=this.verbose )
+
+        #
+
+        #@
+        return None
 
     # recompose individual arrays for a select data type (psi4, strain or news)
     def __recompose_array__( this,theta,phi,kind,domain,select_lm=None,verbose=False ):
