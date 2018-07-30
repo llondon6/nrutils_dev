@@ -2,6 +2,268 @@
 #
 from nrutils.core.basics import *
 
+#
+class gwylm_radiation_axis_workflow:
+
+    '''
+    Workflow to calculate optimal emission axis (i.e. radiation axis), and related quantities. Comprehensive plotting is suggested and included as an option.
+    '''
+
+    #
+    def __init__( this, gwylmo, plot=False, outdir=None, save=False, verbose=True ):
+
+        #
+        from os.path import expanduser
+
+        # Calculate radiated and remnant quantities
+        alert('Calculating Radiated Quantities','gwylm_radiation_axis_workflow',verbose=verbose)
+        gwylmo.__calc_radiated_quantities__(use_mask=False)
+
+        # Store reference to input gwylmo
+        this.gwylmo = gwylmo
+
+        # NOTE that relevant information will be stored within the current object
+        this.radiation_axis = {}
+        rax = this.radiation_axis
+
+        #
+        if outdir is None: outdir = '~/Desktop/'+gwylmo.simname
+        outdir = expanduser( outdir ); this.outdir = outdir
+        mkdir( this.outdir, verbose=verbose )
+
+        # Calculate radiation axes in time and frequency domain
+        alert('Calculating TD Radiation Axis Series','gwylm_radiation_axis_workflow',verbose=verbose)
+        td_alpha,td_beta,td_gamma,td_x,td_y,td_z,td_domain = this.calc_radiation_axis( domain = 'time', kind = 'psi4'  )
+        alert('Calculating FD Radiation Axis Series','gwylm_radiation_axis_workflow',verbose=verbose)
+        fd_alpha,fd_beta,fd_gamma,fd_x,fd_y,fd_z,fd_domain = this.calc_radiation_axis( domain = 'freq', kind = 'psi4'  )
+
+        # Store time domain data
+        rax['td_alpha'],rax['td_beta'],rax['td_gamma'] = td_alpha,td_beta,td_gamma
+        rax['td_x'],rax['td_y'],rax['td_z'] = td_x,td_y,td_z
+        rax['td_domain'] = td_domain
+
+        # Store freq domain data
+        rax['fd_alpha'],rax['fd_beta'],rax['fd_gamma'] = fd_alpha,fd_beta,fd_gamma
+        rax['fd_x'],rax['fd_y'],rax['fd_z'] = fd_x,fd_y,fd_z
+        rax['fd_domain'] = fd_domain
+
+        #
+        alert('Plotting TD Radiation Axis Series','gwylm_radiation_axis_workflow',verbose=verbose)
+        this.plot_radiation_axis_3panel( domain='time' )
+        alert('Plotting FD Radiation Axis Series','gwylm_radiation_axis_workflow',verbose=verbose)
+        this.plot_radiation_axis_3panel( domain='freq' )
+
+        #
+        view = None
+        this.plot_radiation_axis_on_sphere( domain='time', view=view )
+        this.plot_radiation_axis_on_sphere( domain='freq', view=view )
+        #
+        view = (90,270)
+        this.plot_radiation_axis_on_sphere( domain='time', view=view )
+        this.plot_radiation_axis_on_sphere( domain='freq', view=view )
+
+    # Encapsulation of calc angles given domain and type
+    def calc_radiation_axis( this, domain=None, kind = None ):
+
+        # Calc radiation axis: alpha beta gamma and x y z
+        kind = 'psi4' if kind is None else kind
+        domain = 'time' if domain is None else domain
+
+        #
+        gwylmo = this.gwylmo
+
+        # Construct dictionary of multipoles using all multipoles available
+        mp = { (l,m) : ( gwylmo.lm[l,m][kind].y if domain in ('t','time') else gwylmo.lm[l,m][kind].fd_y ) for l,m in gwylmo.lm  }
+        # Domain values: time or freq
+        domain_vals = gwylmo.lm[2,2][kind].t if domain in ('t','time') else gwylmo.lm[2,2][kind].f
+
+        # Calculate corotating angles using low-level function
+        alpha,beta,gamma,x,y,z = calc_coprecessing_angles( mp, domain_vals, ref_orientation=gwylmo.J, return_xyz='all' )
+
+        # return answers
+        return alpha,beta,gamma,x,y,z,domain_vals
+
+    #
+    def plot_radiation_axis_3panel( this, domain=None, kind = None ):
+
+        #
+        from matplotlib.pyplot import figure, figaspect, plot, xlabel, ylabel, xlim, ylim, xscale, yscale, legend, subplot, grid, title, draw, show, savefig
+        from numpy import mod,pi,hstack,array,ones
+        from os.path import join
+
+        # Calc radiation axis: alpha beta gamma and x y z
+        kind = 'psi4' if kind is None else kind
+        domain = 'time' if domain is None else domain
+
+        #
+        gwylmo = this.gwylmo
+
+        #
+        tag = 'td' if domain in ('t','td','time') else 'fd'
+
+        # Extract useful info
+        x,y,z = this.radiation_axis[tag+'_x'],this.radiation_axis[tag+'_y'],this.radiation_axis[tag+'_z']
+        alpha,beta,gamma = this.radiation_axis[tag+'_alpha'],this.radiation_axis[tag+'_beta'],this.radiation_axis[tag+'_gamma']
+        domain_vals = this.radiation_axis[tag+'_domain']
+
+        #
+        fig = figure( figsize=4*figaspect(1) )
+        clr = rgb(3,jet=True); grey = ones(3)*0.8
+        lw = 1.5
+
+        #
+        domain_min = domain_vals[gwylmo.preinspiral.right_index] if domain in ('t','time') else gwylmo.wstart_pn/(2*pi)
+        domain_max = domain_vals[gwylmo.postringdown.left_index] if domain in ('t','time') else gwylmo.lm[2,2][kind].dt/pi
+
+        #
+        mask = (domain_vals>=domain_min) & (domain_vals<=domain_max)
+
+        #
+        ax = subplot(3,1,1)
+        title( gwylmo.simname )
+        if domain in ('t','time'):
+            plot( domain_vals, gwylmo.lm[2,2][kind].plus, color=grey, linewidth = lw )
+            plot( domain_vals, gwylmo.lm[2,2][kind].cross, color=0.8*grey, linewidth = lw )
+            plot( domain_vals, gwylmo.lm[2,2][kind].amp, linewidth = lw, label=r'$\psi_{22}$' )
+            yscale('log',nonposy='clip')
+        else:
+            plot( domain_vals, gwylmo.lm[2,2][kind].fd_amp, linewidth = lw, label=r'$\psi_{22}$' )
+            xscale('log'); yscale('log')
+            ylim( lim(gwylmo.lm[2,2][kind].fd_amp[mask]) )
+        grid()
+        legend( frameon=False, loc='best' )
+
+        #
+        subplot(3,1,2,sharex=ax)
+        reshift = lambda V: V - V[mask][0] + mod(V[mask][0],2*pi)
+        plot( domain_vals, reshift(alpha), color = clr[0], linewidth = lw, label=r'$\alpha$' )
+        plot( domain_vals, reshift(beta),  color = clr[1], linewidth = lw, label=r'$\beta$' )
+        plot( domain_vals, reshift(gamma), color = clr[2], linewidth = lw, label=r'$\gamma$' )
+        legend( frameon=False, loc='best' )
+        ylim( lim( hstack([reshift(alpha)[mask],reshift(beta)[mask],reshift(gamma)[mask]]), dilate=0.1 ) )
+        grid()
+
+        #
+        subplot(3,1,3,sharex=ax)
+        plot( domain_vals, reflect_unwrap(x), color = clr[0], linewidth = lw, label=r'$x$' )
+        plot( domain_vals, y,  color = clr[2], linewidth = lw, label=r'$y$' )
+        plot( domain_vals, z, color = clr[1], linewidth = lw, label=r'$z$' )
+        legend( frameon=False, loc='best' )
+        ylim( lim( hstack([x[mask],y[mask],z[mask]]), dilate=0.1 ) )
+        grid()
+        xlabel( '$t/M$' if 'td'==tag else '$fM$' )
+
+        #
+        ax.set_xlim( [ domain_min, domain_max ] )
+
+        #
+        filepath = join( this.outdir,'%s_3panel.pdf'%tag)
+        savefig(filepath,pad_inches=0, bbox_inches='tight')
+        show()
+
+    #
+    def plot_radiation_axis_on_sphere( this, domain=None, kind = None, view = None ):
+
+        import matplotlib as mpl
+        from mpl_toolkits.mplot3d import Axes3D
+        from matplotlib.pyplot import figure, figaspect, plot, xlabel, ylabel, xlim, ylim, xscale, yscale, legend, subplot, grid, title, draw, show, savefig, axis
+        from numpy import mod,pi,hstack,array,ones,linalg,arange,zeros_like
+        from os.path import join
+
+        # Calc radiation axis: alpha beta gamma and x y z
+        kind = 'psi4' if kind is None else kind
+        domain = 'time' if domain is None else domain
+
+        #
+        gwylmo = this.gwylmo
+
+        #
+        if view is None:
+            view = (30,-60)
+
+        #
+        tag = 'td' if domain in ('t','td','time') else 'fd'
+
+        # Extract useful info
+        x,y,z = this.radiation_axis[tag+'_x'],this.radiation_axis[tag+'_y'],this.radiation_axis[tag+'_z']
+        alpha,beta,gamma = this.radiation_axis[tag+'_alpha'],this.radiation_axis[tag+'_beta'],this.radiation_axis[tag+'_gamma']
+        domain_vals = this.radiation_axis[tag+'_domain']
+
+        #
+        fig = figure( figsize=4*figaspect(1) )
+        ax = fig.add_subplot(111, projection='3d')
+        color = rgb(3)
+
+        #
+        plot_3d_mesh_sphere( ax, color='k', alpha=0.05, lw=1 )
+
+        #
+        gwylmo.__calc_radiated_quantities__(use_mask=False)
+        k = 0
+        jx,jy,jz = gwylmo.remnant['J'][k] / linalg.norm( gwylmo.remnant['J'][k] )
+        jfx,jfy,jfz = gwylmo.remnant['J'][-1] / linalg.norm( gwylmo.remnant['J'][-1] )
+
+        #
+        if tag == 'td':
+            #
+            mask = arange( gwylmo.startindex+1, gwylmo.endindex_by_frequency+1 )
+        else:
+            mask = (abs(gwylmo.f)>gwylmo.wstart_pn/(2*pi)) & (abs(gwylmo.f)<gwylmo.lm[2,2][kind].dt/4)
+
+
+        #
+        lx,ly,lz = (gwylmo.L1+gwylmo.L2)/linalg.norm( gwylmo.L1+gwylmo.L2 )#
+        ax.scatter( lx,ly,lz, marker='h', color='lawngreen', label='Initial $L$ (nrutils)',edgecolors='k' )
+
+        #
+        ax.scatter( jx,jy,jz,marker='o', c='dodgerblue', label='Initial $J$ (Radiated Est.)' )
+        ax.scatter( jfx,jfy,jfz,marker='s', c='dodgerblue', label='Final $J$ (Radiated Est.)',s=80,alpha=0.5 )
+
+        #
+        J = gwylmo.remnant['J']
+        absJ = zeros_like(J)
+        for k in range(J.shape[0]):
+            J[k] /= linalg.norm(J[k])
+            absJ[k] = J[k]
+        plot( J[:,0],J[:,1],J[:,2], label='$J(t)$ (Radiated Est.)' )
+
+        #
+        S1 = array([ gwylmo.raw_metadata.initial_bh_spin2x, gwylmo.raw_metadata.initial_bh_spin2y, gwylmo.raw_metadata.initial_bh_spin2z])
+        S2 = array([ gwylmo.raw_metadata.initial_bh_spin1x, gwylmo.raw_metadata.initial_bh_spin1y, gwylmo.raw_metadata.initial_bh_spin1z])
+        S = S1+S2
+        L = array([ gwylmo.raw_metadata.initial_angular_momentumx, gwylmo.raw_metadata.initial_angular_momentumy, gwylmo.raw_metadata.initial_angular_momentumz])
+        bbh_jx,bbh_jy,bbh_jz = (L+S)/linalg.norm( L+S )
+        ax.scatter( bbh_jx,bbh_jy,bbh_jz, label='Initial $J$ (BBH)', color='tomato', marker='o' )
+
+        #
+        sfx,sfy,sfz = gwylmo.Sf/linalg.norm(gwylmo.Sf)
+        ax.scatter( sfx,sfy,sfz, color='tomato', label='Final J (BBH)', marker='v' )
+
+        #
+        plot( x[mask],y[mask],z[mask], lw=2, color='grey', label='$\hat{V}$' )
+
+        #
+        xlabel('$x$')
+        ylabel('$y$');
+
+        axlim = 0.64*array([-1,1])
+        ax.set_xlim(axlim)
+        ax.set_ylim(axlim)
+        ax.set_zlim(axlim)
+
+        axis('off')
+
+        #
+        ax.view_init(view[0],view[1])
+
+        #
+        legend( loc=1, frameon=True )
+
+        #
+        filepath = join( this.outdir,'%s_sphere_el%i_az%i.pdf'%(tag,view[0],view[1]))
+        savefig(filepath,pad_inches=0, bbox_inches='tight')
+        show()
+
 
 # Calculate Widger D-Matrix Element
 def wdelement( ll,         # polar index (eigenvalue) of multipole to be rotated (set of m's for single ll )
