@@ -136,18 +136,18 @@ class gwylm_radiation_axis_workflow:
         #
         subplot(3,1,2,sharex=ax)
         reshift = lambda V: V - V[mask][0] + mod(V[mask][0],2*pi)
-        plot( domain_vals, reshift(alpha), color = clr[0], linewidth = lw, label=r'$\alpha$' )
-        plot( domain_vals, reshift(beta),  color = clr[1], linewidth = lw, label=r'$\beta$' )
-        plot( domain_vals, reshift(gamma), color = clr[2], linewidth = lw, label=r'$\gamma$' )
+        plot( abs(domain_vals), reshift(alpha), color = clr[0], linewidth = lw, label=r'$\alpha$' )
+        plot( abs(domain_vals), reshift(beta),  color = clr[1], linewidth = lw, label=r'$\beta$' )
+        plot( abs(domain_vals), reshift(gamma), color = clr[2], linewidth = lw, label=r'$\gamma$' )
         legend( frameon=False, loc='best' )
         ylim( lim( hstack([reshift(alpha)[mask],reshift(beta)[mask],reshift(gamma)[mask]]), dilate=0.1 ) )
         grid()
 
         #
         subplot(3,1,3,sharex=ax)
-        plot( domain_vals, reflect_unwrap(x), color = clr[0], linewidth = lw, label=r'$x$' )
-        plot( domain_vals, y,  color = clr[2], linewidth = lw, label=r'$y$' )
-        plot( domain_vals, z, color = clr[1], linewidth = lw, label=r'$z$' )
+        plot( abs(domain_vals), reflect_unwrap(x), color = clr[0], linewidth = lw, label=r'$x$' )
+        plot( abs(domain_vals), y,  color = clr[2], linewidth = lw, label=r'$y$' )
+        plot( abs(domain_vals), z, color = clr[1], linewidth = lw, label=r'$z$' )
         legend( frameon=False, loc='best' )
         ylim( lim( hstack([x[mask],y[mask],z[mask]]), dilate=0.1 ) )
         grid()
@@ -228,16 +228,14 @@ class gwylm_radiation_axis_workflow:
         plot( J[:,0],J[:,1],J[:,2], label='$J(t)$ (Radiated Est.)' )
 
         #
-        S1 = array([ gwylmo.raw_metadata.initial_bh_spin2x, gwylmo.raw_metadata.initial_bh_spin2y, gwylmo.raw_metadata.initial_bh_spin2z])
-        S2 = array([ gwylmo.raw_metadata.initial_bh_spin1x, gwylmo.raw_metadata.initial_bh_spin1y, gwylmo.raw_metadata.initial_bh_spin1z])
-        S = S1+S2
-        L = array([ gwylmo.raw_metadata.initial_angular_momentumx, gwylmo.raw_metadata.initial_angular_momentumy, gwylmo.raw_metadata.initial_angular_momentumz])
+        S = gwylmo.S
+        L = gwylmo.L
         bbh_jx,bbh_jy,bbh_jz = (L+S)/linalg.norm( L+S )
         ax.scatter( bbh_jx,bbh_jy,bbh_jz, label='Initial $J$ (BBH)', color='tomato', marker='o' )
 
         #
         sfx,sfy,sfz = gwylmo.Sf/linalg.norm(gwylmo.Sf)
-        ax.scatter( sfx,sfy,sfz, color='tomato', label='Final J (BBH)', marker='v' )
+        ax.scatter( sfx,sfy,sfz, color='tomato', label='Final $J$ (BBH)', marker='v' )
 
         #
         plot( x[mask],y[mask],z[mask], lw=2, color='grey', label='$\hat{V}$' )

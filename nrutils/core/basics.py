@@ -1063,11 +1063,11 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
     Y = array(Y)
     Z = array(Z)
 
-    # In the case of FD data, where domain values are split between pos and negative frequencies, flip the z convention for f<0 data
-    reflect_mask = domain_vals<0
-    X[reflect_mask] *= -1
-    Y[reflect_mask] *= -1
-    Z[reflect_mask] *= -1
+    # # In the case of FD data, where domain values are split between pos and negative frequencies, flip the z convention for f<0 data
+    # reflect_mask = domain_vals<0
+    # X[reflect_mask] *= -1
+    # Y[reflect_mask] *= -1
+    # Z[reflect_mask] *= -1
 
     # Given the optimal unit vector time series, calculate the related Euler angles
     # NOTE Eq. A3 of arxiv:1304.3176
@@ -1086,6 +1086,12 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
         # NOTE that spline_diff and spline_antidiff live in positive.maths
         gamma = - spline_antidiff( domain_vals, cos(beta) * spline_diff(domain_vals,alpha,k=k), k=k  )
         gamma = unwrap( gamma )
+        # Enforce like integration constant for neg and positive frequency gamma; this assumes time series will not have negative values (i.e. the code should work for TD and FD cases)
+        neg_mask = domain_vals<0
+        _mask = (-domain_vals)>0.01
+        mask_ =  domain_vals>0.01
+        if sum(neg_mask):
+            gamma[neg_mask] = gamma[neg_mask] - gamma[_mask][-1] + gamma[mask_][0]
     else:
         # NOTE that this is the same as above, but here we're choosing an integration constant such that the value is zero. Above, no explicit integration constant is chosen.
         gamma = 0
@@ -1105,7 +1111,7 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
 # Given dictionary of multipoles all with the same l, calculate the roated multipole with (l,mp)
 def rotate_wfarrs_at_all_times( l,                          # the l of the new multipole (everything should have the same l)
                                 m,                          # the m of the new multipole
-                                like_l_multipoles_dict,     # dictionary in the format { (l,m): array([t_column,+,x]) }
+                                like_l_multipoles_dict,     # dictionary in the format { (l,m): array([domain_values,+,x]) }
                                 euler_alpha_beta_gamma,
                                 ref_orientation = None ):             #
 

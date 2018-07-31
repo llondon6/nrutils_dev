@@ -2621,38 +2621,38 @@ class gwylm:
             #
             y_ = mkgwf(wfarr)
 
-            # ---------------------------------------------------- #
-            # Enforce internal sign convention for Psi4 multipoles
-            '''
-            NOTE that the change enforced here is equivalent to changing
-            the convention used when defining the time domain phase: e^i*phi
-            or e^-i*phi. NOTE that this convention is independent of the
-            symmetries of the radiation (e.g. Ylm = -1^l * conj(Yl,-m) ).
-            '''
-            # ---------------------------------------------------- #
+            # # ---------------------------------------------------- #
+            # # Enforce internal sign convention for Psi4 multipoles
+            # '''
+            # NOTE that the change enforced here is equivalent to changing
+            # the convention used when defining the time domain phase: e^i*phi
+            # or e^-i*phi. NOTE that this convention is independent of the
+            # symmetries of the radiation (e.g. Ylm = -1^l * conj(Yl,-m) ).
+            # '''
+            # # ---------------------------------------------------- #
 
-            # Try to determine the sign convention used to define phase. Note that this will be determined only once for the current object based on the l=m=2 multipole.
-            if this.external_sign_convention is None:
-                msk_ = y_.amp > 0.0001*amax(y_.amp)
-                # msk_ = y_.amp > 0.01*amax(y_.amp)
-                if int(scipy_version.split('.')[1])<16:
-                    # Account for old scipy functionality
-                    external_sign_convention = sign(this.L[-1]) * sign(m) * mode( sign( y_.dphi[msk_] ) )[0][0]
-                    initially_msign_matches_wsign = sign(m) == mode( sign( y_.dphi[msk_] ) )[0][0]
-                else:
-                    # Account for modern scipy functionality
-                    external_sign_convention = sign(this.L[-1]) * sign(m) * mode( sign( y_.dphi[msk_] ) ).mode[0]
-                    initially_msign_matches_wsign = sign(m) == mode( sign( y_.dphi[msk_] ) ).mode[0]
-                if initially_msign_matches_wsign: alert('## initall, m and td freq have same sign.')
-                this.external_sign_convention = external_sign_convention
-
-            if this.M_RELATIVE_SIGN_CONVENTION != this.external_sign_convention:
-                wfarr[:,2] = -wfarr[:,2]
-                y_ = mkgwf(wfarr)
-                # Let the people know what is happening.
-                msg = yellow('Re-orienting waveform phase')+' to be consistent with internal sign convention for Psi4, where sign(dPhi/dt)=%i*sign(m)*sign(this.L[-1]).' % this.M_RELATIVE_SIGN_CONVENTION + ' Note that the internal sign convention is defined in ... nrutils/core/__init__.py as "M_RELATIVE_SIGN_CONVENTION". This message has appeared becuase the waveform is determioned to obey and sign convention: sign(dPhi/dt)=%i*sign(m)*sign(this.L[-1]). Note the appearance of the initial z angular momentum, this.L[-1].'%(this.external_sign_convention)
-                thisfun=inspect.stack()[0][3]
-                warning( msg, verbose=this.verbose )
+            # # Try to determine the sign convention used to define phase. Note that this will be determined only once for the current object based on the l=m=2 multipole.
+            # if this.external_sign_convention is None:
+            #     msk_ = y_.amp > 0.0001*amax(y_.amp)
+            #     # msk_ = y_.amp > 0.01*amax(y_.amp)
+            #     if int(scipy_version.split('.')[1])<16:
+            #         # Account for old scipy functionality
+            #         external_sign_convention = sign(this.L[-1]) * sign(m) * mode( sign( y_.dphi[msk_] ) )[0][0]
+            #         initially_msign_matches_wsign = sign(m) == mode( sign( y_.dphi[msk_] ) )[0][0]
+            #     else:
+            #         # Account for modern scipy functionality
+            #         external_sign_convention = sign(this.L[-1]) * sign(m) * mode( sign( y_.dphi[msk_] ) ).mode[0]
+            #         initially_msign_matches_wsign = sign(m) == mode( sign( y_.dphi[msk_] ) ).mode[0]
+            #     if initially_msign_matches_wsign: alert('## initall, m and td freq have same sign.')
+            #     this.external_sign_convention = external_sign_convention
+            #
+            # if this.M_RELATIVE_SIGN_CONVENTION != this.external_sign_convention:
+            #     wfarr[:,2] = -wfarr[:,2]
+            #     y_ = mkgwf(wfarr)
+            #     # Let the people know what is happening.
+            #     msg = yellow('Re-orienting waveform phase')+' to be consistent with internal sign convention for Psi4, where sign(dPhi/dt)=%i*sign(m)*sign(this.L[-1]).' % this.M_RELATIVE_SIGN_CONVENTION + ' Note that the internal sign convention is defined in ... nrutils/core/__init__.py as "M_RELATIVE_SIGN_CONVENTION". This message has appeared becuase the waveform is determioned to obey and sign convention: sign(dPhi/dt)=%i*sign(m)*sign(this.L[-1]). Note the appearance of the initial z angular momentum, this.L[-1].'%(this.external_sign_convention)
+            #     thisfun=inspect.stack()[0][3]
+            #     warning( msg, verbose=this.verbose )
 
             # use array data to construct gwf object with multipolar fields
             if not output:
@@ -3307,7 +3307,7 @@ class gwylm:
 
         if this.M_RELATIVE_SIGN_CONVENTION != this.external_sign_convention:
             # Let the people know what is happening.
-            msg = yellow('[Verify stage] Re-orienting waveform phase')+' to be consistent with internal sign convention for Psi4, where sign(dPhi/dt)=%i*sign(m)*sign(this.L[-1]).' % this.M_RELATIVE_SIGN_CONVENTION + ' Note that the internal sign convention is defined in ... nrutils/core/__init__.py as "M_RELATIVE_SIGN_CONVENTION". This message has appeared becuase the waveform is determioned to obey and sign convention: sign(dPhi/dt)=%i*sign(m)*sign(this.L[-1]). Note the appearance of the initial z angular momentum, this.L[-1].'%(this.external_sign_convention)
+            msg = yellow('[Verify stage] Re-orienting waveform phase')+' to be consistent with internal sign convention for Psi4, where sign(dPhi/dt)=%i*sign(m)*sign(this.L[-1]).' % this.M_RELATIVE_SIGN_CONVENTION + ' Note that the internal sign convention is defined in ... nrutils/core/__init__.py as "M_RELATIVE_SIGN_CONVENTION". This message has appeared becuase the waveform is determined to obey and sign convention: sign(dPhi/dt)=%i*sign(m)*sign(this.L[-1]). Note the appearance of the initial z angular momentum, this.L[-1].'%(this.external_sign_convention)
             thisfun=inspect.stack()[0][3]
             warning( msg, verbose=this.verbose )
             #
@@ -3762,7 +3762,7 @@ class gwylm:
                         # print '>> (lp,mp)=(%i,%i)\n'%(lp,mp)
                         like_l_multipoles.append( this.lm[lp,mp][kind] )
 
-                # Rotate the curent multipole
+                # Rotate the current multipole
                 rotated_gwf = this.lm[lm][kind].__rotate_frame_at_all_times__( like_l_multipoles, euler_alpha_beta_gamma, ref_orientation )
 
                 # Store it to the output gwylm object
