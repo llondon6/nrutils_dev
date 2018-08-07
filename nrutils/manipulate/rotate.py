@@ -10,7 +10,7 @@ class gwylm_radiation_axis_workflow:
     '''
 
     #
-    def __init__( this, gwylmo, plot=False, outdir=None, save=False, verbose=True ):
+    def __init__( this, gwylmo, kind=None, plot=False, outdir=None, save=False, verbose=True ):
 
         #
         from os.path import expanduser
@@ -27,15 +27,18 @@ class gwylm_radiation_axis_workflow:
         rax = this.radiation_axis
 
         #
+        if kind is None: kind = 'psi4'
+
+        #
         if outdir is None: outdir = '~/Desktop/'+gwylmo.simname
         outdir = expanduser( outdir ); this.outdir = outdir
         mkdir( this.outdir, verbose=verbose )
 
         # Calculate radiation axes in time and frequency domain
         alert('Calculating TD Radiation Axis Series','gwylm_radiation_axis_workflow',verbose=verbose)
-        td_alpha,td_beta,td_gamma,td_x,td_y,td_z,td_domain = this.calc_radiation_axis( domain = 'time', kind = 'psi4'  )
+        td_alpha,td_beta,td_gamma,td_x,td_y,td_z,td_domain = this.calc_radiation_axis( domain = 'time', kind = kind  )
         alert('Calculating FD Radiation Axis Series','gwylm_radiation_axis_workflow',verbose=verbose)
-        fd_alpha,fd_beta,fd_gamma,fd_x,fd_y,fd_z,fd_domain = this.calc_radiation_axis( domain = 'freq', kind = 'psi4'  )
+        fd_alpha,fd_beta,fd_gamma,fd_x,fd_y,fd_z,fd_domain = this.calc_radiation_axis( domain = 'freq', kind = kind  )
 
         # Store time domain data
         rax['td_alpha'],rax['td_beta'],rax['td_gamma'] = td_alpha,td_beta,td_gamma
@@ -48,19 +51,22 @@ class gwylm_radiation_axis_workflow:
         rax['fd_domain'] = fd_domain
 
         #
-        alert('Plotting TD Radiation Axis Series','gwylm_radiation_axis_workflow',verbose=verbose)
-        this.plot_radiation_axis_3panel( domain='time' )
-        alert('Plotting FD Radiation Axis Series','gwylm_radiation_axis_workflow',verbose=verbose)
-        this.plot_radiation_axis_3panel( domain='freq' )
+        if plot:
 
-        #
-        view = None
-        this.plot_radiation_axis_on_sphere( domain='time', view=view )
-        this.plot_radiation_axis_on_sphere( domain='freq', view=view )
-        #
-        view = (90,270)
-        this.plot_radiation_axis_on_sphere( domain='time', view=view )
-        this.plot_radiation_axis_on_sphere( domain='freq', view=view )
+            #
+            alert('Plotting TD Radiation Axis Series','gwylm_radiation_axis_workflow',verbose=verbose)
+            this.plot_radiation_axis_3panel( domain='time' )
+            alert('Plotting FD Radiation Axis Series','gwylm_radiation_axis_workflow',verbose=verbose)
+            this.plot_radiation_axis_3panel( domain='freq' )
+
+            #
+            view = None
+            this.plot_radiation_axis_on_sphere( domain='time', view=view )
+            this.plot_radiation_axis_on_sphere( domain='freq', view=view )
+            #
+            view = (90,270)
+            this.plot_radiation_axis_on_sphere( domain='time', view=view )
+            this.plot_radiation_axis_on_sphere( domain='freq', view=view )
 
     # Encapsulation of calc angles given domain and type
     def calc_radiation_axis( this, domain=None, kind = None ):
@@ -88,6 +94,7 @@ class gwylm_radiation_axis_workflow:
 
         #
         from matplotlib.pyplot import figure, figaspect, plot, xlabel, ylabel, xlim, ylim, xscale, yscale, legend, subplot, grid, title, draw, show, savefig
+        from matplotlib.pyplot import close as close_figure
         from numpy import mod,pi,hstack,array,ones
         from os.path import join
 
@@ -157,9 +164,10 @@ class gwylm_radiation_axis_workflow:
         ax.set_xlim( [ domain_min, domain_max ] )
 
         #
-        filepath = join( this.outdir,'%s_3panel.pdf'%tag)
+        filepath = join( this.outdir,'%s_%s_3panel.pdf'%(gwylmo.simname,tag))
         savefig(filepath,pad_inches=0, bbox_inches='tight')
-        show()
+        close_figure()
+        # show()
 
     #
     def plot_radiation_axis_on_sphere( this, domain=None, kind = None, view = None ):
@@ -167,6 +175,7 @@ class gwylm_radiation_axis_workflow:
         import matplotlib as mpl
         from mpl_toolkits.mplot3d import Axes3D
         from matplotlib.pyplot import figure, figaspect, plot, xlabel, ylabel, xlim, ylim, xscale, yscale, legend, subplot, grid, title, draw, show, savefig, axis
+        from matplotlib.pyplot import close as close_figure
         from numpy import mod,pi,hstack,array,ones,linalg,arange,zeros_like
         from os.path import join
 
@@ -258,9 +267,10 @@ class gwylm_radiation_axis_workflow:
         legend( loc=1, frameon=True )
 
         #
-        filepath = join( this.outdir,'%s_sphere_el%i_az%i.pdf'%(tag,view[0],view[1]))
+        filepath = join( this.outdir,'%s_%s_sphere_el%i_az%i.pdf'%(gwylmo.simname,tag,view[0],view[1]))
         savefig(filepath,pad_inches=0, bbox_inches='tight')
-        show()
+        close_figure()
+        # show()
 
 
 # Calculate Widger D-Matrix Element
