@@ -2190,7 +2190,7 @@ class gwylm:
 
         # Store the extraction parameter and level
         this.extraction_parameter = extraction_parameter
-        this.level = level
+        this.level = this.extraction_map_dict['level_map'][extraction_parameter]
 
         # Store the extraction radius if a map is provided in the handler file
         if 'loadhandler' in scentry_obj.__dict__:

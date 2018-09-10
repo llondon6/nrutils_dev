@@ -338,6 +338,7 @@ class match:
         #
         from numpy import angle,sqrt,exp,log,arctan,sin,cos
         from numpy.fft import ifft
+        from pylab import concatenate,argwhere
 
         #
         error('the code here is still in development!')
@@ -352,45 +353,44 @@ class match:
         norm11,norm21 = n1fun(h1dat),n1fun(h2dat)
         norm12,norm22 = n2fun(h1dat),n2fun(h2dat)
         N2 = abs(norm22); sigma1 = angle(norm22)
-        print norm11, norm21
-        print abs(norm12), abs(norm22)
 
         #
         int1 = h1dat * h2dat.conj() / this.psd
         int2 = h1dat.conj()[::-1] * h2dat.conj() / this.psd
-        num_samples = len(int2)
-        fftlen = int( 2 ** ( int(log( num_samples )/log(2)) + 1.0 + 2.0 ) )
 
+
+        # Position in freq array at f_min. This would be to get the point for left_padding
+        f_min_pos=argwhere(freq>=f_min)[0,0]
+
+        # Define zero padding arrays for left and right padding: This is to add the data between 0 and f_min frequencies (both positive and negative)
+        pad_left  = zeros(f_min_pos)
+        pad_right = zeros(f_min_pos-1)
+
+        # Get length in power of 2 to pad the mid-level data
+        fn=int(log(2*f_min_pos + len(int1) - 1)/log(2) + pad_exp)
+        mid_pad_len = 2**fn - len(pad_left) - len(pad_right) - len(int1)
+        mid_pad = zeros(mid_pad_len)
+
+        # Pad the integrals with the above defined zero-pads for obtaining the right inverse freq transform
+        dat1=concatenate((pad_left,int1[:Lf/2],mid_pad,int1[Lf/2+1:],pad_right))
+        dat2=concatenate((pad_left,int2[:Lf/2],mid_pad,int2[Lf/2+1:],pad_right))
+
+
+        N = len(dat1)
         #
-        FFTs = [ ifft(int1,n=fftlen)*fftlen, ifft(int2,n=fftlen)*fftlen ]
+        FFTs = [ ifft(dat1,n=N)*N, ifft(dat2,n=N)*N ]
 
         # Content of alloptmatches
         def alloptmatches(psi):
-            #
-            h1norm = sqrt( norm11 + (norm12*exp(1j*4*psi)).real  )
-            #
-            sumFFTs = FFTs[0]*exp( 1j*2*psi ) + FFTs[1]*exp( -1j*2*psi )
-            #
-            absMatch = abs(sumFFTs); sigma2 = angle( sumFFTs )
-            # from matplotlib import pyplot as pp
-            # pp.figure()
-            # pp.plot( absMatch )
-            # pp.show()
-            #
-            polOptMatches = absMatch * sqrt(  ((norm21**2)-(N2**2))*(norm21-N2*cos(sigma1+2*sigma2))  ) / ( ((norm21**2)-(N2**2))*h1norm )
-            #
-            optMatch = max( polOptMatches )
-            # from matplotlib import pyplot as pp
-            # pp.figure()
-            # pp.plot( absMatch )
-            # pp.show()
 
-            #
-            ## Not needed:
-            # besttime = argmax(polOptMatches)
-            # sigma2opt = sigma2[besttime];
-            # optpol = arctan2( norm21*sin(sigma2opt)+N2*sin(sigma1+sigma2opt) , norm21*cos(sigma2opt)-N2*cos(sigma1+sigma2opt) ) / 2
-            #
+            h1norm = sqrt( norm11 + (norm12*exp(1j*4*psi)).real  )
+
+            sumFFTs = FFTs[0]*exp( 1j*2*psi ) + FFTs[1]*exp( -1j*2*psi )
+
+            absMatch = abs(sumFFTs); sigma2 = angle( sumFFTs )
+            polOptMatches = (absMatch/h1norm)  * sqrt((norm21-N2*cos(sigma1+2*sigma2))/ ( ((norm21**2)-(N2**2))))
+
+            optMatch = max( polOptMatches )
             return optMatch
 
         #
