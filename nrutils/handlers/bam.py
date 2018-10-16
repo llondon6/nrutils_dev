@@ -186,11 +186,12 @@ def learn_metadata( metadata_file_location ):
         x.note += msg
         #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
         # NOTE that these parameters were defined above, and so do not need to be redefined here.
-        S1,S2,S = None,None,None
-        L1,L2,L = None,None,None
-        R1,R2 = None,None
-        P1,P2 = None,None
-        J = None
+        # NOTE that the lines below are commented out resulting in the afterjunk quantities being the initial quantities in cases where the data are not properly formatted. This is confusing. I'm sorry. 
+        #S1,S2,S = None,None,None
+        #L1,L2,L = None,None,None
+        #R1,R2 = None,None
+        #P1,P2 = None,None
+        #J = None
 
     # Extract and store the initial adm energy
     x.madm = y.initial_ADM_energy
