@@ -1173,3 +1173,71 @@ def rotate_wfarrs_at_all_times( l,                          # the l of the new m
 
     # Return the answer
     return ans
+
+
+
+# Careful function to find peak index for BBH waveform cases
+def find_amp_peak_index( t, amp, plot = False ):
+
+    '''
+    Careful function to find peak index for BBH waveform cases
+    e.g. when numerical junk is largeer than physical peak.
+    '''
+
+    #
+    from numpy import log,argmax,linspace
+    if plot:
+        from matplotlib.pyplot import plot,yscale,xscale,axvline,show,figure,xlim
+
+    # defiune function for downsampling to speed up algo
+    def downsample(xx,yy,N):
+        from positive import spline
+        xx_ = spline( xx, xx )(linspace(xx[0],xx[-1],N))
+        return xx_, spline(xx,yy)(xx_)
+
+    # mask and downsample
+    mask =amp>0
+    tt = t[mask]
+    lamp = log( amp[mask] )
+    tt_,lamp_ = downsample(tt,lamp,300)
+
+    # ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~ #
+    Nknots = 6 # NOTE that this number is KEY to the algorithm: its related to the smalles number of lines needed to resolve two peaks! (4 lines) peak1 is junk peak2 is physical; if Nknots is too large, clustering of knots happens
+    # ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~ #
+    
+    knots,_ = romline(tt_,lamp_,Nknots,positive=True,verbose=True)
+    if not (0 in knots):
+        knots = [0] + [ knot for knot in knots ]
+        Nknots += 1
+
+    if plot:
+        figure()
+        axvline( tt_[knots[ int(Nknots/2) ]] )
+        plot( tt, lamp )
+        plot( tt_, lamp_ )
+        plot( tt_[knots], lamp_[knots], color='r', lw=3, ls = '--' )
+
+    #
+    pks,locs = findpeaks(lamp_[knots])
+
+    # Clean amplitude if needed
+    if len(pks)>1: # if the peak is not the first knot == if this is not a ringdown only waveform
+        refk = find( t>tt_[knots[ int(Nknots/2) ]] )[0]
+        clean_amp = amp.copy()
+        clean_amp[0:refk] = amp[ find( t>tt_[knots[ 0 ]] )[0] ]
+    else:
+        # nothing need be done
+        clean_amp = amp
+
+    # Find peak index
+    k_amp_max = argmax( clean_amp )
+
+    if plot:
+        axvline( t[k_amp_max], color='k' )
+        plot( t, log(clean_amp) )
+        xlim( t[k_amp_max]-200,t[k_amp_max]+200 )
+        show()
+
+    # Return answer
+    ans = k_amp_max
+    return ans

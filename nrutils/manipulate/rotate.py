@@ -10,7 +10,7 @@ class gwylm_radiation_axis_workflow:
     '''
 
     #
-    def __init__( this, gwylmo, kind=None, plot=False, outdir=None, save=False, verbose=True ):
+    def __init__( this, gwylmo, kind=None, plot=True, outdir=None, save=True, verbose=True ):
 
         #
         from os.path import expanduser
@@ -30,9 +30,13 @@ class gwylm_radiation_axis_workflow:
         if kind is None: kind = 'psi4'
 
         #
+        this.save = save
+
+        #
         if outdir is None: outdir = '~/Desktop/'+gwylmo.simname
-        outdir = expanduser( outdir ); this.outdir = outdir
-        mkdir( this.outdir, verbose=verbose )
+        if save:
+            outdir = expanduser( outdir ); this.outdir = outdir
+            mkdir( this.outdir, verbose=verbose )
 
         # Calculate radiation axes in time and frequency domain
         alert('Calculating TD Radiation Axis Series','gwylm_radiation_axis_workflow',verbose=verbose)
@@ -164,10 +168,11 @@ class gwylm_radiation_axis_workflow:
         ax.set_xlim( [ domain_min, domain_max ] )
 
         #
-        filepath = join( this.outdir,'%s_%s_3panel.pdf'%(gwylmo.simname,tag))
-        savefig(filepath,pad_inches=0, bbox_inches='tight')
-        close_figure()
-        # show()
+        if this.save:
+            filepath = join( this.outdir,'%s_%s_3panel.pdf'%(gwylmo.simname,tag))
+            savefig(filepath,pad_inches=0, bbox_inches='tight')
+            close_figure()
+            # show()
 
     #
     def plot_radiation_axis_on_sphere( this, domain=None, kind = None, view = None ):
@@ -267,10 +272,11 @@ class gwylm_radiation_axis_workflow:
         legend( loc=1, frameon=True )
 
         #
-        filepath = join( this.outdir,'%s_%s_sphere_el%i_az%i.pdf'%(gwylmo.simname,tag,view[0],view[1]))
-        savefig(filepath,pad_inches=0, bbox_inches='tight')
-        close_figure()
-        # show()
+        if this.save:
+            filepath = join( this.outdir,'%s_%s_sphere_el%i_az%i.pdf'%(gwylmo.simname,tag,view[0],view[1]))
+            savefig(filepath,pad_inches=0, bbox_inches='tight')
+            close_figure()
+            # show()
 
 
 # Calculate Widger D-Matrix Element
@@ -366,37 +372,37 @@ def wdmatrix( l,                # polar l
     #
     return D
 
-# Given an array of complex valued waveform timeseries, and the related mutipolar spherical indeces, as well as the desired rotation angles, rotate the waveform set
-def mprotate( mpdict,           # dictionary or (l,m): complex__time_series_multipole
-              angles,           # three euler angles in order alpha beta gamma
-              verbose = None ): # Let the people know
-
-    # Import useful things
-    from numpy import array, arange, dot
-
-    # Validate the mpdict input
-
-    # Build list of l values; roations will be allied one l at a time
-    lrange = sorted( list(set( [ lm[0] for lm in mpdict.keys() ] )) )
-
-    # A basic check for angles input, more needed
-    if len(angles) != 3:
-        msg = 'angles input must be three floats in alpha beta gamma order'
-        error(msg,'mprotate')
-    for ang in angles:
-        if not isinstance(ang,(float,int)):
-            msg = 'angles must be float or int'
-            error(msg,'mprotate')
-
-    # For each l value
-    for l in lrange:
-
-        # Calculate the m range to use
-        mrange = sorted( [ lm[-1] for lm in mpdict.keys() if l==lm[0] ] )
-
-        # Calculate the related d matrix
-        alpha,beta,gamma = angles
-        D = wdmatrix( l, mrange, alpha, beta, gamma )
-
-        # For all time coordinates (the related indeces)
-        tindmap = range( len( mpdict[ mpdict ] ) )
+# # Given an array of complex valued waveform timeseries, and the related mutipolar spherical indeces, as well as the desired rotation angles, rotate the waveform set
+# def mprotate( mpdict,           # dictionary or (l,m): complex__time_series_multipole
+#               angles,           # three euler angles in order alpha beta gamma
+#               verbose = None ): # Let the people know
+#
+#     # Import useful things
+#     from numpy import array, arange, dot
+#
+#     # Validate the mpdict input
+#
+#     # Build list of l values; roations will be allied one l at a time
+#     lrange = sorted( list(set( [ lm[0] for lm in mpdict.keys() ] )) )
+#
+#     # A basic check for angles input, more needed
+#     if len(angles) != 3:
+#         msg = 'angles input must be three floats in alpha beta gamma order'
+#         error(msg,'mprotate')
+#     for ang in angles:
+#         if not isinstance(ang,(float,int)):
+#             msg = 'angles must be float or int'
+#             error(msg,'mprotate')
+#
+#     # For each l value
+#     for l in lrange:
+#
+#         # Calculate the m range to use
+#         mrange = sorted( [ lm[-1] for lm in mpdict.keys() if l==lm[0] ] )
+#
+#         # Calculate the related d matrix
+#         alpha,beta,gamma = angles
+#         D = wdmatrix( l, mrange, alpha, beta, gamma )
+#
+#         # For all time coordinates (the related indeces)
+#         tindmap = range( len( mpdict[ mpdict ] ) )

@@ -387,6 +387,7 @@ class scentry:
             # extraction_map_dict['radius_map'] maps the extraction radius number to the extraction radius in units of M
             # extraction_map_dict['level_map'] maps the extraction radius number to appropriate level number. This one only applies to BAM.
         else:
+            error('nrutils must be provided a infer_default_level_and_extraction_parameter method to map between extraction radii and extraction parameter. For some NR groups, eg GT, this map is trivial: extraction_parameter = extraction_radius. Data cannot be loaded unless this is sorted. See the bam or maya handler files for reference.')
             # NOTE that otherwise, values from the configuration file will be used
             this.default_extraction_par = this.config.default_par_list[0]
             this.default_level = this.config.default_par_list[1]
@@ -1329,24 +1330,39 @@ class gwf:
         this.dphi   = intrp_diff( this.t, this.phi )                # Derivative of phase, last point interpolated to preserve length
         # this.dphi   = diff( this.phi )/this.dt                # Derivative of phase, last point interpolated to preserve length
 
-        this.k_amp_max = argmax(this.amp)                           # index location of max ampitude
+
+        # Only use the smooth part of the amplitude to determine the peak location. This is needed whenthe junk radiation has a higher amplitude than the physical peak.
+        #mask = smoothest_part( this.amp )
+        #this.k_amp_max = argmax( this.amp[mask[0]:] ) + mask[0]
+        # this.k_amp_max = argmax( this.m * this.dphi * this.amp )
+        # this.k_amp_max = argmax( this.amp )
+        # print this.l, this.m
+        this.k_amp_max = find_amp_peak_index( this.t, this.amp, plot=False ) # function lives in basics
+        # this.k_amp_max = argmax(this.amp)                           # index location of max ampitude
 
 
-        # Handle larger junk radiation
-        this.intrp_t_amp_max = intrp_argmax(this.amp,domain=this.t) # Interpolated time coordinate of max
+        # Estimate true time location of peak amplitude
+        try:
+            this.intrp_t_amp_max = intrp_argmax(clean_amp,domain=this.t) # Interpolated time coordinate of max
+        except:
+            this.intrp_t_amp_max = this.t[this.k_amp_max]
 
-        # If the junk radiation has a higher amplitude than the "merger", then we must take care:
-        # NOTE, here will use a simple heuristic
-        start_chunk = this.t[find(this.amp>0)[0]] + 200 # (M)
-        __t__ = this.t
-        __t__ -= __t__[0]
-        __dt__ = __t__[1]-__t__[0]
-        __k__ = int( start_chunk/__dt__ )
-        if max(this.amp[:__k__]) > max(this.amp[__k__:]):
-            warning(red('The junk radiation appears to have a larger amplitude than that of merger, so we are going to be careful about how we characterize where the peak is.'))
-            if diff(lim(this.t))>start_chunk:
-                this.intrp_t_amp_max = this.t[__k__] + intrp_argmax( this.amp[(__k__+1):], domain=this.t )
-                this.k_amp_max = __k__ + argmax(this.amp[ __k__+1 : ])
+        # # If the junk radiation has a higher amplitude than the "merger", then we must take care:
+        # # NOTE, here will use a simple heuristic
+        # start_chunk = this.t[find(this.amp>0)[0]] + 200 # (M)
+        # __t__ = this.t
+        # __t__ -= __t__[0]
+        # __dt__ = __t__[1]-__t__[0]
+        # __k__ = int( start_chunk/__dt__ )
+        #
+        # try:
+        #     if max(this.amp[:__k__]) > max(this.amp[__k__:]):
+        #         warning(red('The junk radiation appears to have a larger amplitude than that of merger, so we are going to be careful about how we characterize where the peak is.'))
+        #         if diff(lim(this.t))>start_chunk:
+        #             this.intrp_t_amp_max = this.t[__k__] + intrp_argmax( this.amp[(__k__+1):], domain=this.t )
+        #             this.k_amp_max = __k__ + argmax(this.amp[ __k__+1 : ])
+        # except:
+        #     _ = _
 
 
         # ## Diagnostic code
@@ -2190,7 +2206,11 @@ class gwylm:
 
         # Store the extraction parameter and level
         this.extraction_parameter = extraction_parameter
-        this.level = this.extraction_map_dict['level_map'][extraction_parameter]
+        # print this.extraction_map_dict['level_map']
+        if this.extraction_map_dict['level_map']:
+            this.level = this.extraction_map_dict['level_map'][extraction_parameter]
+        else:
+            this.level = this.extraction_parameter
 
         # Store the extraction radius if a map is provided in the handler file
         if 'loadhandler' in scentry_obj.__dict__:
@@ -3373,6 +3393,94 @@ class gwylm:
         ans = recomposed_wfarr
         return ans
 
+    #
+    def getframe(this,frame_type,verbose=None,domain=None):
+
+        #
+        if domain is None: domain = 'time'
+
+        #
+        if not (domain in ('t','time')):
+            error('this method only handles time domain frames for the time being')
+
+        #
+        valid_frames = ('coprecessing','cp','jt','jinit')
+
+        #
+        if not (frame_type in valid_frames):
+            error( 'invalid/unknown frame type given' )
+
+    #
+    def __calc_j_of_t_frame__(this,verbose=None):
+
+        #
+        from numpy.linalg import norm
+        from numpy import arccos,arctan2,array,cos,sin,dot,zeros,ones
+        from scipy.interpolate import InterpolatedUnivariateSpline as IUS
+
+        #
+        this.__calc_radiated_quantities__(use_mask=False)
+
+        # get time series for radiated quantities
+        t = this.remnant['time_used']
+
+        #
+        J = this.remnant['J']
+        J_norm = norm(J, axis=1)
+        thetaJ = zeros( len(J_norm) )
+        phiJ   = zeros( len(J_norm) )
+        for k in range ( len(J_norm) ):
+            thetaJ[k] = arccos(J[k,2]/J_norm[k])
+            phiJ[k]   = arctan2(J[k,1],J[k,0])
+        #
+        phiJ_spl  = IUS(t, phiJ, k=5)
+        dp_dt_spl = phiJ_spl.derivative()
+        dp_dt     = dp_dt_spl(t)
+        # calculate zeta according to the minimal rotation condition: Eq. 18 of arxiv::1110.2965
+        dz_dt = -dp_dt*cos(thetaJ)
+        # calculate zeta
+        dz_dt_spl = IUS(t, dz_dt, k=5)
+        zeta_spl  = dz_dt_spl.antiderivative()
+        zeta      = zeta_spl(t)
+
+        # Define gamma and beta accordingly
+        beta  = -thetaJ
+        gamma = -phiJ
+        # Define alpha such that initial L is aling x
+        L_new = rotate3 ( this.L1 + this.L2, 0, beta[0], gamma[0] )
+        zeta0 = arctan2( L_new.T[1], L_new.T[0] )
+        alpha = -( zeta - zeta[0] + zeta0 )
+
+        # Bundle rotation angles
+        angles = [ alpha, beta, gamma ]
+
+        # Perform rotation
+        return this.__rotate_frame_at_all_times__(angles)
+
+
+    # output corotating waveform
+    def __calc_coprecessing_frame__(this,verbose=None):
+
+        #
+        from nrutils.manipulate.rotate import gwylm_radiation_axis_workflow
+
+        #
+        if verbose is None: verbose = this.verbose
+
+        #
+        foo = gwylm_radiation_axis_workflow(this,plot=False,save=False,verbose=this.verbose)
+
+        #
+        if verbose: alert('Storing radiation axis information to this.radiation_axis_info')
+        this.radiation_axis_info = foo
+
+        #
+        alpha = foo.radiation_axis['td_alpha']
+        beta = foo.radiation_axis['td_beta']
+        gamma = foo.radiation_axis['td_gamma']
+
+        #
+        return this.__rotate_frame_at_all_times__( [gamma,-beta,alpha] )
 
     # Recompose the waveforms at a sky position about the source
     # NOTE that this function returns a gwf object
@@ -4273,11 +4381,13 @@ def lswfafd( apx      ='IMRPhenomPv2',    # Approximant name; must be compatible
 
 # Characterize END of time domain waveform (POST RINGDOWN)
 class gwfcharend:
+
     def __init__(this,ylm):
         # Use amplitude
         this.__characterize_amplitude__(ylm)
         # Use frequency
         this.__characterize_frequency__(ylm)
+
     # Characterize the end of the waveform using values of the amplitude
     def __characterize_amplitude__(this,ylm):
         # Import useful things
@@ -4290,6 +4400,11 @@ class gwfcharend:
         t = t[mask]
         la = log( amp )
         tt = t
+        # ax,fig = ylm.plot()
+        # from matplotlib.pyplot import axvline,sca,show
+        # sca(ax[0]); axvline( ylm.t[ylm.k_amp_max] )
+        # print '>> ',tt.shape, la.shape
+        # show()
         knots,rl = romline(tt,la,2)
         # Check for lack of noise floor (in the case of sims stopped before noise floor reached)
         # NOTE that in this case no effective windowing is applied
@@ -4330,7 +4445,7 @@ class gwfcharstart:
                   verbose   = False ):
 
         #
-        from numpy import arange,diff,where,array,ceil,mean
+        from numpy import arange,diff,where,array,ceil,mean,ones_like
         from numpy import histogram as hist
         thisfun=this.__class__.__name__
 
