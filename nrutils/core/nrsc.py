@@ -4836,7 +4836,7 @@ def lvcnr5_to_gwylm(h5dir,lm=None,verbose=True,dt=0.25,lmax=6,clean=True):
             external_sign_convention = sign(this.L[-1]) * sign(m) * mode( sign( pha ) ).mode[0]
         if M_RELATIVE_SIGN_CONVENTION != external_sign_convention:
             pha = -pha
-            msg = yellow('Re-orienting waveform phase')+' to be consistent with internal sign convention for Strain, where sign(dPhi/dt)=%i*sign(m).' % M_RELATIVE_SIGN_CONVENTION + ' Note that the internal sign convention is defined in ... nrutils/core/__init__.py as "M_RELATIVE_SIGN_CONVENTION". This message has appeared becuase the waveform is determioned to obey and sign convention: sign(dPhi/dt)=%i*sign(m).'%(external_sign_convention)
+            msg = yellow('Re-orienting waveform phase')+' to be consistent with internal sign convention for Strain, where sign(dPhi/dt)=%i*sign(m).' % M_RELATIVE_SIGN_CONVENTION + ' Note that the internal sign convention is defined in ... nrutils/core/__init__.py as "M_RELATIVE_SIGN_CONVENTION". This message has appeared becuase the waveform is determioned to obey the sign convention: sign(dPhi/dt)=%i*sign(m).'%(external_sign_convention)
             thisfun=inspect.stack()[0][3]
             if verbose: alert( msg )
 
