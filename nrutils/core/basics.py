@@ -950,10 +950,10 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
     '''
 
     # Import usefuls
-    from scipy.linalg import eig
+    from scipy.linalg import eig,norm
     from scipy.integrate import cumtrapz
-    from numpy import arctan2,sin,arcsin,pi,ones,arccos
-    from numpy import unwrap,argmax,cos,array,sqrt,sign
+    from numpy import arctan2,sin,arcsin,pi,ones,arccos,double
+    from numpy import unwrap,argmax,cos,array,sqrt,sign,argmin
 
     # Handle optional input
     if ref_orientation is None: ref_orientation = ones(3)
@@ -1024,6 +1024,7 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
         #     if sign(dominant_vec[-1]) ==  sign(ref_orientation[-1]): dominant_vec *= -1
 
         # dominant_vec *= sign(domain_vals[k])*sign(ref_orientation[-1])
+        # if sign(dominant_vec[-1]) == -sign(ref_orientation[-1]): dominant_vec *= -1
 
         if not flip_z_convention:
             if sign(dominant_vec[-1]) == -sign(ref_orientation[-1]): dominant_vec *= -1
@@ -1058,10 +1059,58 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
         #
         X.append(_x);Y.append(_y);Z.append(_z)
 
-    #
+    # Look for point reflection in X
     X = reflect_unwrap(array(X))
+    # Y = reflect_unwrap(array(Y))
     Y = array(Y)
     Z = array(Z)
+
+    #
+    # for k in range(len(X)):
+    #     if k>0:
+    #         if (sign(Y[k])==-sign(Y[k-1])):# or (sign(Y[k])==-sign(Y[k-1])):
+    #             X[k] *= -1
+    #             Y[k] *= -1
+    #             Z[k] *= -1
+            # if (sign(X[k])==-sign(X[k-1])):
+            #     X[k] *= -1
+            #     Y[k] *= -1
+            #     Z[k] *= -1
+                # print '8'
+            # else:
+            #     X[k] *= -1
+            #     Y[k] *= -1
+            #     Z[k] *= -1
+
+
+    # #
+    # tets = [ (1,1,1),
+    #          (-1,1,1),
+    #          (1,-1,1),
+    #          (1,1,-1),
+    #          (-1,-1,1),
+    #          (1,-1,-1),
+    #          (-1,1,-1),
+    #          (-1,-1,-1) ]
+    # for k, (x,y,z) in enumerate( zip(X,Y,Z) ):
+    #     if k>0:
+    #         r0 = array([X[k-1],Y[k-1],Z[k-1]])
+    #         trial_r = array([x,y,z])
+    #         err = []
+    #         for tt in tets:
+    #             dr = trial_r*array(tt)-r0
+    #             err.append( sum( dr*dr ) )
+    #         k0 = argmin(err)
+    #         X[k],Y[k],Z[k] = trial_r*array(tets[k0])
+
+    # If x->-x and y->-y then apply x*=-1, y*=-1 and z*=-1
+
+
+    # # NOTE that the lines below seem like a good idea, but as they are, they break physical sign relations thus mucking up coordinates
+    # # Catch -1 reflections
+    # X = reflect_unwrap2(X,domain=domain_vals)
+    # Y = reflect_unwrap2(Y,domain=domain_vals)
+    # Z = reflect_unwrap2(Z,domain=domain_vals)
 
     # # In the case of FD data, where domain values are split between pos and negative frequencies, flip the z convention for f<0 data
     # reflect_mask = domain_vals<0
@@ -1072,7 +1121,20 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
     # Given the optimal unit vector time series, calculate the related Euler angles
     # NOTE Eq. A3 of arxiv:1304.3176
 
+    # #
+    # try:
+    #     alpha = arctan2(Y,X)
+    # except:
+    #     from numpy import double
+    #     print type(Y), Y.shape
+    #     print type(X), X.shape
+    #     alpha = arctan2(double(Y),double(X))
+
     #
+    X = double(X)
+    Y = double(Y)
+    Z = double(Z)
+
     alpha = arctan2(Y,X)
     beta  = arccos(Z)
 
@@ -1177,7 +1239,7 @@ def rotate_wfarrs_at_all_times( l,                          # the l of the new m
 
 
 # Careful function to find peak index for BBH waveform cases
-def find_amp_peak_index( t, amp, plot = False ):
+def find_amp_peak_index( t, amp, plot = False, return_jid=False ):
 
     '''
     Careful function to find peak index for BBH waveform cases
@@ -1189,55 +1251,75 @@ def find_amp_peak_index( t, amp, plot = False ):
     if plot:
         from matplotlib.pyplot import plot,yscale,xscale,axvline,show,figure,xlim
 
-    # defiune function for downsampling to speed up algo
-    def downsample(xx,yy,N):
-        from positive import spline
-        xx_ = spline( xx, xx )(linspace(xx[0],xx[-1],N))
-        return xx_, spline(xx,yy)(xx_)
-
-    # mask and downsample
-    mask =amp>0
-    tt = t[mask]
-    lamp = log( amp[mask] )
-    tt_,lamp_ = downsample(tt,lamp,300)
-
-    # ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~ #
-    Nknots = 6 # NOTE that this number is KEY to the algorithm: its related to the smalles number of lines needed to resolve two peaks! (4 lines) peak1 is junk peak2 is physical; if Nknots is too large, clustering of knots happens
-    # ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~ #
-    
-    knots,_ = romline(tt_,lamp_,Nknots,positive=True,verbose=True)
-    if not (0 in knots):
-        knots = [0] + [ knot for knot in knots ]
-        Nknots += 1
-
-    if plot:
-        figure()
-        axvline( tt_[knots[ int(Nknots/2) ]] )
-        plot( tt, lamp )
-        plot( tt_, lamp_ )
-        plot( tt_[knots], lamp_[knots], color='r', lw=3, ls = '--' )
-
+    # # defiune function for downsampling to speed up algo
+    # def downsample(xx,yy,N):
+    #     from positive import spline
+    #     xx_ = spline( xx, xx )(linspace(xx[0],xx[-1],N))
+    #     return xx_, spline(xx,yy)(xx_)
     #
-    pks,locs = findpeaks(lamp_[knots])
+    # # mask and downsample
+    # mask =amp>0
+    # tt = t[mask]
+    # lamp = log( amp[mask] )
+    # tt_,lamp_ = downsample(tt,lamp,300)
+    #
+    # # ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~ #
+    # Nknots = 6 # NOTE that this number is KEY to the algorithm: its related to the smalles number of lines needed to resolve two peaks! (4 lines) peak1 is junk peak2 is physical; if Nknots is too large, clustering of knots happens
+    # # ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~ #
+    #
+    # knots,_ = romline(tt_,lamp_,Nknots,positive=True,verbose=True)
+    # if not (0 in knots):
+    #     knots = [0] + [ knot for knot in knots ]
+    #     Nknots += 1
+    #
+    # if plot:
+    #     figure()
+    #     axvline( tt_[knots[ int(Nknots/2) ]] )
+    #     plot( tt, lamp )
+    #     plot( tt_, lamp_ )
+    #     plot( tt_[knots], lamp_[knots], color='r', lw=3, ls = '--' )
+    #
+    # #
+    # pks,locs = findpeaks(lamp_[knots])
+    #
+    # # Clean amplitude if needed
+    # if len(pks)>1: # if the peak is not the first knot == if this is not a ringdown only waveform
+    #     refk = find( t>tt_[knots[ int(Nknots/2) ]] )[0]
+    #     clean_amp = amp.copy()
+    #     clean_amp[0:refk] = amp[ find( t>tt_[knots[ 0 ]] )[0] ]
+    # else:
+    #     # nothing need be done
+    #     clean_amp = amp
+    #
+    # # Find peak index
+    # k_amp_max = argmax( clean_amp )
+    #
+    # if plot:
+    #     axvline( t[k_amp_max], color='k' )
+    #     plot( t, log(clean_amp) )
+    #     xlim( t[k_amp_max]-200,t[k_amp_max]+200 )
+    #     show()
 
-    # Clean amplitude if needed
-    if len(pks)>1: # if the peak is not the first knot == if this is not a ringdown only waveform
-        refk = find( t>tt_[knots[ int(Nknots/2) ]] )[0]
-        clean_amp = amp.copy()
-        clean_amp[0:refk] = amp[ find( t>tt_[knots[ 0 ]] )[0] ]
-    else:
-        # nothing need be done
-        clean_amp = amp
+    amp_ = amp.copy()
+    mask = amp_ > 1e-4*max(amp_)
+    a = find(mask)[0]
+    b = find(mask)[-1]
+    half_way = int((a+b)/2)
+    amp_[ :half_way ] *= 0
+    k_amp_max = argmax( amp_ )
+    # handle ringdown cases
+    if (k_amp_max == half_way): k_amp_max = 0
 
-    # Find peak index
-    k_amp_max = argmax( clean_amp )
-
-    if plot:
-        axvline( t[k_amp_max], color='k' )
-        plot( t, log(clean_amp) )
-        xlim( t[k_amp_max]-200,t[k_amp_max]+200 )
-        show()
+    pre = amp.copy()
+    mask = pre > 1e-4*max(pre)
+    a = find(mask)[0]
+    b = find(mask)[-1]
+    half_way = int((a+b)/2)
+    pre[half_way:] *= 0
+    dt = t[1]-t[0]
+    jid = argmax( pre ) + int(100/dt)
 
     # Return answer
     ans = k_amp_max
+    if return_jid: ans = (k_amp_max,jid)
     return ans

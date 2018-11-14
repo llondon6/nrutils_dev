@@ -14,6 +14,7 @@ class gwylm_radiation_axis_workflow:
 
         #
         from os.path import expanduser
+        from numpy import isnan,array
 
         # Calculate radiated and remnant quantities
         alert('Calculating Radiated Quantities','gwylm_radiation_axis_workflow',verbose=verbose)
@@ -43,6 +44,17 @@ class gwylm_radiation_axis_workflow:
         td_alpha,td_beta,td_gamma,td_x,td_y,td_z,td_domain = this.calc_radiation_axis( domain = 'time', kind = kind  )
         alert('Calculating FD Radiation Axis Series','gwylm_radiation_axis_workflow',verbose=verbose)
         fd_alpha,fd_beta,fd_gamma,fd_x,fd_y,fd_z,fd_domain = this.calc_radiation_axis( domain = 'freq', kind = kind  )
+
+        # # Mask away Nans
+        # mask = array([not isnan(v) for v in fd_beta+fd_alpha+fd_gamma])
+        # print len(fd_beta)-sum(mask)
+        # fd_alpha = fd_alpha[mask]
+        # fd_beta  = fd_beta[mask]
+        # fd_gamma = fd_gamma[mask]
+        # fd_domain=fd_domain[mask]
+        # fd_x = fd_x[mask]
+        # fd_y = fd_y[mask]
+        # fd_z = fd_z[mask]
 
         # Store time domain data
         rax['td_alpha'],rax['td_beta'],rax['td_gamma'] = td_alpha,td_beta,td_gamma
@@ -214,8 +226,9 @@ class gwylm_radiation_axis_workflow:
         #
         gwylmo.__calc_radiated_quantities__(use_mask=False)
         k = 0
-        jx,jy,jz = gwylmo.remnant['J'][k] / linalg.norm( gwylmo.remnant['J'][k] )
-        jfx,jfy,jfz = gwylmo.remnant['J'][-1] / linalg.norm( gwylmo.remnant['J'][-1] )
+        remnant = gwylmo.old_remnant if 'old_remnant' in gwylmo.__dict__ else gwylmo.remnant
+        jx,jy,jz = remnant['J'][k] / linalg.norm( remnant['J'][k] )
+        jfx,jfy,jfz = remnant['J'][-1] / linalg.norm( remnant['J'][-1] )
 
         #
         if tag == 'td':
@@ -234,7 +247,7 @@ class gwylm_radiation_axis_workflow:
         ax.scatter( jfx,jfy,jfz,marker='s', c='dodgerblue', label='Final $J$ (Radiated Est.)',s=80,alpha=0.5 )
 
         #
-        J = gwylmo.remnant['J']
+        J = remnant['J']
         absJ = zeros_like(J)
         for k in range(J.shape[0]):
             J[k] /= linalg.norm(J[k])

@@ -1343,7 +1343,8 @@ class gwf:
 
         # Estimate true time location of peak amplitude
         try:
-            this.intrp_t_amp_max = intrp_argmax(clean_amp,domain=this.t) # Interpolated time coordinate of max
+            # NOTE that teh k_amp_ax above is used to help intrp_t_amp_max
+            this.intrp_t_amp_max = intrp_argmax(clean_amp,domain=this.t,ref_index=this.k_amp_max) # Interpolated time coordinate of max
         except:
             this.intrp_t_amp_max = this.t[this.k_amp_max]
 
@@ -2117,6 +2118,7 @@ class gwylm:
                   fftfactor = None,                   # Option for padding wfarr to next fftfactor powers of two
                   pad = None,                       # Optional padding length in samples of wfarr upon loading; not used if fftfactor is present; 'pad' samples dwill be added to the wfarr rows
                   __M_RELATIVE_SIGN_CONVENTION__ = None,
+                  initial_j_align = None,           # Toggle for putting wabeform in frame where initial J is z-hat
                   verbose               = None ):   # be verbose
 
         '''
@@ -2159,6 +2161,8 @@ class gwylm:
         # NOTE that we don't want the scentry's verbose property to overwrite the input above, so we definte this.verbose at this point, not before.
         this.verbose = verbose
 
+        #
+        this.frame = 'initial-simulation'
 
         # #
         # if fftfactor is None:
@@ -2169,11 +2173,14 @@ class gwylm:
         this.fftfactor = fftfactor
 
         #
+        # from numpy import sign
+        # warning('OVERRIDING M_RELATIVE_SIGN_CONVENTION using standard based on z-compoenent of total spin')
+        # __M_RELATIVE_SIGN_CONVENTION__ = sign(this.S[-1])
         if this.verbose:
             if __M_RELATIVE_SIGN_CONVENTION__ is None:
                 alert('Using default M_RELATIVE_SIGN_CONVENTION of %i'%M_RELATIVE_SIGN_CONVENTION)
             else:
-                alert('Using default input M_RELATIVE_SIGN_CONVENTION of %i'%__M_RELATIVE_SIGN_CONVENTION__)
+                alert('Using %s M_RELATIVE_SIGN_CONVENTION of %i'%(yellow('input'),__M_RELATIVE_SIGN_CONVENTION__))
         this.M_RELATIVE_SIGN_CONVENTION = M_RELATIVE_SIGN_CONVENTION if __M_RELATIVE_SIGN_CONVENTION__ is None else __M_RELATIVE_SIGN_CONVENTION__
 
         # Store the scentry object to optionally access its methods
@@ -2318,6 +2325,11 @@ class gwylm:
     #     else:
     #         return this.__lmlist__[k+1]
 
+    #
+    def get_radiation_axis_info(this,kind='psi4',plot=False,save=False):
+        #
+        from nrutils.manipulate.rotate import gwylm_radiation_axis_workflow
+        return gwylm_radiation_axis_workflow(this,kind=kind,plot=plot,save=save,verbose=this.verbose)
 
     # Create a dictionary representation of the mutlipoles
     def __curate__(this):
@@ -3322,7 +3334,7 @@ class gwylm:
             # Account for modern scipy functionality
             external_sign_convention = sign(this.L[-1]) * sign(m) * mode( sign( dphi ) ).mode[0]
             initially_msign_matches_wsign = sign(m) == mode( sign( dphi ) ).mode[0]
-        if initially_msign_matches_wsign: alert('## initall, m and td freq have same sign.')
+        # if initially_msign_matches_wsign: alert('## initall, m and td freq have same sign.')
         this.external_sign_convention = external_sign_convention
 
         if this.M_RELATIVE_SIGN_CONVENTION != this.external_sign_convention:
@@ -3338,6 +3350,15 @@ class gwylm:
                     wfarr[:,2] *= -1
                     y.setfields( wfarr )
                     this[l,m][kind] = y
+
+
+        # for l,m in this.lm:
+        #     for kind in this[l,m]:
+        #         y = this[l,m][kind]
+        #         wfarr = y.wfarr
+        #         wfarr[:,2] *= -this.M_RELATIVE_SIGN_CONVENTION
+        #         y.setfields( wfarr )
+        #         this[l,m][kind] = y
 
         # # Try to determine the sign convention used to define phase. Note that this will be determined only once for the current object based on the l=m=2 multipole.
         # if this.external_sign_convention is None:
@@ -3410,6 +3431,78 @@ class gwylm:
         if not (frame_type in valid_frames):
             error( 'invalid/unknown frame type given' )
 
+
+    #
+    def __calc_initial_j_frame__(this):
+        '''
+        Rotate multipoles such that initial J is parallel to z-hat
+        '''
+
+        # Import usefuls
+        from numpy import arccos,arctan2,array,linalg,cos,sin,dot,zeros,ones
+        from scipy.interpolate import InterpolatedUnivariateSpline as IUS
+
+        J_norm = linalg.norm(this.J)
+        thetaJ = arccos(this.J[2]/J_norm)
+        phiJ   = arctan2(this.J[1],this.J[0])
+
+        # Define gamma and beta accordingly
+        beta  = -thetaJ
+        gamma = -phiJ
+
+        # Define zeta0 (i.e. -alpha) such that L is along the y-z plane at the initial time step
+        L_new = rotate3 ( this.L1 + this.L2, 0, beta , gamma )
+        zeta0 = arctan2( L_new.T[1], L_new.T[0] )
+        alpha = -zeta0
+
+        # Bundle rotation angles
+        angles = [ alpha, beta, gamma ]
+
+        # perform rotation
+        that = this.__rotate_frame_at_all_times__(angles)
+
+        #
+        that.frame = 'J-initial'
+
+        #
+        return that
+
+    #
+    def __calc_initial_l_frame__(this):
+        '''
+        Rotate multipoles such that initial L is parallel to z-hat
+        '''
+
+        # Import usefuls
+        from numpy import arccos,arctan2,array,linalg,cos,sin,dot,zeros,ones
+        from scipy.interpolate import InterpolatedUnivariateSpline as IUS
+
+        L_norm = linalg.norm(this.L)
+        thetaL = arccos(this.L[2]/L_norm)
+        phiL   = arctan2(this.L[1],this.L[0])
+
+        # Define gamma and beta accordingly
+        beta  = -thetaL
+        gamma = -phiL
+
+        # Define zeta0 (i.e. -alpha) such that J is along the y-z plane at the initial time step
+        J_new = rotate3 ( this.J, 0, beta , gamma )
+        zeta0 = arctan2( J_new.T[1], J_new.T[0] )
+        alpha = -zeta0
+
+        # Bundle rotation angles
+        angles = [ alpha, beta, gamma ]
+
+        # perform rotation
+        that = this.__rotate_frame_at_all_times__(angles)
+
+        #
+        that.frame = 'L-initial'
+
+        #
+        return that
+
+
     #
     def __calc_j_of_t_frame__(this,verbose=None):
 
@@ -3454,12 +3547,26 @@ class gwylm:
         # Bundle rotation angles
         angles = [ alpha, beta, gamma ]
 
+        #
+        that = this.__rotate_frame_at_all_times__(angles)
+
+        #
+        that.frame = 'J(t)'
+
+        #
+        that.__calc_radiated_quantities__(use_mask=False)
+
+
         # Perform rotation
-        return this.__rotate_frame_at_all_times__(angles)
+        return that
 
 
     # output corotating waveform
     def __calc_coprecessing_frame__(this,verbose=None):
+
+        '''
+        Output gwylm object in coprecessing frame, where the optimal emission axis is always along z
+        '''
 
         #
         from nrutils.manipulate.rotate import gwylm_radiation_axis_workflow
@@ -3468,7 +3575,7 @@ class gwylm:
         if verbose is None: verbose = this.verbose
 
         #
-        foo = gwylm_radiation_axis_workflow(this,plot=False,save=False,verbose=this.verbose)
+        foo = gwylm_radiation_axis_workflow(this,plot=False,save=False,verbose=verbose)
 
         #
         if verbose: alert('Storing radiation axis information to this.radiation_axis_info')
@@ -3480,7 +3587,12 @@ class gwylm:
         gamma = foo.radiation_axis['td_gamma']
 
         #
-        return this.__rotate_frame_at_all_times__( [gamma,-beta,alpha] )
+        that = this.__rotate_frame_at_all_times__( [gamma,-beta,alpha] )
+        that.previous_radiation_axis_info = foo
+
+
+        #
+        return that
 
     # Recompose the waveforms at a sky position about the source
     # NOTE that this function returns a gwf object
@@ -3907,8 +4019,51 @@ class gwylm:
         that.S = R( this.S, 0 ); that.J = R( this.J, 0 );
         that.L = R( this.L, 0 )
 
+
+        # Rotate system radiated and remnant quantities
+        if not ( 'remnant' in this.__dict__ ) : this.__calc_radiated_quantities__(use_mask=False)
+        that.old_remnant = copy.deepcopy(this.remnant)
+        that.old_radiated = copy.deepcopy(this.radiated)
+
+        # NOTE that the "old" quantities will be correct values for non-intertial (dynamical) angles
+
+        for key in this.remnant:
+            if isinstance(this.remnant[key],ndarray):
+                # print key, len(this.remnant[key].shape)
+                if this.remnant[key].shape[-1] == 3:
+                    if len(alpha) == len(this.remnant['time_used']):
+                        for k in range(len(alpha)):
+                            that.old_remnant[key][k,:] = R( this.remnant[key][k,:], k )
+                    elif len(alpha)==1:
+                        for k in range( that.old_remnant[key].shape[0] ):
+                            that.old_remnant[key][k,:] = R( this.remnant[key][k,:], 0 )
+                    else:
+                        warning('cannot rotate radiated quantities, length mismatch: len alpha is %i, but times are %i'%(len(alpha),len(this.remnant['time_used'])))
+                        print alpha
+
+        for key in this.radiated:
+            if isinstance(this.radiated[key],ndarray):
+                # print key, len(this.radiated[key].shape)
+                if (this.radiated[key].shape[0] > 1) and (this.radiated[key].shape[-1] == 3):
+                    if len(alpha) == len(this.radiated['time_used']):
+                        if len(this.radiated[key].shape)>1:
+                            for k in range(len(alpha)):
+                                that.old_radiated[key][k,:] = R( this.radiated[key][k,:], k )
+                        else:
+                            if key=='J0':
+                                that.old_radiated[key] = R( this.radiated[key], 0 )
+                    elif len(alpha)==1:
+                        if len(this.radiated[key].shape)>1:
+                            for k in range( that.old_radiated[key].shape[0] ):
+                                that.old_radiated[key][k,:] = R( this.radiated[key][k,:], 0 )
+                        else:
+                            that.old_radiated[key] = R( this.radiated[key], 0 )
+                    else:
+                        warning('cannot rotate radiated quantities, length mismatch: len alpha is %i, but times are %i'%(len(alpha),len(this.radiated['time_used'])))
+                        print alpha
+
         #
-        alert('Note that metadata at the scentry level (i.e. this.__scentry__) have not been rotated, but this.Sf, this.R1 and others have been rotated.')
+        alert('Note that metadata at the scentry level (i.e. this.__scentry__) have not been rotated, but this.Sf, this.R1 and others have been rotated. This includes radiated and remnant quantities.')
 
         # Return answer
         return that
@@ -4445,7 +4600,7 @@ class gwfcharstart:
                   verbose   = False ):
 
         #
-        from numpy import arange,diff,where,array,ceil,mean,ones_like
+        from numpy import arange,diff,where,array,ceil,mean,ones_like,argmax
         from numpy import histogram as hist
         thisfun=this.__class__.__name__
 
@@ -4485,9 +4640,12 @@ class gwfcharstart:
             start_map = find(  D >= max(D)  )[0]
 
             # 5. Determine the with of waveform turn on in indeces based on the results above. NOTE that the width is bound below by half the difference betwen the wf start and the wf peak locations.
-            index_width = min( [ 1+pk_mask[start_map+shift]-pk_mask[start_map], 0.5*(1+y.k_amp_max-pk_mask[ start_map ]) ] )
+            safedex = min( len(pk_mask)-1, start_map+shift )
+            index_width = min( [ 1+pk_mask[safedex]-pk_mask[start_map], 0.5*(1+y.k_amp_max-pk_mask[ start_map ]) ] )
             # 6. Estimate where the waveform begins to turn on. This is approximately where the junk radiation ends. Note that this area will be very depressed upon windowing, so is can be
-            j_id = pk_mask[ start_map ]
+            (_,j_id) = find_amp_peak_index( y.t, y.amp, return_jid=True )
+            # NOTE that the line above is more robust for precessing cases than the line below. There are cases when the optimal emission axis crosses z=0 which causes problems for the line below
+            # j_id = pk_mask[ start_map ]
 
             # 7. Use all results thus far to construct this object
             this.left_index     = int(j_id)                                         # Where the initial junk radiation is thought to end
