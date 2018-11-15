@@ -1061,7 +1061,6 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
 
     # Look for point reflection in X
     X = reflect_unwrap(array(X))
-    # Y = reflect_unwrap(array(Y))
     Y = array(Y)
     Z = array(Z)
 
@@ -1094,7 +1093,24 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
 
                 Z[k:] *= -1
 
-    # Make sure that imag parts are gone 
+    # Enforce same directedness of pos and neg freq angles
+    _mask = (domain_vals < -0.01) & (domain_vals>-0.1)
+    mask_ = (domain_vals < 0.1) & (domain_vals>0.01)
+    from numpy import std
+    if sum(_mask):
+        # print abs(mean(X[_mask][::-1]+X[mask_]))
+        # print 0.5*abs(mean((X[mask_])))
+        flip_neg_domain = abs(mean(X[_mask][::-1]+(X[mask_]))) < 0.5*abs(mean(X[mask_]))
+        if flip_neg_domain:
+            warning('Flipping neg domain vals')
+            X[domain_vals<0] *= -1
+            Y[domain_vals<0] *= -1
+            Z[domain_vals<0] *= -1
+
+    # print abs(mean( X[_mask][::-1]+X[mask_] ))
+    # print 0.5*abs(mean(X[mask_]))
+
+    # Make sure that imag parts are gone
     X = double(X)
     Y = double(Y)
     Z = double(Z)
