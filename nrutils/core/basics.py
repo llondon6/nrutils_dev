@@ -1065,72 +1065,36 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
     Y = array(Y)
     Z = array(Z)
 
-    #
-    # for k in range(len(X)):
-    #     if k>0:
-    #         if (sign(Y[k])==-sign(Y[k-1])):# or (sign(Y[k])==-sign(Y[k-1])):
-    #             X[k] *= -1
-    #             Y[k] *= -1
-    #             Z[k] *= -1
-            # if (sign(X[k])==-sign(X[k-1])):
-            #     X[k] *= -1
-            #     Y[k] *= -1
-            #     Z[k] *= -1
-                # print '8'
-            # else:
-            #     X[k] *= -1
-            #     Y[k] *= -1
-            #     Z[k] *= -1
+    # 3-point vector reflect unwrapping
+    tol = 0.1
+    from numpy import arange,mean
+    for k in range(len(X))[1:-1]:
+        if k>0 and k<(len(domain_vals)-1):
 
+            left_x_has_reflected = abs(X[k]+X[k-1])<tol*abs(X[k-1])
+            left_y_has_reflected = abs(Y[k]+Y[k-1])<tol*abs(X[k-1])
 
-    # #
-    # tets = [ (1,1,1),
-    #          (-1,1,1),
-    #          (1,-1,1),
-    #          (1,1,-1),
-    #          (-1,-1,1),
-    #          (1,-1,-1),
-    #          (-1,1,-1),
-    #          (-1,-1,-1) ]
-    # for k, (x,y,z) in enumerate( zip(X,Y,Z) ):
-    #     if k>0:
-    #         r0 = array([X[k-1],Y[k-1],Z[k-1]])
-    #         trial_r = array([x,y,z])
-    #         err = []
-    #         for tt in tets:
-    #             dr = trial_r*array(tt)-r0
-    #             err.append( sum( dr*dr ) )
-    #         k0 = argmin(err)
-    #         X[k],Y[k],Z[k] = trial_r*array(tets[k0])
+            right_x_has_reflected = abs(X[k]+X[k+1])<tol*abs(X[k])
+            right_y_has_reflected = abs(Y[k]+Y[k+1])<tol*abs(X[k])
 
-    # If x->-x and y->-y then apply x*=-1, y*=-1 and z*=-1
+            x_has_reflected = right_x_has_reflected or left_x_has_reflected
+            y_has_reflected = left_y_has_reflected or right_y_has_reflected
 
+            if x_has_reflected and y_has_reflected:
 
-    # # NOTE that the lines below seem like a good idea, but as they are, they break physical sign relations thus mucking up coordinates
-    # # Catch -1 reflections
-    # X = reflect_unwrap2(X,domain=domain_vals)
-    # Y = reflect_unwrap2(Y,domain=domain_vals)
-    # Z = reflect_unwrap2(Z,domain=domain_vals)
+                if left_x_has_reflected:
+                    X[k:] *=-1
+                if right_x_has_reflected:
+                    X[k+1:] *= -1
 
-    # # In the case of FD data, where domain values are split between pos and negative frequencies, flip the z convention for f<0 data
-    # reflect_mask = domain_vals<0
-    # X[reflect_mask] *= -1
-    # Y[reflect_mask] *= -1
-    # Z[reflect_mask] *= -1
+                if left_y_has_reflected:
+                    Y[k:] *=-1
+                if right_y_has_reflected:
+                    Y[k+1:] *= -1
 
-    # Given the optimal unit vector time series, calculate the related Euler angles
-    # NOTE Eq. A3 of arxiv:1304.3176
+                Z[k:] *= -1
 
-    # #
-    # try:
-    #     alpha = arctan2(Y,X)
-    # except:
-    #     from numpy import double
-    #     print type(Y), Y.shape
-    #     print type(X), X.shape
-    #     alpha = arctan2(double(Y),double(X))
-
-    #
+    # Make sure that imag parts are gone 
     X = double(X)
     Y = double(Y)
     Z = double(Z)
