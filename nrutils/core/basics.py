@@ -925,6 +925,7 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
                               domain_vals = None,   # The time or freq series for multipole data
                               ref_orientation = None, # e.g. initial J; used for breaking degeneracies in calculation
                               return_xyz = False,
+                              safe_domain_range = None,
                               verbose = None ):
 
     '''
@@ -1064,48 +1065,84 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
     Y = array(Y)
     Z = array(Z)
 
+    # #
+    # if sum(domain_vals<0):
+    #     neg_ref = find(domain_vals<0)[0]
+    #     X_neg_sign_ref = sign( X[neg_ref] )
+    #     Y_neg_sign_ref = sign( Y[neg_ref] )
+    #     Z_neg_sign_ref = sign( Z[neg_ref] )
+    #     pos_ref = find(domain_vals>0)[0]
+    #     X_pos_sign_ref = sign( X[pos_ref] )
+    #     Y_pos_sign_ref = sign( Y[pos_ref] )
+    #     Z_pos_sign_ref = sign( Z[pos_ref] )
+
     # 3-point vector reflect unwrapping
+    # print safe_domain_range
     tol = 0.1
+    if safe_domain_range is None: safe_domain_range = lim(abs(domain_vals))
+    safe_domain_range = array( safe_domain_range )
     from numpy import arange,mean
     for k in range(len(X))[1:-1]:
         if k>0 and k<(len(domain_vals)-1):
 
-            left_x_has_reflected = abs(X[k]+X[k-1])<tol*abs(X[k-1])
-            left_y_has_reflected = abs(Y[k]+Y[k-1])<tol*abs(X[k-1])
+            if (abs(domain_vals[k])>min(abs(safe_domain_range))) and (abs(domain_vals[k])<max(abs(safe_domain_range))):
 
-            right_x_has_reflected = abs(X[k]+X[k+1])<tol*abs(X[k])
-            right_y_has_reflected = abs(Y[k]+Y[k+1])<tol*abs(X[k])
+                left_x_has_reflected = abs(X[k]+X[k-1])<tol*abs(X[k-1])
+                left_y_has_reflected = abs(Y[k]+Y[k-1])<tol*abs(X[k-1])
 
-            x_has_reflected = right_x_has_reflected or left_x_has_reflected
-            y_has_reflected = left_y_has_reflected or right_y_has_reflected
+                right_x_has_reflected = abs(X[k]+X[k+1])<tol*abs(X[k])
+                right_y_has_reflected = abs(Y[k]+Y[k+1])<tol*abs(X[k])
 
-            if x_has_reflected and y_has_reflected:
+                x_has_reflected = right_x_has_reflected or left_x_has_reflected
+                y_has_reflected = left_y_has_reflected or right_y_has_reflected
 
-                if left_x_has_reflected:
-                    X[k:] *=-1
-                if right_x_has_reflected:
-                    X[k+1:] *= -1
+                if x_has_reflected and y_has_reflected:
 
-                if left_y_has_reflected:
-                    Y[k:] *=-1
-                if right_y_has_reflected:
-                    Y[k+1:] *= -1
+                    # print domain_vals[k]
 
-                Z[k:] *= -1
+                    if left_x_has_reflected:
+                        X[k:] *=-1
+                    if right_x_has_reflected:
+                        X[k+1:] *= -1
 
-    # Enforce same directedness of pos and neg freq angles
-    _mask = (domain_vals < -0.01) & (domain_vals>-0.1)
-    mask_ = (domain_vals < 0.1) & (domain_vals>0.01)
-    from numpy import std
-    if sum(_mask):
-        # print abs(mean(X[_mask][::-1]+X[mask_]))
-        # print 0.5*abs(mean((X[mask_])))
-        flip_neg_domain = abs(mean(X[_mask][::-1]+(X[mask_]))) < 0.5*abs(mean(X[mask_]))
-        if flip_neg_domain:
-            warning('Flipping neg domain vals')
-            X[domain_vals<0] *= -1
-            Y[domain_vals<0] *= -1
-            Z[domain_vals<0] *= -1
+                    if left_y_has_reflected:
+                        Y[k:] *=-1
+                    if right_y_has_reflected:
+                        Y[k+1:] *= -1
+
+                    Z[k:] *= -1
+
+    # # Enforce same directedness of pos and neg freq angles
+    # _mask = (domain_vals < -0.01) & (domain_vals>-0.1)
+    # mask_ = (domain_vals < 0.1) & (domain_vals>0.01)
+    # from numpy import std
+    # if sum(_mask):
+    #     # print abs(mean(X[_mask][::-1]+X[mask_]))
+    #     # print 0.5*abs(mean((X[mask_])))
+    #     flip_neg_domain = abs(mean(X[_mask][::-1]+(X[mask_]))) < 0.5*abs(mean(X[mask_]))
+    #     if flip_neg_domain:
+    #         warning('Flipping neg domain vals')
+    #         X[domain_vals<0] *= -1
+    #         Y[domain_vals<0] *= -1
+    #         Z[domain_vals<0] *= -1
+
+    # # Try to enforce original directedness at initial domain values
+    # if sum(domain_vals<0):
+    #     X[domain_vals<0] *= X_neg_sign_ref
+    #     Y[domain_vals<0] *= Y_neg_sign_ref
+    #     Z[domain_vals<0] *= Z_neg_sign_ref
+    #     X[domain_vals>0] *= X_pos_sign_ref
+    #     Y[domain_vals>0] *= Y_pos_sign_ref
+    #     Z[domain_vals>0] *= Z_pos_sign_ref
+
+    # # Try to make sure that Z is positive most of the time
+    # from scipy.stats import mode
+    # mz = mode( sign(Z) )
+    # if mz == -1:
+    #     X *= -1
+    #     Y *= -1
+    #     Z *= -1
+
 
     # print abs(mean( X[_mask][::-1]+X[mask_] ))
     # print 0.5*abs(mean(X[mask_]))

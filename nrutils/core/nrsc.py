@@ -3562,7 +3562,7 @@ class gwylm:
 
 
     # output corotating waveform
-    def __calc_coprecessing_frame__(this,verbose=None):
+    def __calc_coprecessing_frame__(this,safe_domain_range=None,verbose=None):
 
         '''
         Output gwylm object in coprecessing frame, where the optimal emission axis is always along z
@@ -3575,7 +3575,11 @@ class gwylm:
         if verbose is None: verbose = this.verbose
 
         #
-        foo = gwylm_radiation_axis_workflow(this,plot=False,save=False,verbose=verbose)
+        if safe_domain_range is None:
+            safe_domain_range=[0.009,0.3]
+
+        #
+        foo = gwylm_radiation_axis_workflow(this,plot=False,save=False,verbose=verbose,safe_domain_range=safe_domain_range)
 
         #
         if verbose: alert('Storing radiation axis information to this.radiation_axis_info')
@@ -3589,7 +3593,6 @@ class gwylm:
         #
         that = this.__rotate_frame_at_all_times__( [gamma,-beta,alpha] )
         that.previous_radiation_axis_info = foo
-
 
         #
         return that

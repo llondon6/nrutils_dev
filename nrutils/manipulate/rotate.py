@@ -10,7 +10,7 @@ class gwylm_radiation_axis_workflow:
     '''
 
     #
-    def __init__( this, gwylmo, kind=None, plot=True, outdir=None, save=True, verbose=True ):
+    def __init__( this, gwylmo, kind=None, plot=True, outdir=None, save=True, safe_domain_range=None, verbose=True ):
 
         #
         from os.path import expanduser
@@ -41,9 +41,9 @@ class gwylm_radiation_axis_workflow:
 
         # Calculate radiation axes in time and frequency domain
         alert('Calculating TD Radiation Axis Series','gwylm_radiation_axis_workflow',verbose=verbose)
-        td_alpha,td_beta,td_gamma,td_x,td_y,td_z,td_domain = this.calc_radiation_axis( domain = 'time', kind = kind  )
+        td_alpha,td_beta,td_gamma,td_x,td_y,td_z,td_domain = this.calc_radiation_axis( domain = 'time', kind = kind, safe_domain_range=None  )
         alert('Calculating FD Radiation Axis Series','gwylm_radiation_axis_workflow',verbose=verbose)
-        fd_alpha,fd_beta,fd_gamma,fd_x,fd_y,fd_z,fd_domain = this.calc_radiation_axis( domain = 'freq', kind = kind  )
+        fd_alpha,fd_beta,fd_gamma,fd_x,fd_y,fd_z,fd_domain = this.calc_radiation_axis( domain = 'freq', kind = kind, safe_domain_range=None  )
 
         # # Mask away Nans
         # mask = array([not isnan(v) for v in fd_beta+fd_alpha+fd_gamma])
@@ -85,7 +85,7 @@ class gwylm_radiation_axis_workflow:
             this.plot_radiation_axis_on_sphere( domain='freq', view=view )
 
     # Encapsulation of calc angles given domain and type
-    def calc_radiation_axis( this, domain=None, kind = None ):
+    def calc_radiation_axis( this, domain=None, kind = None, safe_domain_range=None ):
 
         # Calc radiation axis: alpha beta gamma and x y z
         kind = 'psi4' if kind is None else kind
@@ -100,7 +100,7 @@ class gwylm_radiation_axis_workflow:
         domain_vals = gwylmo.lm[2,2][kind].t if domain in ('t','time') else gwylmo.lm[2,2][kind].f
 
         # Calculate corotating angles using low-level function
-        alpha,beta,gamma,x,y,z = calc_coprecessing_angles( mp, domain_vals, ref_orientation=gwylmo.J, return_xyz='all' )
+        alpha,beta,gamma,x,y,z = calc_coprecessing_angles( mp, domain_vals, ref_orientation=gwylmo.J, return_xyz='all', safe_domain_range = ([0.01,0.1] if safe_domain_range is None else safe_domain_range) if domain in ('f','freq') else None )
 
         # return answers
         return alpha,beta,gamma,x,y,z,domain_vals
