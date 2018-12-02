@@ -3989,7 +3989,18 @@ class gwylm:
                 rotated_gwf = this.lm[lm][kind].__rotate_frame_at_all_times__( like_l_multipoles, euler_alpha_beta_gamma, ref_orientation )
 
                 # Store it to the output gwylm object
-                that.lm[lm][kind] = rotated_gwf
+                # that.lm[lm][kind] = rotated_gwf
+                if kind == 'psi4':
+                    k = this.ylm.index( this.lm[lm][kind] )
+                    this.ylm[k] = rotated_gwf
+                elif kind == 'news':
+                    k = this.flm.index( this.lm[lm][kind] )
+                    this.flm[k] = rotated_gwf
+                elif kind == 'strain':
+                    k = this.hlm.index( this.lm[lm][kind] )
+                    this.hlm[k] = rotated_gwf
+                # Apply changes to lm dictionary
+                this.__curate__()
 
         # ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~- #
         # Rotate related metadata??

@@ -43,7 +43,7 @@ class gwylm_radiation_axis_workflow:
         alert('Calculating TD Radiation Axis Series','gwylm_radiation_axis_workflow',verbose=verbose)
         td_alpha,td_beta,td_gamma,td_x,td_y,td_z,td_domain = this.calc_radiation_axis( domain = 'time', kind = kind, safe_domain_range=None  )
         alert('Calculating FD Radiation Axis Series','gwylm_radiation_axis_workflow',verbose=verbose)
-        fd_alpha,fd_beta,fd_gamma,fd_x,fd_y,fd_z,fd_domain = this.calc_radiation_axis( domain = 'freq', kind = kind, safe_domain_range=None  )
+        fd_alpha,fd_beta,fd_gamma,fd_x,fd_y,fd_z,fd_domain = this.calc_radiation_axis( domain = 'freq', kind = kind, safe_domain_range=safe_domain_range  )
 
         # # Mask away Nans
         # mask = array([not isnan(v) for v in fd_beta+fd_alpha+fd_gamma])
