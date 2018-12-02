@@ -3991,16 +3991,16 @@ class gwylm:
                 # Store it to the output gwylm object
                 # that.lm[lm][kind] = rotated_gwf
                 if kind == 'psi4':
-                    k = this.ylm.index( this.lm[lm][kind] )
-                    this.ylm[k] = rotated_gwf
+                    k = that.ylm.index( that.lm[lm][kind] )
+                    that.ylm[k] = rotated_gwf
                 elif kind == 'news':
-                    k = this.flm.index( this.lm[lm][kind] )
-                    this.flm[k] = rotated_gwf
+                    k = that.flm.index( that.lm[lm][kind] )
+                    that.flm[k] = rotated_gwf
                 elif kind == 'strain':
-                    k = this.hlm.index( this.lm[lm][kind] )
-                    this.hlm[k] = rotated_gwf
+                    k = that.hlm.index( that.lm[lm][kind] )
+                    that.hlm[k] = rotated_gwf
                 # Apply changes to lm dictionary
-                this.__curate__()
+                that.__curate__()
 
         # ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~- #
         # Rotate related metadata??
