@@ -284,7 +284,7 @@ class make_pnnr_hybrid(gwylm):
         this.hybrid_gwylmo.__input_lmlist__ = this.lmlist
         this.hybrid_gwylmo.__curate__()
         #
-        this.characterize_start_end()
+        this.hybrid_gwylmo.characterize_start_end()
         this.hybrid_gwylmo.wstart = this.hybrid_gwylmo.wstart_pn = this.__pn__.wM_min*2
         this.hybrid_gwylmo.madm = this.__pn__.remnant['M'][0]
         #

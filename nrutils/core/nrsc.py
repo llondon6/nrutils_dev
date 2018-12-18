@@ -2152,7 +2152,7 @@ class gwylm:
             warning( 'You have input a directory rather than an scentry object. We will try to convert the directory to an scentry object, but this is slower than using the our catalog system. Please consider modifying the appropriate configuretion file (i.e. in "%s") to accommodate your new simulation, or perhaps create a new configuration file. Given your new or updated configuration file, please run nrutils.scbuild("my_config_name") to update your local catalog. If you are confident that all has gone well, you may also wish to push changes in your catalog (to the master repo). Live long and prosper. -- Lionel'%cyan(global_settings.config_path),'gwylm' )
             scentry_obj = simdir2scentry( simdir, verbose=verbose )[0]
 
-        # Allow users to input path to h5 file in lvc-nr format
+        # TODO: Allow users to input path to h5 file in lvc-nr format
 
         # Confer the scentry_object's attributes to this object for ease of referencing
         for attr in scentry_obj.__dict__.keys():
@@ -2214,10 +2214,11 @@ class gwylm:
         # Store the extraction parameter and level
         this.extraction_parameter = extraction_parameter
         # print this.extraction_map_dict['level_map']
-        if this.extraction_map_dict['level_map']:
-            this.level = this.extraction_map_dict['level_map'][extraction_parameter]
-        else:
-            this.level = this.extraction_parameter
+        if 'extraction_map_dict' in this.__dict__:
+            if this.extraction_map_dict['level_map']:
+                this.level = this.extraction_map_dict['level_map'][extraction_parameter]
+            else:
+                this.level = this.extraction_parameter
 
         # Store the extraction radius if a map is provided in the handler file
         if 'loadhandler' in scentry_obj.__dict__:
@@ -2291,7 +2292,7 @@ class gwylm:
             this.__curate__()
 
         #
-        this.__enforce_m_relative_phase_orientation__()
+        if load: this.__enforce_m_relative_phase_orientation__()
 
 
     # Allow class to be indexed
@@ -2332,7 +2333,7 @@ class gwylm:
         return gwylm_radiation_axis_workflow(this,kind=kind,plot=plot,save=save,verbose=this.verbose)
 
     # Create a dictionary representation of the mutlipoles
-    def __curate__(this):
+    def __curate__(this,__kind__='psi4'):
         '''Create a dictionary representation of the mutlipoles'''
         # NOTE that this method should be called every time psi4, strain and/or news is loaded.
         # NOTE that the related methods are: __load__, calchlm and calcflm
@@ -2350,8 +2351,8 @@ class gwylm:
         for f in this.flm:
             this.lm[(f.l,f.m)]['news'] = f
         #
-        this.t = this[2,2]['psi4'].t
-        this.f = this[2,2]['psi4'].f
+        this.t = this[2,2][__kind__].t
+        this.f = this[2,2][__kind__].f
 
     # Validate inputs to constructor
     def __valinputs__(this,thisfun,lm=None,lmax=None,scentry_obj=None):
@@ -3313,7 +3314,7 @@ class gwylm:
         return ans
 
     # Enforce M_RELATIVE_SIGN_CONVENTION
-    def __enforce_m_relative_phase_orientation__(this):
+    def __enforce_m_relative_phase_orientation__(this,kind=None):
 
         # Import usefuls
         from numpy import arange,sign,diff,unwrap,angle,amax,isnan,amin,log,exp,std,median,mod,mean
@@ -3321,9 +3322,13 @@ class gwylm:
         from scipy.version import version as scipy_version
         thisfun=inspect.stack()[0][3]
 
+        #
+        if kind is None:
+            kind = 'psi4'
+
         # Use the 2,2, multipole just after wstart to determine initial phase direction
         mask = arange(this.startindex,this.startindex+50)
-        dphi = this[2,2]['psi4'].dphi[mask]
+        dphi = this[2,2][kind].dphi[mask]
         m=2
 
         if int(scipy_version.split('.')[1])<16:
@@ -4787,6 +4792,9 @@ def lvcnr5_to_gwylm(h5dir,lm=None,verbose=True,dt=0.25,lmax=6,clean=True):
     e.X1,e.X2 = chi1,chi2
     e.S1,e.S2 = chi1*e.m1**2,chi2*e.m1**2
 
+    e.L = array([f.attrs['LNhatx'],f.attrs['LNhaty'],f.attrs['LNhatz']])
+    warning('NOTE that the L saved here (i.e. y.L) is the UNIT direction of L --- the interface may be updated in the future to use a PN L')
+
     if f.attrs['Format'] == 2:
         e.R1 = array( [f['position1x-vs-time']['Y'][0],f['position1y-vs-time']['Y'][0],f['position1z-vs-time']['Y'][0]] )
         e.R2 = array( [f['position2x-vs-time']['Y'][0],f['position2y-vs-time']['Y'][0],f['position2z-vs-time']['Y'][0]] )
@@ -4840,32 +4848,40 @@ def lvcnr5_to_gwylm(h5dir,lm=None,verbose=True,dt=0.25,lmax=6,clean=True):
             if verbose: alert("couldn't load (l,m)=({0},{1})".format(l,m))
             break
 
-        # Enforce internal sign convention for time domain hlm
-        msk_ = amp > 0.01*amax(amp)
-        if int(scipy_version.split('.')[1])<16:
-            # Account for old scipy functionality
-            external_sign_convention = sign(this.L[-1]) * sign(m) * mode( sign( pha ) )[0][0]
-        else:
-            # Account for modern scipy functionality
-            external_sign_convention = sign(this.L[-1]) * sign(m) * mode( sign( pha ) ).mode[0]
-        if M_RELATIVE_SIGN_CONVENTION != external_sign_convention:
-            pha = -pha
-            msg = yellow('Re-orienting waveform phase')+' to be consistent with internal sign convention for Strain, where sign(dPhi/dt)=%i*sign(m).' % M_RELATIVE_SIGN_CONVENTION + ' Note that the internal sign convention is defined in ... nrutils/core/__init__.py as "M_RELATIVE_SIGN_CONVENTION". This message has appeared becuase the waveform is determioned to obey the sign convention: sign(dPhi/dt)=%i*sign(m).'%(external_sign_convention)
-            thisfun=inspect.stack()[0][3]
-            if verbose: alert( msg )
+        # # Enforce internal sign convention for time domain hlm
+        # msk_ = amp > 0.01*amax(amp)
+        # if int(scipy_version.split('.')[1])<16:
+        #     # Account for old scipy functionality
+        #     external_sign_convention = sign(this.L[-1]) * sign(m) * mode( sign( pha ) )[0][0]
+        # else:
+        #     # Account for modern scipy functionality
+        #     external_sign_convention = sign(this.L[-1]) * sign(m) * mode( sign( pha ) ).mode[0]
+        # if M_RELATIVE_SIGN_CONVENTION != external_sign_convention:
+        #     pha = -pha
+        #     msg = yellow('Re-orienting waveform phase')+' to be consistent with internal sign convention for Strain, where sign(dPhi/dt)=%i*sign(m).' % M_RELATIVE_SIGN_CONVENTION + ' Note that the internal sign convention is defined in ... nrutils/core/__init__.py as "M_RELATIVE_SIGN_CONVENTION". This message has appeared becuase the waveform is determioned to obey the sign convention: sign(dPhi/dt)=%i*sign(m).'%(external_sign_convention)
+        #     thisfun=inspect.stack()[0][3]
+        #     if verbose: alert( msg )
 
         z = amp * exp(1j*pha)
         wfarr = array([ t, z.real, z.imag ]).T
         y.hlm.append(  gwf( wfarr,l=l,m=m,kind='$rh_{%i%i}/M$'%(l,m) )  )
 
+        # news
+        wfarr = array([ t, spline_diff(t,z.real), spline_diff(t,z.imag) ]).T
+        y.flm.append(  gwf( wfarr,l=l,m=m,kind=r'$r\dot\psi_{%i%i}/M$'%(l,m) )  )
+        # psi4
+        wfarr = array([ t, spline_diff(t,z.real,2), spline_diff(t,z.imag,2) ]).T
+        y.ylm.append(  gwf( wfarr,l=l,m=m,kind=r'$r\psi_{%i%i}/M$'%(l,m) )  )
+
     #
     y.__lmlist__ = lmlist
     y.__input_lmlist__ = lmlist
-    y.__curate__()
+    y.__curate__(__kind__='strain')
     f.close()
 
     #
     y.characterize_start_end()
+    y.__enforce_m_relative_phase_orientation__(kind='strain')
     if clean: y.clean()
 
     #
