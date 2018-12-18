@@ -925,6 +925,7 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
                               domain_vals = None,   # The time or freq series for multipole data
                               ref_orientation = None, # e.g. initial J; used for breaking degeneracies in calculation
                               return_xyz = False,
+                              safe_domain_range = None,
                               verbose = None ):
 
     '''
@@ -950,10 +951,10 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
     '''
 
     # Import usefuls
-    from scipy.linalg import eig
+    from scipy.linalg import eig,norm
     from scipy.integrate import cumtrapz
-    from numpy import arctan2,sin,arcsin,pi,ones,arccos
-    from numpy import unwrap,argmax,cos,array,sqrt,sign
+    from numpy import arctan2,sin,arcsin,pi,ones,arccos,double
+    from numpy import unwrap,argmax,cos,array,sqrt,sign,argmin
 
     # Handle optional input
     if ref_orientation is None: ref_orientation = ones(3)
@@ -1024,6 +1025,7 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
         #     if sign(dominant_vec[-1]) ==  sign(ref_orientation[-1]): dominant_vec *= -1
 
         # dominant_vec *= sign(domain_vals[k])*sign(ref_orientation[-1])
+        # if sign(dominant_vec[-1]) == -sign(ref_orientation[-1]): dominant_vec *= -1
 
         if not flip_z_convention:
             if sign(dominant_vec[-1]) == -sign(ref_orientation[-1]): dominant_vec *= -1
@@ -1058,21 +1060,98 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
         #
         X.append(_x);Y.append(_y);Z.append(_z)
 
-    #
+    # Look for point reflection in X
     X = reflect_unwrap(array(X))
     Y = array(Y)
     Z = array(Z)
 
-    # # In the case of FD data, where domain values are split between pos and negative frequencies, flip the z convention for f<0 data
-    # reflect_mask = domain_vals<0
-    # X[reflect_mask] *= -1
-    # Y[reflect_mask] *= -1
-    # Z[reflect_mask] *= -1
+    # #
+    # if sum(domain_vals<0):
+    #     neg_ref = find(domain_vals<0)[0]
+    #     X_neg_sign_ref = sign( X[neg_ref] )
+    #     Y_neg_sign_ref = sign( Y[neg_ref] )
+    #     Z_neg_sign_ref = sign( Z[neg_ref] )
+    #     pos_ref = find(domain_vals>0)[0]
+    #     X_pos_sign_ref = sign( X[pos_ref] )
+    #     Y_pos_sign_ref = sign( Y[pos_ref] )
+    #     Z_pos_sign_ref = sign( Z[pos_ref] )
 
-    # Given the optimal unit vector time series, calculate the related Euler angles
-    # NOTE Eq. A3 of arxiv:1304.3176
+    # 3-point vector reflect unwrapping
+    # print safe_domain_range
+    tol = 0.1
+    if safe_domain_range is None: safe_domain_range = lim(abs(domain_vals))
+    safe_domain_range = array( safe_domain_range )
+    from numpy import arange,mean
+    for k in range(len(X))[1:-1]:
+        if k>0 and k<(len(domain_vals)-1):
 
-    #
+            if (abs(domain_vals[k])>min(abs(safe_domain_range))) and (abs(domain_vals[k])<max(abs(safe_domain_range))):
+
+                left_x_has_reflected = abs(X[k]+X[k-1])<tol*abs(X[k-1])
+                left_y_has_reflected = abs(Y[k]+Y[k-1])<tol*abs(X[k-1])
+
+                right_x_has_reflected = abs(X[k]+X[k+1])<tol*abs(X[k])
+                right_y_has_reflected = abs(Y[k]+Y[k+1])<tol*abs(X[k])
+
+                x_has_reflected = right_x_has_reflected or left_x_has_reflected
+                y_has_reflected = left_y_has_reflected or right_y_has_reflected
+
+                if x_has_reflected and y_has_reflected:
+
+                    # print domain_vals[k]
+
+                    if left_x_has_reflected:
+                        X[k:] *=-1
+                    if right_x_has_reflected:
+                        X[k+1:] *= -1
+
+                    if left_y_has_reflected:
+                        Y[k:] *=-1
+                    if right_y_has_reflected:
+                        Y[k+1:] *= -1
+
+                    Z[k:] *= -1
+
+    # # Enforce same directedness of pos and neg freq angles
+    # _mask = (domain_vals < -0.01) & (domain_vals>-0.1)
+    # mask_ = (domain_vals < 0.1) & (domain_vals>0.01)
+    # from numpy import std
+    # if sum(_mask):
+    #     # print abs(mean(X[_mask][::-1]+X[mask_]))
+    #     # print 0.5*abs(mean((X[mask_])))
+    #     flip_neg_domain = abs(mean(X[_mask][::-1]+(X[mask_]))) < 0.5*abs(mean(X[mask_]))
+    #     if flip_neg_domain:
+    #         warning('Flipping neg domain vals')
+    #         X[domain_vals<0] *= -1
+    #         Y[domain_vals<0] *= -1
+    #         Z[domain_vals<0] *= -1
+
+    # # Try to enforce original directedness at initial domain values
+    # if sum(domain_vals<0):
+    #     X[domain_vals<0] *= X_neg_sign_ref
+    #     Y[domain_vals<0] *= Y_neg_sign_ref
+    #     Z[domain_vals<0] *= Z_neg_sign_ref
+    #     X[domain_vals>0] *= X_pos_sign_ref
+    #     Y[domain_vals>0] *= Y_pos_sign_ref
+    #     Z[domain_vals>0] *= Z_pos_sign_ref
+
+    # # Try to make sure that Z is positive most of the time
+    # from scipy.stats import mode
+    # mz = mode( sign(Z) )
+    # if mz == -1:
+    #     X *= -1
+    #     Y *= -1
+    #     Z *= -1
+
+
+    # print abs(mean( X[_mask][::-1]+X[mask_] ))
+    # print 0.5*abs(mean(X[mask_]))
+
+    # Make sure that imag parts are gone
+    X = double(X)
+    Y = double(Y)
+    Z = double(Z)
+
     alpha = arctan2(Y,X)
     beta  = arccos(Z)
 
@@ -1172,4 +1251,92 @@ def rotate_wfarrs_at_all_times( l,                          # the l of the new m
     ans = array( [ t, new_plus, new_cross ] ).T
 
     # Return the answer
+    return ans
+
+
+
+# Careful function to find peak index for BBH waveform cases
+def find_amp_peak_index( t, amp, plot = False, return_jid=False ):
+
+    '''
+    Careful function to find peak index for BBH waveform cases
+    e.g. when numerical junk is largeer than physical peak.
+    '''
+
+    #
+    from numpy import log,argmax,linspace
+    if plot:
+        from matplotlib.pyplot import plot,yscale,xscale,axvline,show,figure,xlim
+
+    # # defiune function for downsampling to speed up algo
+    # def downsample(xx,yy,N):
+    #     from positive import spline
+    #     xx_ = spline( xx, xx )(linspace(xx[0],xx[-1],N))
+    #     return xx_, spline(xx,yy)(xx_)
+    #
+    # # mask and downsample
+    # mask =amp>0
+    # tt = t[mask]
+    # lamp = log( amp[mask] )
+    # tt_,lamp_ = downsample(tt,lamp,300)
+    #
+    # # ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~ #
+    # Nknots = 6 # NOTE that this number is KEY to the algorithm: its related to the smalles number of lines needed to resolve two peaks! (4 lines) peak1 is junk peak2 is physical; if Nknots is too large, clustering of knots happens
+    # # ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~ #
+    #
+    # knots,_ = romline(tt_,lamp_,Nknots,positive=True,verbose=True)
+    # if not (0 in knots):
+    #     knots = [0] + [ knot for knot in knots ]
+    #     Nknots += 1
+    #
+    # if plot:
+    #     figure()
+    #     axvline( tt_[knots[ int(Nknots/2) ]] )
+    #     plot( tt, lamp )
+    #     plot( tt_, lamp_ )
+    #     plot( tt_[knots], lamp_[knots], color='r', lw=3, ls = '--' )
+    #
+    # #
+    # pks,locs = findpeaks(lamp_[knots])
+    #
+    # # Clean amplitude if needed
+    # if len(pks)>1: # if the peak is not the first knot == if this is not a ringdown only waveform
+    #     refk = find( t>tt_[knots[ int(Nknots/2) ]] )[0]
+    #     clean_amp = amp.copy()
+    #     clean_amp[0:refk] = amp[ find( t>tt_[knots[ 0 ]] )[0] ]
+    # else:
+    #     # nothing need be done
+    #     clean_amp = amp
+    #
+    # # Find peak index
+    # k_amp_max = argmax( clean_amp )
+    #
+    # if plot:
+    #     axvline( t[k_amp_max], color='k' )
+    #     plot( t, log(clean_amp) )
+    #     xlim( t[k_amp_max]-200,t[k_amp_max]+200 )
+    #     show()
+
+    amp_ = amp.copy()
+    mask = amp_ > 1e-4*max(amp_)
+    a = find(mask)[0]
+    b = find(mask)[-1]
+    half_way = int((a+b)/2)
+    amp_[ :half_way ] *= 0
+    k_amp_max = argmax( amp_ )
+    # handle ringdown cases
+    if (k_amp_max == half_way): k_amp_max = 0
+
+    pre = amp.copy()
+    mask = pre > 1e-4*max(pre)
+    a = find(mask)[0]
+    b = find(mask)[-1]
+    half_way = int((a+b)/2)
+    pre[half_way:] *= 0
+    dt = t[1]-t[0]
+    jid = argmax( pre ) + int(100/dt)
+
+    # Return answer
+    ans = k_amp_max
+    if return_jid: ans = (k_amp_max,jid)
     return ans
