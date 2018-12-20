@@ -3037,6 +3037,7 @@ class gwylm:
                 for f in this.flm:
                     f.apply_window( window=window )
 
+
             elif method.lower() == 'crop':
 
                 # Crop such that the waveform daya starts abruptly
@@ -3056,6 +3057,9 @@ class gwylm:
                     h.apply_mask( mask )
                 for f in this.flm:
                     f.apply_mask( mask )
+
+                this.endindex_by_frequency -= ( len(this.t) - len(this.t[ mask ]) )
+                this.t = this.t[ mask ]
 
             # Tag this object as clean
             this.__isclean__ = True
