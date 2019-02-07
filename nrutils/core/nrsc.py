@@ -2959,7 +2959,9 @@ class gwylm:
         # NOTE that this is the end of the calchlm method
 
     # Characterise the start of the waveform using the l=m=2 psi4 multipole
-    def characterize_start_end(this,turnon_width_in_cylcles=3):
+    def characterize_start_end(this,turnon_width_in_cylcles=3, simulated = False):
+
+        # Added keyword "simulated" to handle data with no junk radiation at start of the waveform
 
         # Look for the l=m=2 psi4 multipole
         if len( this.ylm ):
@@ -2975,7 +2977,7 @@ class gwylm:
         #%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&#
         # Use the l=m=2 psi4 multipole to determine the waveform start
         # store information about the start of the waveform to the current object
-        this.preinspiral = gwfcharstart( y22, shift=turnon_width_in_cylcles )
+        this.preinspiral = gwfcharstart( y22, shift=turnon_width_in_cylcles, simulated = simulated )
         # store the expected min frequency in the waveform to this object as:
         this.wstart = this.preinspiral.left_dphi
         this.startindex = this.preinspiral.left_index
@@ -3836,6 +3838,7 @@ class gwylm:
         for j in ans.lm:
             for k in ans.lm[j]:
                 ans.lm[j][k].interpolate( dt=dt )
+        ans.dt = dt #update dt tag
         if not apply: return ans
 
     # Given a reference gwylm, pad the current object and perhaps the reference to the same length
@@ -3852,7 +3855,7 @@ class gwylm:
             l1 = that.hlm[0].n
             l2 = zref.hlm[0].n
 
-        if l1!=l2: ( that if l2>l1 else zref ).pad( max([l1,l2]) )
+        if l1!=l2: ( that if l2>l1 else zref ).pad( abs(l2 - l1) ) #changed to difference rather than max
         return that,zref
 
     # Given a reference gwylm, align the peak to that of a reference waveform
@@ -4620,7 +4623,8 @@ class gwfcharstart:
                   y,                    # input gwf object who'se start behavior will be characterised
                   shift     = 3,        # The size of the turn on region in units of waveform cycles.
                   __smooth__ = True,
-                  verbose   = False ):
+                  verbose   = False,
+                  simulated = False ):  # tag to identify simulated data with no junk radiation at waveform start
 
         #
         from numpy import arange,diff,where,array,ceil,mean,ones_like,argmax
@@ -4671,8 +4675,12 @@ class gwfcharstart:
             # j_id = pk_mask[ start_map ]
 
             # 7. Use all results thus far to construct this object
-            this.left_index     = int(j_id)                                         # Where the initial junk radiation is thought to end
-            this.right_index    = int(j_id + index_width - 1)                       # If tapering is desired, then this index will be
+            if simulated:                                                           # Allow the taper to start at the beginning of the waveform
+                this.left_index = 0
+                this.right_index    = int(index_width - 1)
+            else:
+                this.left_index = int(j_id)                                         # Where the initial junk radiation is thought to end
+                this.right_index    = int(j_id + index_width - 1)                   # If tapering is desired, then this index will be
                                                                                     # the end of the tapered region.
             this.left_dphi      = y.dphi[ this.left_index  ]                        # A lowerbound estimate for the min frequency within
                                                                                     # the waveform.
