@@ -4685,7 +4685,7 @@ class gwfcharstart:
         # Construct related window
         this.window_state = [this.left_index,this.right_index]
         this.window = maketaper( y.t, this.window_state )
-        y.plot()
+        # y.plot()
 
 
 # Function which converts lalsim waveform to gwf object
