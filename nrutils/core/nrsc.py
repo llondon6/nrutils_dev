@@ -2977,7 +2977,7 @@ class gwylm:
         # store information about the start of the waveform to the current object
         this.preinspiral = gwfcharstart( y22, shift=turnon_width_in_cylcles )
         # store the expected min frequency in the waveform to this object as:
-        this.wstart = this.preinspiral.left_dphi
+        this.wstart = this.preinspiral.center_dphi
         this.startindex = this.preinspiral.left_index
         # Estimate the smallest orbital frequency relevant for this waveform using a PN formula.
         safety_factor = 0.90
@@ -4685,8 +4685,6 @@ class gwfcharstart:
         # Construct related window
         this.window_state = [this.left_index,this.right_index]
         this.window = maketaper( y.t, this.window_state )
-        # y.plot()
-
 
 # Function which converts lalsim waveform to gwf object
 def lalsim2gwf( hp,hc,M,D, fd=False ):
