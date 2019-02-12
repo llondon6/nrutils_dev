@@ -4674,17 +4674,18 @@ class gwfcharstart:
             this.left_index     = int(j_id)                                         # Where the initial junk radiation is thought to end
             this.right_index    = int(j_id + index_width - 1)                       # If tapering is desired, then this index will be
                                                                                     # the end of the tapered region.
-            this.left_dphi      = y.dphi[ this.left_index  ]                        # A lowerbound estimate for the min frequency within
+            this.left_dphi      = abs(y.dphi[ this.left_index  ])                        # A lowerbound estimate for the min frequency within
                                                                                     # the waveform.
-            this.right_dphi     = y.dphi[ this.right_index ]                        # An upperbound estimate for the min frequency within
+            this.right_dphi     = abs(y.dphi[ this.right_index ])                        # An upperbound estimate for the min frequency within
                                                                                     # the waveform
-            this.center_dphi    = mean(y.dphi[ this.left_index:this.right_index ])  # A moderate estimate for the min frequency within they
+            this.center_dphi    = abs(mean(y.dphi[ this.left_index:this.right_index ]))  # A moderate estimate for the min frequency within they
                                                                                     # waveform
             this.peak_mask      = pk_mask
 
         # Construct related window
         this.window_state = [this.left_index,this.right_index]
         this.window = maketaper( y.t, this.window_state )
+        y.plot()
 
 
 # Function which converts lalsim waveform to gwf object
