@@ -186,7 +186,7 @@ def learn_metadata( metadata_file_location ):
         x.note += msg
         #-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#-#
         # NOTE that these parameters were defined above, and so do not need to be redefined here.
-        # NOTE that the lines below are commented out resulting in the afterjunk quantities being the initial quantities in cases where the data are not properly formatted. This is confusing. I'm sorry. 
+        # NOTE that the lines below are commented out resulting in the afterjunk quantities being the initial quantities in cases where the data are not properly formatted. This is confusing. I'm sorry.
         #S1,S2,S = None,None,None
         #L1,L2,L = None,None,None
         #R1,R2 = None,None
@@ -197,11 +197,14 @@ def learn_metadata( metadata_file_location ):
     x.madm = y.initial_ADM_energy
 
     # Store all quantities to the current object
-    x.S1_afterjunk,x.S_afterjunk2,x.S_afterjunk = S1,S2,S
-    x.L1_afterjunk,x.L2_afterjunk,x.L_afterjunk = L1,L2,L
-    x.R1_afterjunk,x.R2_afterjunk = R1,R2
-    x.P1_afterjunk,x.P2_afterjunk = P1,P2
-    x.J_afterjunk = J
+    # --
+
+    # NOTE that previously aftejunk fields had been reatined for backwards compatability. Now they are depreciated and hence commented out below. IN THE FUTURE, a separate methid may be developed to carefully store these time/freq dependednt (by convention of refernce) parameters.
+    ## x.S1_afterjunk,x.S2_afterjunk,x.S_afterjunk = S1,S2,S
+    ## x.L1_afterjunk,x.L2_afterjunk,x.L_afterjunk = L1,L2,L
+    ## x.R1_afterjunk,x.R2_afterjunk = R1,R2
+    ## x.P1_afterjunk,x.P2_afterjunk = P1,P2
+    ## x.J_afterjunk = J
 
     # Estimate the initial biary separation (afterjunk), and warn the user if this value is significantly different than the bbh file
     x.b = norm(R1-R2) # float( y.initial_separation )
