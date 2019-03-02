@@ -10,7 +10,7 @@ class gwylm_radiation_axis_workflow:
     '''
 
     #
-    def __init__( this, gwylmo, kind=None, plot=True, outdir=None, save=True, safe_domain_range=None, verbose=True ):
+    def __init__( this, gwylmo, kind=None, plot=False, outdir=None, save=False, safe_domain_range=None, verbose=True ):
 
         #
         from os.path import expanduser
@@ -66,8 +66,8 @@ class gwylm_radiation_axis_workflow:
         rax['fd_x'],rax['fd_y'],rax['fd_z'] = fd_x,fd_y,fd_z
         rax['fd_domain'] = fd_domain
 
-        #
-        if plot:
+        # Define plotting function to be called either internally or externally
+        def internal_plotting_function():
 
             #
             alert('Plotting TD Radiation Axis Series','gwylm_radiation_axis_workflow',verbose=verbose)
@@ -83,6 +83,12 @@ class gwylm_radiation_axis_workflow:
             view = (90,270)
             this.plot_radiation_axis_on_sphere( domain='time', view=view )
             this.plot_radiation_axis_on_sphere( domain='freq', view=view )
+
+        # Store internal plotting funtion to this object
+        this.plot = internal_plotting_function
+
+        #
+        if plot: this.plot()
 
     # Encapsulation of calc angles given domain and type
     def calc_radiation_axis( this, domain=None, kind = None, safe_domain_range=None ):

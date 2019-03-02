@@ -2046,20 +2046,45 @@ class gwf:
     def __rotate_frame_at_all_times__( this,                        # The current object
                                        like_l_multipoles,           # List of available multipoles with same l
                                        euler_alpha_beta_gamma,      # List of euler angles
-                                       ref_orientation = None ):    # A reference orienation (useful for BAM)
+                                       ref_orientation = None,      # A reference orienation (useful for BAM)
+                                       transform_domain=None,       # Domain of transformation ('td','fd')
+                                       verbose=False ):             # Toggle for letting the people know
 
         #
         that = this.copy()
+
+        #
+        if transform_domain is None:
+            transform_domain = 'td'
+
+        #
+        allowed_transform_domains = ('td','fd')
+        if not ( transform_domain.lower() in allowed_transform_domains ):
+            error('Transform domain must be in %s'%str(allowed_transform_domains))
+        else:
+            alert( 'Transforming to the coprecessing frame using %s angles.'%yellow(transform_domain.upper()),verbose=verbose )
 
         #
         if not ( ref_orientation is None ) :
             error('The use of "ref_orientation" has been depreciated for this function.')
 
         #
-        like_l_multipoles_dict = { (y.l,y.m):y.wfarr for y in like_l_multipoles }
+        like_l_multipoles_dict = { (y.l,y.m): (y.wfarr if transform_domain=='td' else y.fd_wfarr) for y in like_l_multipoles }
 
         #
         rotated_wfarr = rotate_wfarrs_at_all_times( this.l,this.m, like_l_multipoles_dict, euler_alpha_beta_gamma, ref_orientation=ref_orientation )
+
+        # IF domain is frequency domain,
+        # THEN convert waveform array into the time domain
+        if transform_domain.lower() == 'fd':
+            from numpy import array
+            from numpy.fft import ifftshift,fftshift,ifft,fftfreq
+            f,fd_re,fd_im = rotated_wfarr.T
+            t     = this.t
+            td_re = fftshift(ifft(ifftshift( fd_re ))).real * this.df*this.n
+            td_im = fftshift(ifft(ifftshift( fd_im ))).real * this.df*this.n
+            rotated_wfarr = array( [t,td_re,td_im], dtype=float ).T
+            # NOTE that there can be an overall time shift at this stage
 
         # Reset related fields using the new data
         that.setfields( rotated_wfarr )
@@ -3276,12 +3301,12 @@ class gwylm:
             return ans
 
     # shift the time series
-    def tshift( this, shift=0, apply=True ):
+    def tshift( this, shift=0, method=None, apply=True ):
         # shift each mode
         ans = this if apply else this.copy()
         for z in ans.lm:
             for k in ans.lm[z]:
-                ans.lm[z][k].tshift( shift=shift, apply=apply )
+                ans.lm[z][k].tshift( shift=shift, method=method, apply=apply )
         #
         if not apply: return ans
 
@@ -3444,7 +3469,7 @@ class gwylm:
 
 
     #
-    def __calc_initial_j_frame__(this):
+    def __calc_initial_j_frame__(this,verbose=False):
         '''
         Rotate multipoles such that initial J is parallel to z-hat
         '''
@@ -3470,7 +3495,7 @@ class gwylm:
         angles = [ alpha, beta, gamma ]
 
         # perform rotation
-        that = this.__rotate_frame_at_all_times__(angles)
+        that = this.__rotate_frame_at_all_times__(angles,verbose=verbose)
 
         #
         that.frame = 'J-initial'
@@ -3479,7 +3504,7 @@ class gwylm:
         return that
 
     #
-    def __calc_initial_l_frame__(this):
+    def __calc_initial_l_frame__(this,verbose=False):
         '''
         Rotate multipoles such that initial L is parallel to z-hat
         '''
@@ -3505,7 +3530,7 @@ class gwylm:
         angles = [ alpha, beta, gamma ]
 
         # perform rotation
-        that = this.__rotate_frame_at_all_times__(angles)
+        that = this.__rotate_frame_at_all_times__(angles,verbose=verbose)
 
         #
         that.frame = 'L-initial'
@@ -3559,7 +3584,7 @@ class gwylm:
         angles = [ alpha, beta, gamma ]
 
         #
-        that = this.__rotate_frame_at_all_times__(angles)
+        that = this.__rotate_frame_at_all_times__(angles,verbose=verbose)
 
         #
         that.frame = 'J(t)'
@@ -3573,7 +3598,7 @@ class gwylm:
 
 
     # output corotating waveform
-    def __calc_coprecessing_frame__(this,safe_domain_range=None,verbose=None):
+    def __calc_coprecessing_frame__(this,safe_domain_range=None,verbose=None,transform_domain=None):
 
         '''
         Output gwylm object in coprecessing frame, where the optimal emission axis is always along z
@@ -3584,6 +3609,17 @@ class gwylm:
 
         #
         if verbose is None: verbose = this.verbose
+
+        #
+        if transform_domain is None:
+            transform_domain = 'td'
+
+        #
+        allowed_transform_domains = ('td','fd')
+        if not ( transform_domain.lower() in allowed_transform_domains ):
+            error('Transform domain must be in %s'%str(allowed_transform_domains))
+        else:
+            alert( 'Transforming to the coprecessing frame using %s angles.'%yellow(transform_domain.upper()),verbose=verbose )
 
         #
         if safe_domain_range is None:
@@ -3597,12 +3633,12 @@ class gwylm:
         this.radiation_axis_info = foo
 
         #
-        alpha = foo.radiation_axis['td_alpha']
-        beta = foo.radiation_axis['td_beta']
-        gamma = foo.radiation_axis['td_gamma']
+        alpha = foo.radiation_axis['%s_alpha'%transform_domain]
+        beta  = foo.radiation_axis['%s_beta' %transform_domain]
+        gamma = foo.radiation_axis['%s_gamma'%transform_domain]
 
         #
-        that = this.__rotate_frame_at_all_times__( [gamma,-beta,alpha] )
+        that = this.__rotate_frame_at_all_times__( [gamma,-beta,alpha], transform_domain=transform_domain )
         that.previous_radiation_axis_info = foo
 
         #
@@ -3959,14 +3995,28 @@ class gwylm:
     # Given some time and set of euler angles, rotate all multipole data ... and possibly initial position, spin, and final spin.
     def __rotate_frame_at_all_times__( this,                        # The current object
                                        euler_alpha_beta_gamma,      # List of euler angles
-                                       ref_orientation = None ):    # A reference orienation (useful for BAM)
+                                       ref_orientation = None,      # A reference orienation (useful for BAM)
+                                       transform_domain=None,       # Domain of transformation ('td','fd')
+                                       verbose=False ):              # Toggle for letting the people know
 
         '''
         Given some time and set of euler angles, rotate all multipole data ... and possibly initial position, spin, and final spin.
         '''
 
         # Import usefuls
-        from numpy import arccos,dot,ndarray,array
+        from numpy import arccos,dot,ndarray,array,argmax
+
+        #
+        if transform_domain is None:
+            transform_domain = 'td'
+
+        #
+        allowed_transform_domains = ('td','fd')
+        if not ( transform_domain.lower() in allowed_transform_domains ):
+            error('Transform domain must be in %s'%str(allowed_transform_domains))
+        else:
+            alert( 'Transforming to the coprecessing frame using %s angles.'%yellow(transform_domain.upper()),verbose=verbose )
+
 
         # Perform roations for all kinds
         kinds = ['strain','psi4','news']
@@ -3998,7 +4048,7 @@ class gwylm:
                         like_l_multipoles.append( this.lm[lp,mp][kind] )
 
                 # Rotate the current multipole
-                rotated_gwf = this.lm[lm][kind].__rotate_frame_at_all_times__( like_l_multipoles, euler_alpha_beta_gamma, ref_orientation )
+                rotated_gwf = this.lm[lm][kind].__rotate_frame_at_all_times__( like_l_multipoles, euler_alpha_beta_gamma, ref_orientation, transform_domain=transform_domain )
 
                 # Store it to the output gwylm object
                 # that.lm[lm][kind] = rotated_gwf
@@ -4013,6 +4063,17 @@ class gwylm:
                     that.hlm[k] = rotated_gwf
                 # Apply changes to lm dictionary
                 that.__curate__()
+
+        # Check if data needs to be time shifted relative to a frame invariant reference
+        if transform_domain.lower() == 'fd':
+            # We'll use psi4
+            invariant_k_max = argmax( sum( [ y.amp for y in this.ylm ] ) )
+            transform_k_max = argmax( sum( [ y.amp for y in that.ylm ] ) )
+            print transform_k_max,invariant_k_max
+            print that.t[transform_k_max],that.t[invariant_k_max]
+            time_shift_amount = that.dt * ( - transform_k_max + invariant_k_max )
+            alert('Time shifting the FD transformed data by %s time units'%yellow(str(time_shift_amount)), verbose=verbose )
+            that.tshift( shift = time_shift_amount , method='index' )
 
         # ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~- #
         # Rotate related metadata??
