@@ -4043,8 +4043,6 @@ class gwylm:
                 for lp,mp in this.lm:
                     l,m = lm
                     if lp == l:
-                        # print '>> (l,m)=(%i,%i)'%(l,m)
-                        # print '>> (lp,mp)=(%i,%i)\n'%(lp,mp)
                         like_l_multipoles.append( this.lm[lp,mp][kind] )
 
                 # Rotate the current multipole
@@ -4067,10 +4065,8 @@ class gwylm:
         # Check if data needs to be time shifted relative to a frame invariant reference
         if transform_domain.lower() == 'fd':
             # We'll use psi4
-            invariant_k_max = argmax( sum( [ y.amp for y in this.ylm ] ) )
-            transform_k_max = argmax( sum( [ y.amp for y in that.ylm ] ) )
-            print transform_k_max,invariant_k_max
-            print that.t[transform_k_max],that.t[invariant_k_max]
+            invariant_k_max = argmax( sum( [ y.amp*y.amp for y in this.ylm ] ) )
+            transform_k_max = argmax( sum( [ y.amp*y.amp for y in that.ylm ] ) )
             time_shift_amount = that.dt * ( - transform_k_max + invariant_k_max )
             alert('Time shifting the FD transformed data by %s time units'%yellow(str(time_shift_amount)), verbose=verbose )
             that.tshift( shift = time_shift_amount , method='index' )
