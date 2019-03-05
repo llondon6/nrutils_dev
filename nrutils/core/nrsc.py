@@ -3602,7 +3602,7 @@ class gwylm:
         gamma = foo.radiation_axis['td_gamma']
 
         #
-        that = this.__rotate_frame_at_all_times__( [gamma,-beta,alpha] )
+        that = this.__rotate_frame_at_all_times__( [-gamma,-beta,-alpha] )
         that.previous_radiation_axis_info = foo
 
         #
