@@ -861,6 +861,28 @@ def calc_Lab_tensor( multipole_dict ):
     # Rename multipole_dict for short-hand
     y = multipole_dict
 
+    # Allow user to input real and imag parts separately -- this helps with sanity checks
+    if isinstance( y[2,2], dict ):
+        #
+        if not ( ('real' in y[2,2]) and ('imag' in y[2,2]) ):
+            error('You\'ve entered a multipole dictionary with separate real and imaginary parts. This must be formatted such that y[2,2]["real"] gives the real part and ...')
+        #
+        x = {}
+        lmlist = y.keys()
+        for l,m in lmlist:
+            x[l,m]        = y[l,m]['real'] + 1j*y[l,m]['imag']
+            x[l,m,'conj'] = x[l,m].conj()
+    elif isinstance( y[2,2], (float,int,complex,ndarray) ):
+        #
+        x = {}
+        lmlist = y.keys()
+        for l,m in lmlist:
+            x[l,m]        = y[l,m]
+            x[l,m,'conj'] = y[l,m].conj()
+    #
+    y = x
+
+
     # Check type of dictionary values and pre-allocate output
     if isinstance( y[2,2], (float,int,complex) ):
         L = zeros( (3,3), dtype=complex )
@@ -880,22 +902,22 @@ def calc_Lab_tensor( multipole_dict ):
     I0,I1,I2,Izz = zeros_like(y[2,2]), zeros_like(y[2,2]), zeros_like(y[2,2]), zeros_like(y[2,2])
 
     # Sum contributions from input multipoles
-    for l,m in y:
+    for l,m in lmlist:
 
         # Eq. A2c
-        I0 += 0.5 * ( l*(l+1)-m*m ) * y[l,m] * y[l,m].conj()
+        I0 += 0.5 * ( l*(l+1)-m*m ) * y[l,m] * y[l,m,'conj']
 
         # Eq. A2b
-        I1 += c(l,m) * (m+0.5) * ( y[l,m+1].conj() if (l,m+1) in y else 0 ) * y[l,m]
+        I1 += c(l,m) * (m+0.5) * ( y[l,m+1,'conj'] if (l,m+1) in y else 0 ) * y[l,m]
 
         # Eq. A2a
-        I2 += 0.5 * c(l,m) * c(l,m+1) * y[l,m] * ( y[l,m+2].conj() if (l,m+2) in y else 0 )
+        I2 += 0.5 * c(l,m) * c(l,m+1) * y[l,m] * ( y[l,m+2,'conj'] if (l,m+2) in y else 0 )
 
         # Eq. A2d
-        Izz += m*m * y[l,m] * y[l,m].conj()
+        Izz += m*m * y[l,m] * y[l,m,'conj']
 
     # Compute the net power (amplitude squared) of the multipoles
-    N = sum( [ y[l,m] * y[l,m].conj() for l,m in y ] ).real
+    N = sum( [ y[l,m] * y[l,m,'conj'] for l,m in lmlist ] ).real
 
     #-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-#
     # Populate the emission tensor ( Eq. A2e )
@@ -967,9 +989,10 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
         if isinstance( y[l,m], (float,int) ):
             y[l,m] = array( [ y[l,m], ] )
         else:
-            # Some input validation
-            if domain_vals is None: error( 'Since your multipole data is a series, you must also input the related domain_vals (i.e. times or frequencies) array' )
-            if len(domain_vals) != len(y[l,m]): error('domain_vals array and multipole data not of same length')
+            if not isinstance(y[l,m],dict):
+                # Some input validation
+                if domain_vals is None: error( 'Since your multipole data is a series, you must also input the related domain_vals (i.e. times or frequencies) array' )
+                if len(domain_vals) != len(y[l,m]): error('domain_vals array and multipole data not of same length')
 
 
     #-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-#
@@ -1210,7 +1233,7 @@ def rotate_wfarrs_at_all_times( l,                          # the l of the new m
 
     #
     if not ( ref_orientation is None ) :
-        warning('The use of "ref_orientation" has been depreciated for this function.')
+        error('The use of "ref_orientation" has been depreciated for this function.')
 
     # Handle the default behavior for the reference orientation
     if ref_orientation is None:

@@ -493,6 +493,26 @@ class scentry:
         # Perform comparison and return
         return allclose( param_array(this), param_array(that), atol=atol )
 
+    # Load times series for L,S,J and maybe others to this.__source_timeseries__
+    def get_source_timeseries_method(this):
+
+        '''
+        Load times series for L,S,J and maybe others to this.__source_timeseries__
+        '''
+
+        # Load the handler for this entry. It will be used multiple times below.
+        handler = this.loadhandler()
+
+        # Load times series and output if the handler method exists
+        if 'learn_source_dynamics' in handler.__dict__:
+            #
+            # print '>> found learn_source_dynamics'
+            this.__source_timeseries_function__ = handler.learn_source_dynamics
+        else:
+            #
+            warning(' No "%s" found in handler for %s.'%(magenta('learn_source_dynamics'),magenta(this.simname)))
+            #
+            return None
 
 # Concert a simulation directory to a scentry object
 # NOTE that this algorithm is to be compared to scbuild()
@@ -2078,11 +2098,13 @@ class gwf:
         # THEN convert waveform array into the time domain
         if transform_domain.lower() == 'fd':
             from numpy import array
-            from numpy.fft import ifftshift,fftshift,ifft,fftfreq
-            f,fd_re,fd_im = rotated_wfarr.T
+            from scipy.fftpack import ifftshift,ifft,fft
+            that.raw_transformed_fd_wfarr = rotated_wfarr.copy()
+            f,fd_p,fd_c = rotated_wfarr.T
             t     = this.t
-            td_re = fftshift(ifft(ifftshift( fd_re ))).real * this.df*this.n
-            td_im = fftshift(ifft(ifftshift( fd_im ))).real * this.df*this.n
+            td_re = ifft(ifftshift( fd_p )).real * this.df*this.n
+            td_im = ifft(ifftshift( fd_c )).real * this.df*this.n
+            # td_im *= -1 # NOTE that here we introduce a minus sign. There appears to be a step in rotate_wfarrs_at_all_times which assumes that input multipoles are real?
             rotated_wfarr = array( [t,td_re,td_im], dtype=float ).T
             # NOTE that there can be an overall time shift at this stage
 
@@ -2116,6 +2138,13 @@ class gwf:
             #
             this.__lowpassfiltered__ = True
 
+    #
+    def __flip_cross_sign_convention__(this):
+        #
+        this.wfarr[:,-1] *= -1
+        this.setfields()
+
+
 
 # Class for waveforms: Psi4 multipoles, strain multipoles (both spin weight -2), recomposed waveforms containing h+ and hx. NOTE that detector response waveforms will be left to pycbc to handle
 class gwylm:
@@ -2144,6 +2173,7 @@ class gwylm:
                   pad = None,                       # Optional padding length in samples of wfarr upon loading; not used if fftfactor is present; 'pad' samples dwill be added to the wfarr rows
                   __M_RELATIVE_SIGN_CONVENTION__ = None,
                   initial_j_align = None,           # Toggle for putting wabeform in frame where initial J is z-hat
+                  load_source_timeseries = False, # Toggle for loading timeseries for L,S,J from dynamics
                   verbose               = None ):   # be verbose
 
         '''
@@ -2182,6 +2212,23 @@ class gwylm:
         # Confer the scentry_object's attributes to this object for ease of referencing
         for attr in scentry_obj.__dict__.keys():
             setattr( this, attr, scentry_obj.__dict__[attr] )
+
+        # If the source dynamics function has been written for this simulation's handler, then store that function to the current object if it doesn not already exist. NOTE that after the waveform data has been loaded, the associated time values will be used to polulate the source time series field in the current object.
+        if load_source_timeseries:
+            alert('Trying to load source timeseries from simulation directory using "learn_source_dynamics" in the handler script.',verbose=verbose)
+            if not ('__source_timeseries_method__' in this.__dict__):
+                #
+                handler = scentry_obj.loadhandler()
+                if 'learn_source_dynamics' in handler.__dict__:
+                    this.__source_timeseries_method__ = handler.learn_source_dynamics
+                else:
+                    # Turn off if-else cases below
+                    warning('could not load source dynamics time series')
+                    load_source_timeseries = False
+            else:
+                # Turn off if-else cases below
+                warning('could not load source dynamics time series')
+                load_source_timeseries = False
 
         # NOTE that we don't want the scentry's verbose property to overwrite the input above, so we definte this.verbose at this point, not before.
         this.verbose = verbose
@@ -2318,6 +2365,10 @@ class gwylm:
 
         #
         if load: this.__enforce_m_relative_phase_orientation__()
+
+        # Populate a dictionary which contains the time series for source dynamics
+        if load_source_timeseries:
+            this.__source_timeseries__ = this.__source_timeseries_method__( scentry_obj,  this.t )
 
 
     # Allow class to be indexed
@@ -3020,7 +3071,7 @@ class gwylm:
         this.endindex_by_frequency = this.postringdown.frequency_end_index
 
     # Clean the time domain waveform by removing junk radiation.
-    def clean( this, method=None, crop_time=None ):
+    def clean( this, method=None, crop_time=None, force=False ):
 
         # Default cleaning method will be smooth windowing
         if method is None:
@@ -3031,7 +3082,7 @@ class gwylm:
         #    characterize_start_end method
         # ---------------------------------------------------------------------- #
 
-        if not this.__isclean__ :
+        if not this.__isclean__ or force :
 
             if method.lower() == 'window':
 
@@ -3598,7 +3649,7 @@ class gwylm:
 
 
     # output corotating waveform
-    def __calc_coprecessing_frame__(this,safe_domain_range=None,verbose=None,transform_domain=None):
+    def __calc_coprecessing_frame__(this,safe_domain_range=None,verbose=None,transform_domain=None,__format__=None):
 
         '''
         Output gwylm object in coprecessing frame, where the optimal emission axis is always along z
@@ -3626,7 +3677,7 @@ class gwylm:
             safe_domain_range=[0.009,0.3]
 
         #
-        foo = gwylm_radiation_axis_workflow(this,plot=False,save=False,verbose=verbose,safe_domain_range=safe_domain_range)
+        foo = gwylm_radiation_axis_workflow(this,plot=False,save=False,verbose=verbose,safe_domain_range=safe_domain_range,__format__=__format__)
 
         #
         if verbose: alert('Storing radiation axis information to this.radiation_axis_info')
@@ -4004,7 +4055,7 @@ class gwylm:
         '''
 
         # Import usefuls
-        from numpy import arccos,dot,ndarray,array,argmax
+        from numpy import arccos,dot,ndarray,array,argmax,pi
 
         #
         if transform_domain is None:
@@ -4049,7 +4100,7 @@ class gwylm:
                 rotated_gwf = this.lm[lm][kind].__rotate_frame_at_all_times__( like_l_multipoles, euler_alpha_beta_gamma, ref_orientation, transform_domain=transform_domain )
 
                 # Store it to the output gwylm object
-                # that.lm[lm][kind] = rotated_gwf
+                # NOTE that ylm, flm, and hlm must change here, NOT the references created in curate
                 if kind == 'psi4':
                     k = that.ylm.index( that.lm[lm][kind] )
                     that.ylm[k] = rotated_gwf
@@ -4061,15 +4112,6 @@ class gwylm:
                     that.hlm[k] = rotated_gwf
                 # Apply changes to lm dictionary
                 that.__curate__()
-
-        # Check if data needs to be time shifted relative to a frame invariant reference
-        if transform_domain.lower() == 'fd':
-            # We'll use psi4
-            invariant_k_max = argmax( sum( [ y.amp*y.amp for y in this.ylm ] ) )
-            transform_k_max = argmax( sum( [ y.amp*y.amp for y in that.ylm ] ) )
-            time_shift_amount = that.dt * ( - transform_k_max + invariant_k_max )
-            alert('Time shifting the FD transformed data by %s time units'%yellow(str(time_shift_amount)), verbose=verbose )
-            that.tshift( shift = time_shift_amount , method='index' )
 
         # ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~- #
         # Rotate related metadata??
@@ -4087,20 +4129,81 @@ class gwylm:
             beta = array([beta])
             gamma = array([gamma])
 
+        # #
+        # if transform_domain == 'fd':
+        #     warning('CODE UPDATE NEEDED: Vector metadata rotations currently incorrectly assume that the first index corresponds to initial, and that the last index corresponds to findal. This assumtion is not correct for FD angles.')
 
+        if transform_domain == 'fd':
+            start_index = find(that.f >= that.wstart_pn/(2*pi))[0]
+            warning('Note that metadata vectors for initial data will be rotated according to positive frequency angles.')
+            end_index = find(that.f >= that.lm[2,2]['psi4'].dt/4)[0]
+        else:
+            start_index = 0
+            end_index = -1
+
+        # print start_index,end_index
         R = lambda X,k: rotate3( X, alpha[k], beta[k], gamma[k] )
-        that.Sf = R( this.Sf, -1 ); that.Xf = R( this.Xf, -1 )
+        that.Sf = R( this.Sf, end_index ); that.Xf = R( this.Xf, end_index )
 
         # * initial spins
-        that.S1 = R( this.S1, 0 ); that.S2 = R( this.S2, 0 )
-        that.X1 = R( this.X1, 0 ); that.X2 = R( this.X2, 0 )
+        that.S1 = R( this.S1, start_index ); that.S2 = R( this.S2, start_index )
+        that.X1 = R( this.X1, start_index ); that.X2 = R( this.X2, start_index )
         # * initial angular momenta
-        that.L1 = R( this.L1, 0 ); that.L2 = R( this.L2, 0 )
+        that.L1 = R( this.L1, start_index ); that.L2 = R( this.L2, start_index )
         # * initial positions / position time series / maybe velocities
-        that.R1 = R( this.R1, 0 ); that.R2 = R( this.R2, 0 )
+        that.R1 = R( this.R1, start_index ); that.R2 = R( this.R2, start_index )
         # * others
-        that.S = R( this.S, 0 ); that.J = R( this.J, 0 );
-        that.L = R( this.L, 0 )
+        that.S = R( this.S, start_index ); that.J = R( this.J, start_index );
+        that.L = R( this.L, start_index )
+
+        # If source dynamics time series is stored, then rotate that too
+        if '__source_timeseries__' in this.__dict__:
+            alert('Attempting to rotate dynamics timeseries in this.__source_timeseries__')
+            #
+            times_used = this.__source_timeseries__['times_used']
+            J_ = this.__source_timeseries__['J'].copy()
+            L_ = this.__source_timeseries__['L'].copy()
+            S_ = this.__source_timeseries__['S'].copy()
+            if not angles_are_arrays:
+                #
+                # print J.shape, len(J.T), alpha
+                J = array([rotate3( j, alpha[0],beta[0],gamma[0]) for j in J_])
+                L = array([rotate3( l, alpha[0],beta[0],gamma[0]) for l in L_])
+                S = array([rotate3( s, alpha[0],beta[0],gamma[0]) for s in S_])
+            else:
+                #
+                if transform_domain=='td':
+                    a = spline( this.t, alpha )( times_used )
+                    b = spline( this.t, beta  )( times_used )
+                    g = spline( this.t, gamma )( times_used )
+                    J = array( [rotate3( J[k],a[k],b[k],g[k] ) for j in range(len(J[:,0]))] )
+                    L = array( [rotate3( L[k],a[k],b[k],g[k] ) for j in range(len(L[:,0]))] )
+                    S = array( [rotate3( S[k],a[k],b[k],g[k] ) for j in range(len(S[:,0]))] )
+                else:
+                    from scipy.fftpack import fft,ifftshift,ifft,fftfreq
+                    fd_J = array( [fft(j) for j in J_.T] ).T
+                    fd_L = array( [fft(l) for l in L_.T] ).T
+                    fd_S = array( [fft(s) for s in S_.T] ).T
+                    freqs_needed = fftfreq( len(J), times_used[1]-times_used[0] )
+                    a = spline( this.f, ifftshift( alpha ) )( freqs_needed )
+                    b = spline( this.f, ifftshift( beta  ) )( freqs_needed )
+                    g = spline( this.f, ifftshift( gamm  ) )( freqs_needed )
+                    #
+                    fd_J = array( [rotate3( fd_J[k],a[k],b[k],g[k] ) for j in range(len(freqs_needed))] )
+                    fd_L = array( [rotate3( fd_L[k],a[k],b[k],g[k] ) for j in range(len(freqs_needed))] )
+                    fd_S = array( [rotate3( fd_S[k],a[k],b[k],g[k] ) for j in range(len(freqs_needed))] )
+                    #
+                    J = array( [ifft(j) for j in fd_J.T] ).T
+                    L = array( [ifft(l) for l in fd_L.T] ).T
+                    S = array( [ifft(s) for s in fd_S.T] ).T
+
+
+
+            #
+            that.__source_timeseries__['J'] = J
+            that.__source_timeseries__['L'] = L
+            that.__source_timeseries__['S'] = S
+
 
 
         # Rotate system radiated and remnant quantities
@@ -4462,6 +4565,17 @@ class gwylm:
 
         #
         this.__lowpassfiltered__ = True
+
+    #
+    def __flip_cross_sign_convention__(this):
+        #
+        warning('Now multiplying all cross infromation by -1. This function should not need to be called.',verbose=this.verbose)
+        kinds = ['ylm','hlm','flm']
+        for kind in kinds:
+            for y in this.__dict__[kind]:
+                y.__flip_cross_sign_convention__()
+        #
+        this.__curate__()
 
 
 

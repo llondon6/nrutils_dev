@@ -498,3 +498,103 @@ def infer_default_level_and_extraction_parameter( this,     # An scentry object
 
     # Return answers
     return extraction_parameter,level,extraction_map_dict
+
+
+#
+def learn_source_dynamics(scentry_object,time_series,verbose=True):
+
+    '''
+    Based on notebook by Jonathan Thompson, 2019self.
+
+    NOTES
+    ---
+    * For now, only S, L and J will be calculated and stored. This is to be useful while avoiding faff due to mass ratio convetions.
+
+    USAGE
+    ---
+    dict_with_source_dynamics = learn_source_dynamics(time_series,verbose=True)
+
+    '''
+
+    # Import usefuls
+    from scipy.interpolate import InterpolatedUnivariateSpline as IUS
+    from numpy import array, cross
+
+    #
+    if verbose:
+        alert('Trying to learn source dynamics from simulatoin files ...')
+
+
+    # Reference masses
+    mass1 = scentry_object.raw_metadata.mass1
+    mass2 = scentry_object.raw_metadata.mass2
+
+    # Find puncture data locations
+    puncture_data_1_location = ls( scentry_object.simdir()+\
+                'moving_puncture_integrate1*' )[0]
+    puncture_data_2_location = ls( scentry_object.simdir()+ \
+                'moving_puncture_integrate2*' )[0]
+
+    # Location of spin data
+    spin_data_1_location = ls( scentry_object.simdir()+\
+            'hspin_1*' )[0]
+    spin_data_2_location = ls( scentry_object.simdir()+ \
+                'hspin_2*' )[0]
+
+    # Load puncture and spin data
+    puncture_data_1,_ = smart_load( puncture_data_1_location )
+    puncture_data_2,_ = smart_load( puncture_data_2_location )
+    spin_data_1,_ = smart_load( spin_data_1_location )
+    spin_data_2,_ = smart_load( spin_data_2_location )
+
+    # Extract Puncture Locations
+    R1 = array( [  puncture_data_1[:,0],puncture_data_1[:,1],\
+            puncture_data_1[:,2],  ] ).T
+    R2 = array( [  puncture_data_2[:,0],puncture_data_2[:,1],\
+                puncture_data_2[:,2],  ] ).T
+
+    # Compute component momenta:
+    # NOTE that here the shift is actually contained within puncture_data,
+    # and NOTE that the shift is -1 times the velocity
+    P1 = mass1 * -array( [  puncture_data_1[:,3],puncture_data_1[:,4],\
+                puncture_data_1[:,5],  ] ).T
+    P2 = mass2 * -array( [  puncture_data_2[:,3],puncture_data_2[:,4],\
+                puncture_data_2[:,5],  ] ).T
+
+    # Reference spins
+    S1_ = array( [  spin_data_1[:,1],spin_data_1[:,2],\
+                spin_data_1[:,3],  ] )
+    S2_ = array( [  spin_data_2[:,1],spin_data_2[:,2],\
+                spin_data_2[:,3],  ] )
+
+    # Estimate the component angular momenta
+    L1 = cross(R1,P1)
+    L2 = cross(R2,P2)
+    L_ = L1+L2
+
+    # Time values
+    L_times  = puncture_data_1[:, -1]
+    S1_times = spin_data_1[:, 0]
+    S2_times = spin_data_2[:, 0]
+
+    # # Interpolate everything of use. Some care is taken with the spins as the data files may have sligtly different time series.
+    # time_series = L_times[ L_times > scentry_object.raw_metadata.after_junkradiation_time ]
+    time_series = time_series[ time_series < max(lim(L_times)[-1],lim(S1_times)[-1]) ]
+    S1 = array(  [ IUS(S1_times,s)(time_series) for s in S1_ ]  ).T
+    S2 = array(  [ IUS(S2_times,s)(time_series) for s in S2_ ]  ).T
+    L = array(  [ IUS(L_times,l)(time_series) for l in L_.T ]  ).T
+    
+    # Total angular momenta
+    S = S1+S2   # Spin
+    J = L+S     # Orbital  Spin
+
+    # Save everything in a standard dictionary
+    foo = {}
+    foo['L'] = L
+    foo['S'] = S
+    foo['J'] = J
+    foo['times_used'] = time_series
+
+    # Let's go! :D
+    ans = foo
+    return ans
