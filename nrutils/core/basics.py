@@ -1202,7 +1202,7 @@ def rotate_wfarrs_at_all_times( l,                          # the l of the new m
     '''
 
     # Import usefuls
-    from numpy import exp, pi, array, ones, sign
+    from numpy import exp, pi, array, ones, sign, complex128
     from nrutils.manipulate.rotate import wdelement
 
     #
@@ -1220,10 +1220,17 @@ def rotate_wfarrs_at_all_times( l,                          # the l of the new m
     gamma *= sign( ref_orientation[-1] )
     alpha *= sign( ref_orientation[-1] )
 
+    # Test to see if the original wfarr is complex and if so set the new wfarr to be complex as well
+    wfarr_type = type( like_l_multipoles_dict[2,2][:,1][0] )
+
     #
     # new_ylm = 0
-    new_plus = 0
-    new_cross = 0
+    if wfarr_type == complex128:
+        new_plus  = 0 + 0j
+        new_cross = 0 + 0j
+    else:
+        new_plus  = 0
+        new_cross = 0
     for lm in like_l_multipoles_dict:
         # See eq A9 of arxiv:1012:2879
         l,mp = lm
