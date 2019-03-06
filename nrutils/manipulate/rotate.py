@@ -10,7 +10,7 @@ class gwylm_radiation_axis_workflow:
     '''
 
     #
-    def __init__( this, gwylmo, kind=None, plot=False, outdir=None, save=False, safe_domain_range=None, verbose=True ):
+    def __init__( this, gwylmo, kind=None, plot=False, outdir=None, save=False, safe_domain_range=None, verbose=True,__format__=None ):
 
         #
         from os.path import expanduser
@@ -41,9 +41,9 @@ class gwylm_radiation_axis_workflow:
 
         # Calculate radiation axes in time and frequency domain
         alert('Calculating TD Radiation Axis Series','gwylm_radiation_axis_workflow',verbose=verbose)
-        td_alpha,td_beta,td_gamma,td_x,td_y,td_z,td_domain = this.calc_radiation_axis( domain = 'time', kind = kind, safe_domain_range=None  )
+        td_alpha,td_beta,td_gamma,td_x,td_y,td_z,td_domain = this.calc_radiation_axis( domain = 'time', kind = kind, safe_domain_range=None, __format__=__format__  )
         alert('Calculating FD Radiation Axis Series','gwylm_radiation_axis_workflow',verbose=verbose)
-        fd_alpha,fd_beta,fd_gamma,fd_x,fd_y,fd_z,fd_domain = this.calc_radiation_axis( domain = 'freq', kind = kind, safe_domain_range=safe_domain_range  )
+        fd_alpha,fd_beta,fd_gamma,fd_x,fd_y,fd_z,fd_domain = this.calc_radiation_axis( domain = 'freq', kind = kind, safe_domain_range=safe_domain_range, __format__=__format__  )
 
         # # Mask away Nans
         # mask = array([not isnan(v) for v in fd_beta+fd_alpha+fd_gamma])
@@ -91,7 +91,7 @@ class gwylm_radiation_axis_workflow:
         if plot: this.plot()
 
     # Encapsulation of calc angles given domain and type
-    def calc_radiation_axis( this, domain=None, kind = None, safe_domain_range=None ):
+    def calc_radiation_axis( this, domain=None, kind = None, safe_domain_range=None, __format__=None ):
 
         # Calc radiation axis: alpha beta gamma and x y z
         kind = 'psi4' if kind is None else kind
@@ -101,7 +101,12 @@ class gwylm_radiation_axis_workflow:
         gwylmo = this.gwylmo
 
         # Construct dictionary of multipoles using all multipoles available
-        mp = { (l,m) : ( gwylmo.lm[l,m][kind].y if domain in ('t','time') else gwylmo.lm[l,m][kind].fd_y ) for l,m in gwylmo.lm  }
+        # NOTE that the __format__ toggle may be useful for sanity checks
+        if not ( __format__ is None ):
+            alert('Usinf alternative format!')
+            mp = { (l,m) : ( {'real':gwylmo.lm[l,m][kind].wfarr[:,1],'imag':gwylmo.lm[l,m][kind].wfarr[:,2]} if domain in ('t','time') else {'real':gwylmo.lm[l,m][kind].fd_wfarr[:,1],'imag':gwylmo.lm[l,m][kind].fd_wfarr[:,2]} ) for l,m in gwylmo.lm  }
+        else:
+            mp = { (l,m) : ( gwylmo.lm[l,m][kind].y if domain in ('t','time') else gwylmo.lm[l,m][kind].fd_y ) for l,m in gwylmo.lm  }
         # Domain values: time or freq
         domain_vals = gwylmo.lm[2,2][kind].t if domain in ('t','time') else gwylmo.lm[2,2][kind].f
 
@@ -232,7 +237,8 @@ class gwylm_radiation_axis_workflow:
         #
         gwylmo.__calc_radiated_quantities__(use_mask=False)
         k = 0
-        remnant = gwylmo.old_remnant if 'old_remnant' in gwylmo.__dict__ else gwylmo.remnant
+        # remnant = gwylmo.old_remnant if 'old_remnant' in gwylmo.__dict__ else gwylmo.remnant
+        remnant = gwylmo.remnant
         jx,jy,jz = remnant['J'][k] / linalg.norm( remnant['J'][k] )
         jfx,jfy,jfz = remnant['J'][-1] / linalg.norm( remnant['J'][-1] )
 
@@ -253,12 +259,12 @@ class gwylm_radiation_axis_workflow:
         ax.scatter( jfx,jfy,jfz,marker='s', c='dodgerblue', label='Final $J$ (Radiated Est.)',s=80,alpha=0.5 )
 
         #
+        # J = this.gwylmo.remnant['J'].copy()
         J = remnant['J']
-        absJ = zeros_like(J)
+        # J /= linalg.norm(J,axis=1)
         for k in range(J.shape[0]):
             J[k] /= linalg.norm(J[k])
-            absJ[k] = J[k]
-        plot( J[:,0],J[:,1],J[:,2], label='$J(t)$ (Radiated Est.)' )
+        plot( J[:,0],J[:,1],J[:,2], label='$J(t)$ (Radiated Est.)',zorder=-2e4 )
 
         #
         S = gwylmo.S
@@ -271,7 +277,7 @@ class gwylm_radiation_axis_workflow:
         ax.scatter( sfx,sfy,sfz, color='tomato', label='Final $J$ (BBH)', marker='v' )
 
         #
-        plot( x[mask],y[mask],z[mask], lw=2, color='grey', label='$\hat{V}$' )
+        plot( x[mask],y[mask],z[mask], lw=2, color='grey', label='$\hat{V}(%s)$'%('t' if tag=='td' else 'f') )
 
         #
         xlabel('$x$')
@@ -289,6 +295,7 @@ class gwylm_radiation_axis_workflow:
 
         #
         legend( loc=1, frameon=True )
+        title(('Time Domain: ' if tag=='td' else 'Frequency Domain: ' ) + this.gwylmo.simname, loc='right', alpha=0.5, fontsize=16)
 
         #
         if this.save:
@@ -390,38 +397,3 @@ def wdmatrix( l,                # polar l
 
     #
     return D
-
-# # Given an array of complex valued waveform timeseries, and the related mutipolar spherical indeces, as well as the desired rotation angles, rotate the waveform set
-# def mprotate( mpdict,           # dictionary or (l,m): complex__time_series_multipole
-#               angles,           # three euler angles in order alpha beta gamma
-#               verbose = None ): # Let the people know
-#
-#     # Import useful things
-#     from numpy import array, arange, dot
-#
-#     # Validate the mpdict input
-#
-#     # Build list of l values; roations will be allied one l at a time
-#     lrange = sorted( list(set( [ lm[0] for lm in mpdict.keys() ] )) )
-#
-#     # A basic check for angles input, more needed
-#     if len(angles) != 3:
-#         msg = 'angles input must be three floats in alpha beta gamma order'
-#         error(msg,'mprotate')
-#     for ang in angles:
-#         if not isinstance(ang,(float,int)):
-#             msg = 'angles must be float or int'
-#             error(msg,'mprotate')
-#
-#     # For each l value
-#     for l in lrange:
-#
-#         # Calculate the m range to use
-#         mrange = sorted( [ lm[-1] for lm in mpdict.keys() if l==lm[0] ] )
-#
-#         # Calculate the related d matrix
-#         alpha,beta,gamma = angles
-#         D = wdmatrix( l, mrange, alpha, beta, gamma )
-#
-#         # For all time coordinates (the related indeces)
-#         tindmap = range( len( mpdict[ mpdict ] ) )
