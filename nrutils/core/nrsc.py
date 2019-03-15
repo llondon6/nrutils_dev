@@ -3035,9 +3035,9 @@ class gwylm:
         # NOTE that this is the end of the calchlm method
 
     # Characterise the start of the waveform using the l=m=2 psi4 multipole
-    def characterize_start_end(this,turnon_width_in_cylcles=3, simulated = False):
+    def characterize_start_end(this,turnon_width_in_cylcles=3, nojunk = False):
 
-        # Added keyword "simulated" to handle data with no junk radiation at start of the waveform
+        # Added keyword "nojunk" to handle data with no junk radiation at start of the waveform
 
         # Look for the l=m=2 psi4 multipole
         if len( this.ylm ):
@@ -3053,7 +3053,7 @@ class gwylm:
         #%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&#
         # Use the l=m=2 psi4 multipole to determine the waveform start
         # store information about the start of the waveform to the current object
-        this.preinspiral = gwfcharstart( y22, shift=turnon_width_in_cylcles, simulated = simulated )
+        this.preinspiral = gwfcharstart( y22, shift=turnon_width_in_cylcles, nojunk = nojunk )
         # store the expected min frequency in the waveform to this object as:
         this.wstart = this.preinspiral.center_dphi
         this.startindex = this.preinspiral.left_index
@@ -4795,7 +4795,7 @@ class gwfcharstart:
                   shift     = 3,        # The size of the turn on region in units of waveform cycles.
                   __smooth__ = True,
                   verbose   = False,
-                  simulated = False ):  # tag to identify simulated data with no junk radiation at waveform start
+                  nojunk = False ):  # tag to identify data with no junk radiation at waveform start
 
         #
         from numpy import arange,diff,where,array,ceil,mean,ones_like,argmax
@@ -4846,7 +4846,7 @@ class gwfcharstart:
             # j_id = pk_mask[ start_map ]
 
             # 7. Use all results thus far to construct this object
-            if simulated:                                                           # Allow the taper to start at the beginning of the waveform
+            if nojunk:                                                           # Allow the taper to start at the beginning of the waveform
                 this.left_index = 0
                 this.right_index    = int(index_width - 1)
             else:
