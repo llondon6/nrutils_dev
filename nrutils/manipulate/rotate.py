@@ -103,7 +103,7 @@ class gwylm_radiation_axis_workflow:
         # Construct dictionary of multipoles using all multipoles available
         # NOTE that the __format__ toggle may be useful for sanity checks
         if not ( __format__ is None ):
-            alert('Usinf alternative format!')
+            alert('Using alternative dictionary format')
             mp = { (l,m) : ( {'real':gwylmo.lm[l,m][kind].wfarr[:,1],'imag':gwylmo.lm[l,m][kind].wfarr[:,2]} if domain in ('t','time') else {'real':gwylmo.lm[l,m][kind].fd_wfarr[:,1],'imag':gwylmo.lm[l,m][kind].fd_wfarr[:,2]} ) for l,m in gwylmo.lm  }
         else:
             mp = { (l,m) : ( gwylmo.lm[l,m][kind].y if domain in ('t','time') else gwylmo.lm[l,m][kind].fd_y ) for l,m in gwylmo.lm  }

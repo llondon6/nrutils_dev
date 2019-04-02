@@ -1166,6 +1166,9 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
     #     Y *= -1
     #     Z *= -1
 
+    # #
+    # Z = unwrap(pi*Z)
+    # Z /= pi
 
     # print abs(mean( X[_mask][::-1]+X[mask_] ))
     # print 0.5*abs(mean(X[mask_]))

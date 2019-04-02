@@ -680,6 +680,128 @@ def scbuild(keyword=None,save=True):
         alert(msg,'scbuild')
 
 
+#
+def sc_add( database_name, simulation_dir ):
+    '''
+
+    Function to add individual runs to a simulation catalog.
+
+    INPUTS
+    ---
+    database_name,  Name of database to add entry to (e.g. hogshead for hogshead.db)
+    simulation_dir  Locaiton of valid simulation directory to add to catalog
+
+    OUTPUT
+    ---
+    None
+
+    Jonathan Thompson, Lionel London 2019
+
+    '''
+
+    # Switch to Jonathan's short-hand
+    # Targeted database to update and the location of the new simulation files
+    db_to_update = database_name
+    new_sim_path = simulation_dir
+
+    # Look up metadata and config parameters
+    cpath_list = glob.glob( global_settings.config_path+'*.ini' )
+
+    # Filter the available .ini files for the desired database
+    if isinstance(db_to_update,(str,unicode)):
+        msg = 'Filtering ini files for \"%s\"'%cyan(db_to_update)
+        alert(msg)
+        cpath_list = filter( lambda path: db_to_update in path, cpath_list )
+
+    #
+    if not cpath_list:
+        msg = 'Cannot find configuration files (*.ini) in %s' % global_settings.config_path
+        error(msg)
+
+
+    # Create config object from the config file (assuming only one .ini file per database, take the first!)
+    config = scconfig( cpath_list[0] )
+
+    # Create streaming log file
+    logfstr = global_settings.database_path + '/' + splitext(basename(config.config_file_location))[0] + '.log'
+    msg = 'Opening log file in: '+cyan(logfstr)
+    alert(msg)
+    logfid = open(logfstr, 'w')
+
+    # Grabbing current database
+    current_database_path = global_settings.database_path + splitext(basename(config.config_file_location))[0] + '.' + global_settings.database_ext
+    if isfile(current_database_path):
+        msg = 'Opening database file in: '+cyan(current_database_path)
+        alert(msg)
+        with open( current_database_path, 'r') as data_file:
+            current_database = pickle.load(data_file)
+    else:
+        msg = "Database doesn't exist!"+cyan(current_database_path)
+        error(msg)
+
+
+    # Generate a list of current simulation directories in the database
+    current_db_dirs = [e.raw_metadata.source_dir[0] for e in current_database ]
+    current_db_simnames = [e.simname for e in current_database ]
+
+    # Check that the desired simulation (to be added) isn't already in the database
+    if new_sim_path in current_db_dirs:
+        msg = 'The "new" simulation directory is already in the database!'
+        alert(msg)
+        quit()
+
+
+    # Search for the simulation file with the correct metadata_id
+    msg = 'Searching for %s in %s.' % ( cyan(config.metadata_id), cyan(new_sim_path) ) + yellow(' This may take a long time if the folder being searched is mounted from a remote drive.')
+    alert(msg)
+    mdfile_list = rfind(new_sim_path,config.metadata_id,verbose=True)
+    alert('done.')
+
+    # Attempt scentry file creation from mdfiles
+    for mdfile in mdfile_list:
+        # Create scentry object
+        entry = scentry(config,mdfile,verbose=True)
+
+        # write to log file
+        logfid.write( '%5i\t%s\n'% (0,entry.log) )
+
+        if entry.isvalid:
+            # entry is valid and now we can check if it's already in the database via simname
+            if entry.simname in current_db_simnames:
+                msg = 'The "new" simulation name is already in the database!'
+                alert(msg)
+                break
+            else:
+                # If the obj is valid, add it to the catalog list
+                alert('Simulation missing in the database and will be added\t\t\t\t %s'%yellow(entry.simname))
+
+                # Backup old database
+                db_backup_path = current_database_path + '.backup'
+                msg = 'Creating backup of database file to %s'%cyan(db_backup_path)
+                alert(msg,'scbuild')
+                with open(db_backup_path, 'wb') as dbf:
+                  pickle.dump( current_database , dbf, pickle.HIGHEST_PROTOCOL )
+
+                # Append new entries to the old database
+                new_database = current_database[:]
+                new_database.append(entry)
+
+                # Write updated database to file
+                msg = 'Saving updated database file to %s'%cyan(current_database_path)
+                alert(msg,'scbuild')
+                with open( current_database_path, 'wb') as data_file:
+                    pickle.dump( new_database, data_file, pickle.HIGHEST_PROTOCOL )
+        else:
+            # .bbh file not valid to create scentry object
+            msg = 'This entry is not valid: {}'.format(mdfile)
+            alert(msg)
+
+
+    # Close the log file
+    logfid.close()
+
+
+
 # Reconfigure a database file to the user's current nrutils configuration
 def screconf( database_path, verbose=True, make_backup=True ):
     '''
@@ -4324,6 +4446,7 @@ class gwylm:
     def __calc_radiated_quantities__(this,              # The current object
                                      use_mask = True,   # Toggle for chopping of noisey data. NOTE use_mask = False is useful if you need radiated quantities of the same length as the original waveforms
                                      ref_orientation = None,
+                                     enforce_initial_J_consistency=True,
                                      verbose=False):    # Toggle for letting the people know
 
         ''' Reference: https://arxiv.org/pdf/0707.4654.pdf '''
@@ -4384,12 +4507,13 @@ class gwylm:
         # Calculate the internal angular momentum by using either the final or initial angular momentum values
         this.remnant['J'] = -this.radiated['J']
 
-        # # Use the final spin value to set the integration constant
-        # this.remnant['J'] = this.remnant['J'] - this.remnant['J'][end_index,:] + this.Sf # Enforce consistency with final spin vector
-
         # Use the initial J value to set the integration constant
         initial_index = 0 # index location where we expect the simulation data to NATURALLY start. For example, we expect that if the waveform data has been padded upon loading that this padding happens to the right of the data series, and not to the left.
-        this.remnant['J'] = this.remnant['J'] - this.remnant['J'][initial_index,:] + this.J # Enforce consistency with initial spin vector
+        if enforce_initial_J_consistency:
+            this.remnant['J'] = this.remnant['J'] - this.remnant['J'][initial_index,:] + this.J # Enforce consistency with initial spin vector
+        else:
+            # # Use the final spin value to set the integration constant
+            this.remnant['J'] = this.remnant['J'] - this.remnant['J'][end_index,:] + this.Sf # Enforce consistency with final spin vector
 
         this.remnant['S'] = this.remnant['J'] # The remnant has no orbital angular momentum. Is this right?
         this.remnant['P'] = -this.radiated['P'] # Assumes zero linear momentum at integration region start
