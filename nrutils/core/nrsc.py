@@ -698,6 +698,13 @@ def sc_add( database_name, simulation_dir ):
     Jonathan Thompson, Lionel London 2019
 
     '''
+    from nrutils.core import global_settings
+    from os.path import dirname, basename, isdir, realpath, abspath, join, splitext, isfile
+    from os import pardir,system,popen
+    import pickle
+    import glob
+    from nrutils.core.nrsc import scconfig, scentry
+    from commands import getstatusoutput as bash
 
     # Switch to Jonathan's short-hand
     # Targeted database to update and the location of the new simulation files
