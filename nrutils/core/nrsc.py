@@ -3188,7 +3188,12 @@ class gwylm:
         this.startindex = this.preinspiral.left_index
         # Estimate the smallest orbital frequency relevant for this waveform using a PN formula.
         safety_factor = 0.90
-        this.wstart_pn = safety_factor*2.0*pnw0(this.m1,this.m2,this.b)
+        if this.b:
+            this.wstart_pn = safety_factor*2.0*pnw0(this.m1,this.m2,this.b)
+        else:
+            #
+            warning('No initial orbital separation found in metadata. The wstart_pn field will be set to the initial ferquency of the l=m=2 strain multipole.')
+            this.wstart_pn = this[2,2]['strain'].dphi[0]
 
         #%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&#
         # Characterize the END of the waveform (post-ringdown)       #

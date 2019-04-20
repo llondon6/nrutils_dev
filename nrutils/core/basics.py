@@ -1352,24 +1352,30 @@ def find_amp_peak_index( t, amp, plot = False, return_jid=False ):
 
     amp_ = amp.copy()
     mask = amp_ > 1e-4*max(amp_)
-    a = find(mask)[0]
-    b = find(mask)[-1]
-    half_way = int((a+b)/2)
-    amp_[ :half_way ] *= 0
-    k_amp_max = argmax( amp_ )
-    # handle ringdown cases
-    if (k_amp_max == half_way): k_amp_max = 0
+    if sum(mask):
+        a = find(mask)[0]
+        b = find(mask)[-1]
+        half_way = int((a+b)/2)
+        amp_[ :half_way ] *= 0
+        k_amp_max = argmax( amp_ )
+        # handle ringdown cases
+        if (k_amp_max == half_way): k_amp_max = 0
 
-    pre = amp.copy()
-    mask = pre > 1e-4*max(pre)
-    a = find(mask)[0]
-    b = find(mask)[-1]
-    half_way = int((a+b)/2)
-    pre[half_way:] *= 0
-    dt = t[1]-t[0]
-    jid = argmax( pre ) + int(100/dt)
+        pre = amp.copy()
+        mask = pre > 1e-4*max(pre)
+        a = find(mask)[0]
+        b = find(mask)[-1]
+        half_way = int((a+b)/2)
+        pre[half_way:] *= 0
+        dt = t[1]-t[0]
+        jid = argmax( pre ) + int(100/dt)
 
-    # Return answer
-    ans = k_amp_max
-    if return_jid: ans = (k_amp_max,jid)
-    return ans
+        # Return answer
+        ans = k_amp_max
+        if return_jid: ans = (k_amp_max,jid)
+        return ans
+    else:
+        warning('the data input here may be flat and zero')
+        ans = 0
+        if return_jid: ans = (0,0)
+        return ans
