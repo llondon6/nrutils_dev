@@ -10,7 +10,7 @@ class gwylm_radiation_axis_workflow:
     '''
 
     #
-    def __init__( this, gwylmo, kind=None, plot=False, outdir=None, save=False, safe_domain_range=None, verbose=True,__format__=None ):
+    def __init__( this, gwylmo, kind=None, plot=False, outdir=None, save=False, safe_domain_range=None, verbose=True,__format__=None, ref_orientation=None ):
 
         #
         from os.path import expanduser
@@ -91,7 +91,7 @@ class gwylm_radiation_axis_workflow:
         if plot: this.plot()
 
     # Encapsulation of calc angles given domain and type
-    def calc_radiation_axis( this, domain=None, kind = None, safe_domain_range=None, __format__=None ):
+    def calc_radiation_axis( this, domain=None, kind = None, safe_domain_range=None, __format__=None, ref_orientation=None ):
 
         # Calc radiation axis: alpha beta gamma and x y z
         kind = 'psi4' if kind is None else kind
@@ -111,7 +111,7 @@ class gwylm_radiation_axis_workflow:
         domain_vals = gwylmo.lm[2,2][kind].t if domain in ('t','time') else gwylmo.lm[2,2][kind].f
 
         # Calculate corotating angles using low-level function
-        alpha,beta,gamma,x,y,z = calc_coprecessing_angles( mp, domain_vals, ref_orientation=gwylmo.J, return_xyz='all', safe_domain_range = ([0.01,0.1] if safe_domain_range is None else safe_domain_range) if domain in ('f','freq') else None )
+        alpha,beta,gamma,x,y,z = calc_coprecessing_angles( mp, domain_vals, ref_orientation=gwylmo.L if ref_orientation is None else ref_orientation, return_xyz='all', safe_domain_range = ([0.01,0.1] if safe_domain_range is None else safe_domain_range) if domain in ('f','freq') else None )
 
         # return answers
         return alpha,beta,gamma,x,y,z,domain_vals
