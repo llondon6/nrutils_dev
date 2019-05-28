@@ -330,7 +330,7 @@ def align_wfarr_average_phase(this,that,mask=None,verbose=False):
     '''
 
     #
-    from numpy import angle,unwrap,mean
+    from numpy import angle,unwrap,mean,pi,mod
 
     #
     if mask is None:
@@ -354,6 +354,7 @@ def align_wfarr_average_phase(this,that,mask=None,verbose=False):
         alert('The phase shift applied is %s radians.'%magenta('%1.4e'%(dphi)))
 
     #
+    dphi = mod(dphi,2*pi)
     this_ = shift_wfarr_phase(this,dphi)
 
     #
@@ -456,14 +457,17 @@ def recompose_complex_waveforms( y_dict, theta, phi ):
     return Z
 
 #
-def get_wfarr_relative_phase(this,that):
+def get_wfarr_relative_phase(this,that, mask=None):
 
     #
-    from numpy import angle,unwrap,mean
+    from numpy import angle,unwrap,mean,ones_like,pi
 
     #
-    u = this[:,1]+1j*this[:,2]
-    v = that[:,1]+1j*that[:,2]
+    if mask is None: mask = ones_like(this[:,0],dtype=bool)
+
+    #
+    u = this[mask,1]+1j*this[mask,2]
+    v = that[mask,1]+1j*that[mask,2]
 
     #
     _a = unwrap( angle(u) )[0]
@@ -477,14 +481,18 @@ def get_wfarr_relative_phase(this,that):
 
 
 # Find the average phase difference and align two wfarr's
-def align_wfarr_initial_phase(this,that):
+def align_wfarr_initial_phase(this,that, mask=None ):
     '''
     'this' phase will be aligned to 'that' phase over their domains
     '''
 
-    dphi = get_wfarr_relative_phase(this,that)
+    #
+    from numpy import pi,mod
+
+    dphi = get_wfarr_relative_phase(this,that,mask=mask)
 
     #
+    dphi = mod(dphi,2*pi)
     this_ = shift_wfarr_phase(this,dphi)
 
     #
@@ -1135,43 +1143,19 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
 
                     Z[k:] *= -1
 
-    # # Enforce same directedness of pos and neg freq angles
-    # _mask = (domain_vals < -0.01) & (domain_vals>-0.1)
-    # mask_ = (domain_vals < 0.1) & (domain_vals>0.01)
-    # from numpy import std
-    # if sum(_mask):
-    #     # print abs(mean(X[_mask][::-1]+X[mask_]))
-    #     # print 0.5*abs(mean((X[mask_])))
-    #     flip_neg_domain = abs(mean(X[_mask][::-1]+(X[mask_]))) < 0.5*abs(mean(X[mask_]))
-    #     if flip_neg_domain:
-    #         warning('Flipping neg domain vals')
-    #         X[domain_vals<0] *= -1
-    #         Y[domain_vals<0] *= -1
-    #         Z[domain_vals<0] *= -1
-
-    # # Try to enforce original directedness at initial domain values
-    # if sum(domain_vals<0):
-    #     X[domain_vals<0] *= X_neg_sign_ref
-    #     Y[domain_vals<0] *= Y_neg_sign_ref
-    #     Z[domain_vals<0] *= Z_neg_sign_ref
-    #     X[domain_vals>0] *= X_pos_sign_ref
-    #     Y[domain_vals>0] *= Y_pos_sign_ref
-    #     Z[domain_vals>0] *= Z_pos_sign_ref
-
-    # # Try to make sure that Z is positive most of the time
-    # from scipy.stats import mode
-    # mz = mode( sign(Z) )
-    # if mz == -1:
-    #     X *= -1
-    #     Y *= -1
-    #     Z *= -1
-
-    # #
-    # Z = unwrap(pi*Z)
-    # Z /= pi
-
-    # print abs(mean( X[_mask][::-1]+X[mask_] ))
-    # print 0.5*abs(mean(X[mask_]))
+    # # Enforce that the initial direction of Z is the same as the input reference orientation
+    index_ref = find( domain_vals>min(abs(safe_domain_range)) )[0]
+    Z_ref = Z[ index_ref ]
+    print 'len(domain_vals) = ',len(domain_vals)
+    print 'index_ref = ',index_ref
+    print 'Z_ref = ',Z_ref
+    print 'ref_orientation = ',ref_orientation
+    if Z_ref != 0:
+        if sign(Z_ref) != sign( ref_orientation[-1] ):
+            warning('Reference orientation and calculated data inconsistent. We will reflect.')
+            Z *= -1
+            Y *= -1
+            X *= -1
 
     # Make sure that imag parts are gone
     X = double(X)

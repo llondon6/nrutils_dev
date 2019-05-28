@@ -2144,7 +2144,7 @@ class gwf:
 
         # Look for phase-alignement
         if 'initial-phase' in method:
-            this.wfarr = align_wfarr_initial_phase( this.wfarr, that.wfarr )
+            this.wfarr = align_wfarr_initial_phase( this.wfarr, that.wfarr, mask=mask,  )
             this.setfields()
         if 'average-phase' in method:
             this.wfarr = align_wfarr_average_phase( this.wfarr, that.wfarr, mask=mask, verbose=verbose)
@@ -2270,10 +2270,45 @@ class gwf:
     #
     def __flip_cross_sign_convention__(this):
         #
+        warning('You should not need to use this function. If you are using this functoin, please check your workflow for possible sign convention inconsistencies.')
         this.wfarr[:,-1] *= -1
         this.setfields()
 
+    #
+    def __get_derivative__(this,n=1):
 
+        #
+        from numpy import array
+
+        #
+        that = this.copy()
+
+        #
+        t,A,B = this.wfarr.T
+
+        #
+        DnA = spline_diff(t,A,n)
+        DnB = spline_diff(t,B,n)
+
+        #
+        wfarr = array([t,DnA,DnB]).T
+        that.setfields(wfarr)
+
+        #
+        if '\\psi' in that.kind:
+            that.kind = that.kind.replace('\\psi','D^{%i}\\psi'%n)
+        elif 'rh' in that.kind:
+            that.kind = that.kind.replace('rh','rD^{%i}h'%n)
+        elif 'r\dot' in that.kind:
+            that.kind = that.kind.replace('r\dot','rD^{%i}\dot'%n)
+        else:
+            that.kind = '$D^{%i}$'%n + that.kind
+
+        return that
+
+    #
+    def __get_antiderivative__(this,n=1):
+        return None
 
 # Class for waveforms: Psi4 multipoles, strain multipoles (both spin weight -2), recomposed waveforms containing h+ and hx. NOTE that detector response waveforms will be left to pycbc to handle
 class gwylm:
@@ -2282,38 +2317,47 @@ class gwylm:
     '''
 
     # Class constructor
-    def __init__( this,                             # reference for the object to be created
-                  scentry_obj,                      # member of the scentry class
-                  lm                    = None,     # iterable of length 2 containing multipolr l and m
-                  lmax                  = None,     # if set, multipoles with all |m| up to lmax will be loaded.
-                                                    # This input is not compatible with the lm tag
-                  dt                    = 0.15,     # if given, the waveform array will beinterpolated to
-                                                    # this timestep
-                  load                  = None,     # IF true, we will try to load data from the scentry_object
-                  clean                 = None,     # Toggle automatic tapering
-                  extraction_parameter  = None,     # Extraction parameter labeling extraction zone/radius for run
-                  level = None,                     # Opional refinement level for simulation. NOTE that not all NR groups use this specifier. In such cases, this input has no effect on loading.
-                  w22 = None,                       # Optional input for lowest physical frequency in waveform; by default an wstart value is calculated from the waveform itself and used in place of w22
-                  lowpass=None,                     # Toggle to lowpass filter waveform data upon load using "romline" (in basics.py) routine to define window
-                  calcstrain = None,                # If True, strain will be calculated upon loading
-                  calcnews = None,
-                  enforce_polarization_convention = None, # If true, polarization will be adjusted according to initial separation vectors
-                  fftfactor = None,                   # Option for padding wfarr to next fftfactor powers of two
-                  pad = None,                       # Optional padding length in samples of wfarr upon loading; not used if fftfactor is present; 'pad' samples dwill be added to the wfarr rows
-                  __M_RELATIVE_SIGN_CONVENTION__ = None,
-                  initial_j_align = None,           # Toggle for putting wabeform in frame where initial J is z-hat
-                  load_source_timeseries = False, # Toggle for loading timeseries for L,S,J from dynamics
-                  verbose               = None ):   # be verbose
+    def __init__( this,scentry_obj, lm=None, lmax=None, dt=0.15, load=None, clean=None, extraction_parameter=None, level=None, w22=None, lowpass=None, calcstrain=None, calcnews=None, enforce_polarization_convention=None, fftfactor=None, pad=None, __M_RELATIVE_SIGN_CONVENTION__=None, initial_j_align=None, load_source_timeseries=False,mutipole_dictionary=None, verbose=None ):
 
         '''
-        Put something informative here!
+
+        CLASS for storage and manipulation of spin -2 spherical harmonic multipole moments of gravitational radiation.
+
+        INPUTS
+        ---
+        this,                             # reference for the object to be created
+        scentry_obj,                      # member of the scentry class
+        lm                    = None,     # iterable of length 2 containing multipolr l and m
+        lmax                  = None,     # if set, multipoles with all |m| up to lmax will be loaded.
+                                        # This input is not compatible with the lm tag
+        dt                    = 0.15,     # if given, the waveform array will beinterpolated to
+                                        # this timestep
+        load                  = None,     # IF true, we will try to load data from the scentry_object
+        clean                 = None,     # Toggle automatic tapering
+        extraction_parameter  = None,     # Extraction parameter labeling extraction zone/radius for run
+        level = None,                     # Opional refinement level for simulation. NOTE that not all NR groups use this specifier. In such cases, this input has no effect on loading.
+        w22 = None,                       # Optional input for lowest physical frequency in waveform; by default an wstart value is calculated from the waveform itself and used in place of w22
+        lowpass=None,                     # Toggle to lowpass filter waveform data upon load using "romline" (in basics.py) routine to define window
+        calcstrain = None,                # If True, strain will be calculated upon loading
+        calcnews = None,
+        enforce_polarization_convention = None, # If true, polarization will be adjusted according to initial separation vectors
+        fftfactor = None,                   # Option for padding wfarr to next fftfactor powers of two
+        pad = None,                       # Optional padding length in samples of wfarr upon loading; not used if fftfactor is present; 'pad' samples dwill be added to the wfarr rows
+        __M_RELATIVE_SIGN_CONVENTION__ = None,
+        initial_j_align = None,           # Toggle for putting wabeform in frame where initial J is z-hat
+        load_source_timeseries = False, # Toggle for loading timeseries for L,S,J from dynamics
+        verbose               = None ):   # be verbose
+
+        OUTPUT
+        ---
+        Member of gwylm class
+
         '''
 
         # NOTE that this method is setup to print the value of each input if verbose is true.
         # NOTE that default input values are handled just below
 
         # Print non None inputs to screen
-        thisfun = this.__class__.__name__
         if not ( verbose in (None,False) ):
             for k in dir():
                 if (eval(k) is not None) and (eval(k) is not False) and not ('this' in k):
@@ -2322,6 +2366,7 @@ class gwylm:
 
         # Handle default values
         load = True if load is None else load
+        # if multipole_dictionary: load = False
         clean = False if clean is None else clean
         calcstrain = True if calcstrain is None else calcstrain
         calcnews = True if calcnews is None else calcnews
@@ -2560,7 +2605,7 @@ class gwylm:
         this.f = this[2,2][__kind__].f
 
     # Validate inputs to constructor
-    def __valinputs__(this,thisfun,lm=None,lmax=None,scentry_obj=None):
+    def __valinputs__(this,thisfun,lm=None,lmax=None,scentry_obj=None,multipole_dictionary=None):
 
         from numpy import shape
 
@@ -3783,7 +3828,7 @@ class gwylm:
 
 
     # output corotating waveform
-    def __calc_coprecessing_frame__(this,safe_domain_range=None,verbose=None,transform_domain=None,__format__=None):
+    def __calc_coprecessing_frame__(this,safe_domain_range=None,verbose=None,transform_domain=None,__format__=None,ref_orientation=None):
 
         '''
         Output gwylm object in coprecessing frame, where the optimal emission axis is always along z
@@ -3800,6 +3845,10 @@ class gwylm:
             transform_domain = 'td'
 
         #
+        if ref_orientation is None:
+            ref_orientation = this.L
+
+        #
         allowed_transform_domains = ('td','fd')
         if not ( transform_domain.lower() in allowed_transform_domains ):
             error('Transform domain must be in %s'%str(allowed_transform_domains))
@@ -3811,7 +3860,7 @@ class gwylm:
             safe_domain_range=[0.009,0.3]
 
         #
-        foo = gwylm_radiation_axis_workflow(this,plot=False,save=False,verbose=verbose,safe_domain_range=safe_domain_range,__format__=__format__)
+        foo = gwylm_radiation_axis_workflow(this,plot=False,save=False,verbose=verbose,safe_domain_range=safe_domain_range,__format__=__format__,ref_orientation=ref_orientation)
 
         #
         if verbose: alert('Storing radiation axis information to this.radiation_axis_info')
