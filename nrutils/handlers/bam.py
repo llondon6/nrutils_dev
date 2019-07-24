@@ -53,6 +53,7 @@ def learn_metadata( metadata_file_location ):
     ## by the OS. NOTE that the approach commented out below is prefered.
     # par_file_location = metadata_file_location[:-3]+'par'
 
+    print metadata_file_location
     par_file_location = find(dirname(metadata_file_location)+'/*.par')[0]
     raw_metadata = smart_object( [metadata_file_location,par_file_location] )
 
@@ -222,10 +223,10 @@ def learn_metadata( metadata_file_location ):
     x.valid = True
 
     # Load irriducible mass data
-    irr_mass_file_list = ls(parent(metadata_file_location)+'hmass_2*gz')
-    if len(irr_mass_file_list)>0:
-        irr_mass_file = irr_mass_file_list[0]
-        irr_mass_data,mass_status = smart_load(irr_mass_file)
+    mass_file_list = ls(parent(metadata_file_location)+'hmass_2*gz')
+    if len(mass_file_list)>0:
+        mass_file = mass_file_list[0]
+        mass_data,mass_status = smart_load(mass_file)
     else:
         mass_status = False
     # Load spin data
@@ -238,11 +239,11 @@ def learn_metadata( metadata_file_location ):
     # Estimate final mass and spin
     if mass_status and spin_status:
         Sf = spin_data[-1,1:]
-        irrMf = irr_mass_data[-1,1]
-        x.__irrMf__ = irrMf
-        irrMf_squared = irrMf**2
-        Sf_squared = norm(Sf)**2
-        x.mf = sqrt( irrMf_squared + Sf_squared / (4*irrMf_squared) ) / (x.m1+x.m2)
+        Mf = mass_data[-1,1]
+        x.__Mf__ = Mf
+        x.spin_data_series = spin_data
+        x.mass_data_series = irr_mass_data
+        x.mf = Mf
         #
         x.Sf = Sf
         x.Xf = x.Sf/(x.mf*x.mf)
@@ -583,7 +584,7 @@ def learn_source_dynamics(scentry_object,time_series,verbose=True):
     S1 = array(  [ IUS(S1_times,s)(time_series) for s in S1_ ]  ).T
     S2 = array(  [ IUS(S2_times,s)(time_series) for s in S2_ ]  ).T
     L = array(  [ IUS(L_times,l)(time_series) for l in L_.T ]  ).T
-    
+
     # Total angular momenta
     S = S1+S2   # Spin
     J = L+S     # Orbital  Spin

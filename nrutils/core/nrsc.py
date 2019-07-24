@@ -2317,7 +2317,7 @@ class gwylm:
     '''
 
     # Class constructor
-    def __init__( this,scentry_obj, lm=None, lmax=None, dt=0.15, load=None, clean=None, extraction_parameter=None, level=None, w22=None, lowpass=None, calcstrain=None, calcnews=None, enforce_polarization_convention=None, fftfactor=None, pad=None, __M_RELATIVE_SIGN_CONVENTION__=None, initial_j_align=None, load_source_timeseries=False,mutipole_dictionary=None, verbose=None ):
+    def __init__( this,scentry_obj, lm=None, lmax=None, dt=0.15, load=None, clean=None, extraction_parameter=None, level=None, w22=None, lowpass=None, calcstrain=None, calcnews=None, enforce_polarization_convention=None, fftfactor=None, pad=None, __M_RELATIVE_SIGN_CONVENTION__=None, initial_j_align=None, load_source_timeseries=False,mutipole_dictionary=None, verbose=None, wfarr_dict=None ):
 
         '''
 
@@ -2366,6 +2366,14 @@ class gwylm:
 
         # Handle default values
         load = True if load is None else load
+
+        #
+        if not (wfarr_dict is None):
+            load=False
+            calcnews=False
+            calcstrain=False
+
+
         # if multipole_dictionary: load = False
         clean = False if clean is None else clean
         calcstrain = True if calcstrain is None else calcstrain
@@ -4442,6 +4450,7 @@ class gwylm:
                        T0 = 20,                 # Time relative to peak strain to start ringdown
                        T1 = None,               # Time relative to peak lum where ringdown ends (if None, gwylm.ringdown sets its value to the end of the waveform approx at noise floor)
                        apply_result = False,    # If true, apply result to input this object
+                       guess=None,
                        verbose = False ):       # Let the people know
         '''Estimate Remnant BH mass and spin from gwylm object. This is done by "brute"
         force here (i.e. an actual calculation), but NOTE that values for final mass
@@ -4468,24 +4477,29 @@ class gwylm:
         def action( Mfxf ):
             # NOTE that the first psi4 multipole is referenced below.
             # There was only one loaded here, s it has to be for l=m=2
-            f = qnmfit(g.lm[2,2]['psi4'],Mfxf=Mfxf)
+            f = qnmfit(g.lm[2,2]['psi4'],Mfxf=Mfxf,statsfit=not True,greedy=True)
             # f = qnmfit(g.ylm[0],Mfxf=Mfxf)
             return f.frmse
 
-        # Use PhenomD fit for guess
-        eta = this.m1*this.m2/((this.m1+this.m2)**2)
-        chi1, chi2 = this.S1[-1]/(this.m1**2), this.S2[-1]/(this.m2**2)
-        # guess_xf = jf14067295( this.m1,this.m2,chi1,chi2 )
-        # guess_Mf = Mf14067295( this.m1,this.m2,chi1,chi2 )
-        guess_Mf,guess_xf = remnant(this.m1,this.m2,this.chi1,this.chi2)
-        guess = (guess_Mf,guess_xf)
+
+        if guess is None:
+            # Use PhenomD fit for guess
+            eta = this.m1*this.m2/((this.m1+this.m2)**2)
+            chi1, chi2 = this.S1[-1]/(this.m1**2), this.S2[-1]/(this.m2**2)
+            # guess_xf = jf14067295( this.m1,this.m2,chi1,chi2 )
+            # guess_Mf = Mf14067295( this.m1,this.m2,chi1,chi2 )
+            guess_Mf,guess_xf = remnant(this.m1,this.m2,this.X1[-1],this.X2[-1])
+            guess = (guess_Mf,guess_xf)
+            print guess
 
         # perform the minization
-        # NOTE that mass is bound on (0,1) and spin on (-1,1)
         Q = minimize( action,guess, bounds=[(1-0.999,1),(-0.999,0.999)] )
 
         # Extract the solution
         mf,xf = Q.x
+
+        #
+        fo = qnmfit(g.lm[2,2]['psi4'],Mfxf=Q.x,statsfit= not True,greedy=not True)
 
         # Apply to the input gwylm object if requested
         if apply_result:
@@ -4500,7 +4514,7 @@ class gwylm:
                         y.Xf = y.Sf / (mf*mf)
 
         # Return stuff, including the fit object
-        return mf,xf,Q
+        return mf,xf,Q,fo
 
 
     # Estimate the energy radiated for the current collection of GW multipoles
