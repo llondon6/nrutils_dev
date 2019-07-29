@@ -53,7 +53,6 @@ def learn_metadata( metadata_file_location ):
     ## by the OS. NOTE that the approach commented out below is prefered.
     # par_file_location = metadata_file_location[:-3]+'par'
 
-    print metadata_file_location
     par_file_location = find(dirname(metadata_file_location)+'/*.par')[0]
     raw_metadata = smart_object( [metadata_file_location,par_file_location] )
 
@@ -242,7 +241,7 @@ def learn_metadata( metadata_file_location ):
         Mf = mass_data[-1,1]
         x.__Mf__ = Mf
         x.spin_data_series = spin_data
-        x.mass_data_series = irr_mass_data
+        x.mass_data_series = mass_data
         x.mf = Mf
         #
         x.Sf = Sf
