@@ -436,7 +436,11 @@ class scentry:
         if this.config:
             if 'static' in this.__dict__:
                 if this.static:
-                    ans = this.config.simdir
+                    if 'simdir' in this.config.__dict__:
+                        ans = this.config.simdir
+                    else:
+                        warning('You have requested the simulation directory (simdir) for a static object who\'s associated scconfig object (*.config) does not have a simdir property. Possibly, one should have manually defined this property when constructing your static object. For now, we will retirn "none".')
+                        ans = 'none'
                 else:
                     ans = this.config.reconfig().catalog_dir + this.relative_simdir
             else:
