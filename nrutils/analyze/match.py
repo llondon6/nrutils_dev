@@ -288,6 +288,9 @@ class match:
             min_match.append(  min(match_list) )
             max_match.append(  max(match_list) )
             avg_match.append( mean(match_list) )
+            min_snr.append(  min(optsnr_list) )
+            max_snr.append(  max(optsnr_list) )
+            avg_snr.append( mean(optsnr_list) )
             #
             if hm_vs_quad:
                 quadrupole_min_match.append(  min(quadrupole_match_list) )
@@ -318,6 +321,9 @@ class match:
         match_info['min'] = min_match
         match_info['avg'] = avg_match
         match_info['max'] = max_match
+        match_info['min_snr'] = min_snr
+        match_info['avg_snr'] = avg_snr
+        match_info['max_snr'] = max_snr
         match_info['weighted_avg'] = snr_avg_match
         match_info['samples'] = samples
         #
