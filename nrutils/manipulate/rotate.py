@@ -153,7 +153,7 @@ class gwylm_radiation_axis_workflow:
         mask = (domain_vals>=domain_min) & (domain_vals<=domain_max)
 
         #
-        ax = subplot(3,1,1)
+        ax1 = subplot(3,1,1)
         title( gwylmo.simname )
         if domain in ('t','time'):
             plot( domain_vals, gwylmo.lm[2,2][kind].plus, color=grey, linewidth = lw )
@@ -168,7 +168,7 @@ class gwylm_radiation_axis_workflow:
         legend( frameon=False, loc='best' )
 
         #
-        subplot(3,1,2,sharex=ax)
+        ax2 = subplot(3,1,2,sharex=ax1)
         reshift = lambda V: V - V[mask][0] + mod(V[mask][0],2*pi)
         plot( abs(domain_vals), reshift(alpha), color = clr[0], linewidth = lw, label=r'$\alpha$' )
         plot( abs(domain_vals), reshift(beta),  color = clr[1], linewidth = lw, label=r'$\beta$' )
@@ -178,7 +178,7 @@ class gwylm_radiation_axis_workflow:
         grid()
 
         #
-        subplot(3,1,3,sharex=ax)
+        ax3 = subplot(3,1,3,sharex=ax1)
         plot( abs(domain_vals), reflect_unwrap(x), color = clr[0], linewidth = lw, label=r'$x$' )
         plot( abs(domain_vals), y,  color = clr[2], linewidth = lw, label=r'$y$' )
         plot( abs(domain_vals), z, color = clr[1], linewidth = lw, label=r'$z$' )
@@ -188,7 +188,7 @@ class gwylm_radiation_axis_workflow:
         xlabel( '$t/M$' if 'td'==tag else '$fM$' )
 
         #
-        ax.set_xlim( [ domain_min, domain_max ] )
+        ax1.set_xlim( [ domain_min, domain_max ] )
 
         #
         if this.save:
@@ -196,6 +196,9 @@ class gwylm_radiation_axis_workflow:
             savefig(filepath,pad_inches=0, bbox_inches='tight')
             close_figure()
             # show()
+
+        #
+        return (fig,(ax1,ax2,ax3))
 
     #
     def plot_radiation_axis_on_sphere( this, domain=None, kind = None, view = None ):
@@ -303,6 +306,9 @@ class gwylm_radiation_axis_workflow:
             savefig(filepath,pad_inches=0, bbox_inches='tight')
             close_figure()
             # show()
+
+        #
+        return fig,ax
 
 
 # Calculate Widger D-Matrix Element
