@@ -522,9 +522,6 @@ def learn_source_dynamics(scentry_object,time_series,verbose=False):
     from nrutils.core.basics import straighten_wfarr
     from numpy import array, cross
 
-    #
-    alert('Trying to learn source dynamics from simulation files ...',verbose=verbose,header=True)
-
     # ---------------------------------- #
     # Load/Calculate Momenta
     # ---------------------------------- #
@@ -609,7 +606,7 @@ def learn_source_dynamics(scentry_object,time_series,verbose=False):
 
     #
     def mask( t ):
-        msk = (t<=min(time_series)) & (t<=max(time_series))
+        msk = (t>=min(time_series)) & (t<=max(time_series))
         return msk
 
     # Interpolate everything of use. Some care is taken with the spins as the data files may have sligtly different time series.

@@ -2705,64 +2705,79 @@ class gwylm:
             alert('The following spherical multipoles will be loaded:%s'%cyan(str(this.__lmlist__)))
 
 
-    # #
-    # def plot_3d_trajectory(this,ax=None):
     #
-    #     #
-    #     from numpy import sin,cos,linspace,ones_like,array,pi
-    #     from mpl_toolkits.mplot3d import Axes3D
-    #     from matplotlib.pyplot import figure,plot,figaspect,text,axis
-    #
-    #     if ax is None:
-    #         fig = figure( figsize=4*figaspect(1) )
-    #         ax = fig.add_subplot(111,projection='3d')
-    #
-    #     plot_3d_mesh_sphere( ax, color='k', alpha=0.025, lw=1, axes_alpha=0.1 )
-    #
-    #     traj_alpha = 0.5
-    #     traj1_color = '#0392ff'
-    #     traj2_color = '#ff1c03'
-    #
-    #     def plot_single_trajectory(xx,yy,zz,color='black',alpha=0.6,lw=2,plot_start=False,plot_end=False,label=None):
-    #
-    #         plot(xx,yy,zz,color=color,alpha=alpha,lw=lw,label=label if plot_end else None)
-    #         if plot_start: ax.scatter( xx[0], yy[0], zz[0],  label=r'Initial %s'%label, color=color, marker='o', s=20 )
-    #         if plot_end:   ax.scatter( xx[-1],yy[-1],zz[-1], label=r'Final %s'%label,   color=color, marker='v', s=20 )
-    #
-    #     #
-    #     def alpha_plot_trajectory( xx,yy,zz, nmasks=10, color='b', lw=1,label=None ):
-    #
-    #         nmask_len = int(float(len(xx))/nmasks)
-    #         masks = []; startdex,enddex = 0,nmask_len
-    #         for k in range(nmasks):
-    #             masks.append( range( startdex, enddex ) )
-    #             startdex=enddex
-    #             enddex = enddex+nmask_len
-    #             if k+1 == nmasks-1:
-    #                 enddex = len(xx)
-    #
-    #         #
-    #         alpha_min = 0.05
-    #         alpha_max = 0.99
-    #         for k,mask in enumerate(masks):
-    #             alpha = alpha_min+k*(alpha_max-alpha_min)/(len(masks)-1)
-    #             plot_end=(k==len(masks)-1)
-    #             plot_start=(k==0)
-    #             plot_single_trajectory(xx[mask],yy[mask],zz[mask],color=color,alpha=alpha,lw=lw,plot_start=plot_start,plot_end=plot_end,label=label if (plot_end or plot_start) else None)
-    #
-    #
-    #
-    #     alpha_plot_trajectory(x1,y1,z1,color=traj1_color,lw=1,label=r'$\vec{R}_1$')
-    #     alpha_plot_trajectory(x2,y2,z2,color=traj2_color,lw=1,label=r'$\vec{R}_2$')
-    #
-    #     ax.legend()
-    #     axlim = 0.64*array([-1,1])
-    #     ax.set_xlim(axlim)
-    #     ax.set_ylim(axlim)
-    #     ax.set_zlim(axlim)
-    #     axis('off')
-    #
-    #     return ax
+    def plot_3d_trajectory(this,ax=None):
+
+        #
+        from numpy import sin,cos,linspace,ones_like,array,pi,max,sqrt
+        from mpl_toolkits.mplot3d import Axes3D
+        from matplotlib.pyplot import figure,plot,figaspect,text,axis
+
+        #
+        if not 'dynamics' in this.__dict__:
+            warning('Dynamics must be loaded in order to plot 3D trajectories. We will now load dynamics for you using "this.load_dynamics()"')
+            this.load_dynamics()
+
+        # Collect compoenents 1
+        x1,y1,z1 = this.dynamics['R1'].T
+        max_r1 = sqrt( x1[0]**2 + y1[0]**2 + z1[0]**2 )
+        x1,y1,z1 = [ v/max_r1 for v in (x1,y1,z1) ]
+
+        # Collect compoenents 2
+        x2,y2,z2 = this.dynamics['R2'].T
+        max_r2 = sqrt( x2[0]**2 + y2[0]**2 + z2[0]**2 )
+        x2,y2,z2 = [ v/max_r2 for v in (x2,y2,z2) ]
+
+        if ax is None:
+            fig = figure( figsize=4*figaspect(1) )
+            ax = fig.add_subplot(111,projection='3d')
+
+        plot_3d_mesh_sphere( ax, color='k', alpha=0.025, lw=1, axes_alpha=0.1 )
+
+        traj_alpha = 0.5
+        traj1_color = '#0392ff'
+        traj2_color = '#ff1c03'
+
+        def plot_single_trajectory(xx,yy,zz,color='black',alpha=0.6,lw=2,plot_start=False,plot_end=False,label=None):
+
+            plot(xx,yy,zz,color=color,alpha=alpha,lw=lw,label=label if plot_end else None)
+            if plot_start: ax.scatter( xx[0], yy[0], zz[0],  label=r'Initial %s'%label, color=color, marker='o', s=20 )
+            if plot_end:   ax.scatter( xx[-1],yy[-1],zz[-1], label=r'Final %s'%label,   color=color, marker='v', s=20 )
+
+        #
+        def alpha_plot_trajectory( xx,yy,zz, nmasks=10, color='b', lw=1,label=None ):
+
+            nmask_len = int(float(len(xx))/nmasks)
+            masks = []; startdex,enddex = 0,nmask_len
+            for k in range(nmasks):
+                masks.append( range( startdex, enddex ) )
+                startdex=enddex
+                enddex = enddex+nmask_len
+                if k+1 == nmasks-1:
+                    enddex = len(xx)
+
+            #
+            alpha_min = 0.05
+            alpha_max = 0.99
+            for k,mask in enumerate(masks):
+                alpha = alpha_min+k*(alpha_max-alpha_min)/(len(masks)-1)
+                plot_end=(k==len(masks)-1)
+                plot_start=(k==0)
+                plot_single_trajectory(xx[mask],yy[mask],zz[mask],color=color,alpha=alpha,lw=lw,plot_start=plot_start,plot_end=plot_end,label=label if (plot_end or plot_start) else None)
+
+
+
+        alpha_plot_trajectory(x1,y1,z1,color=traj1_color,lw=1,label=r'$\vec{R}_1$')
+        alpha_plot_trajectory(x2,y2,z2,color=traj2_color,lw=1,label=r'$\vec{R}_2$')
+
+        ax.legend()
+        axlim = 0.64*array([-1,1])
+        ax.set_xlim(axlim)
+        ax.set_ylim(axlim)
+        ax.set_zlim(axlim)
+        axis('off')
+
+        return ax
 
     # Wrapper for core load function. NOTE that the extraction parameter input is independent of the usage in the class constructor.
     def __load__( this,                      # The current object
@@ -4843,10 +4858,16 @@ class gwylm:
         '''
 
         #
-        alert('Trying to load source dynamics ...',verbose=verbose)
+        alert('Trying to load source dynamics ...',verbose=verbose,header=True)
         #
+        alert('Calculating radiated quantities to estimate useful times ...',verbose=verbose)
         this.__calc_radiated_quantities__()
-        this.dynamics = handler.learn_source_dynamics( sco, this.radiated['time_used'],verbose=this.verbose or verbose )
+        sco = this.__scentry__
+        alert('Retrieving method from handler for loading source dyanmics as this is specific to BAM, GT-MAYA, SXS, etc ...',verbose=verbose)
+        handler = sco.loadhandler()
+        alert('Loading/Learning dynamics ...',verbose=verbose)
+        this.dynamics = handler.learn_source_dynamics( sco, this.radiated['time_used'],verbose=verbose )
+        alert('Done.',verbose=verbose)
         #
         return None
 
