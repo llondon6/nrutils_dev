@@ -2706,12 +2706,16 @@ class gwylm:
 
 
     #
-    def plot_3d_trajectory(this,ax=None):
+    def plot_3d_trajectory(this,ax=None,view=None):
 
         #
         from numpy import sin,cos,linspace,ones_like,array,pi,max,sqrt
         from mpl_toolkits.mplot3d import Axes3D
         from matplotlib.pyplot import figure,plot,figaspect,text,axis
+
+        #
+        if view is None:
+            view = (30,-60)
 
         #
         if not 'dynamics' in this.__dict__:
@@ -2720,12 +2724,12 @@ class gwylm:
 
         # Collect compoenents 1
         x1,y1,z1 = this.dynamics['R1'].T
-        max_r1 = sqrt( x1[0]**2 + y1[0]**2 + z1[0]**2 )
+        max_r1 = max(sqrt( x1**2 + y1**2 + z1**2 ))
         x1,y1,z1 = [ v/max_r1 for v in (x1,y1,z1) ]
 
         # Collect compoenents 2
         x2,y2,z2 = this.dynamics['R2'].T
-        max_r2 = sqrt( x2[0]**2 + y2[0]**2 + z2[0]**2 )
+        max_r2 = max(sqrt( x2**2 + y2**2 + z2**2 ))
         x2,y2,z2 = [ v/max_r2 for v in (x2,y2,z2) ]
 
         if ax is None:
@@ -2776,6 +2780,8 @@ class gwylm:
         ax.set_ylim(axlim)
         ax.set_zlim(axlim)
         axis('off')
+        #
+        ax.view_init(view[0],view[1])
 
         return ax
 
@@ -2828,9 +2834,17 @@ class gwylm:
 
 
     #Given an extraction parameter, use the handler's extraction_map to determine extraction radius
-    def __r__(this,extraction_parameter):
+    def r(this):
+        ''' Return the current object's extraction radius'''
+        return this.__r__()
+    def __r__(this,extraction_parameter=None):
         #
-        return this.__scentry__.loadhandler().extraction_map(this,extraction_parameter)
+        if extraction_parameter==None:
+            # return the exctraction radius for a specific extraction parameter
+            return this.__scentry__.loadhandler().extraction_map(this,extraction_parameter)
+        else:
+            # return the extractoin radius of the current object
+            return this.extraction_map_dict['radius_map'][this.extraction_parameter]
 
     # load the waveform data
     def load(this,                  # The current object
@@ -3237,8 +3251,6 @@ class gwylm:
             # close the file
             alert('ascii data stored to "%s"'%cyan(ascii_file),verbose=verbose)
             f.close()
-
-
 
 
     # Strain via ffi method
@@ -4852,7 +4864,7 @@ class gwylm:
         this.__lowpassfiltered__ = True
 
     # Load interpolated dynamics from the run directory
-    def load_dynamics(this,verbose=False):
+    def load_dynamics(this,verbose=False,times=None):
         '''
         Load interpolated dynamics from the run directory
         '''
@@ -4861,12 +4873,14 @@ class gwylm:
         alert('Trying to load source dynamics ...',verbose=verbose,header=True)
         #
         alert('Calculating radiated quantities to estimate useful times ...',verbose=verbose)
-        this.__calc_radiated_quantities__()
+        if times is None:
+            this.__calc_radiated_quantities__()
+            times =  this.radiated['time_used']-
         sco = this.__scentry__
         alert('Retrieving method from handler for loading source dyanmics as this is specific to BAM, GT-MAYA, SXS, etc ...',verbose=verbose)
         handler = sco.loadhandler()
         alert('Loading/Learning dynamics ...',verbose=verbose)
-        this.dynamics = handler.learn_source_dynamics( sco, this.radiated['time_used'],verbose=verbose )
+        this.dynamics = handler.learn_source_dynamics( sco, times,verbose=verbose )
         alert('Done.',verbose=verbose)
         #
         return None
