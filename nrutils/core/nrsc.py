@@ -2785,6 +2785,111 @@ class gwylm:
 
         return ax
 
+
+    #
+    def __plot_3d_quantity__(this,key,ax=None,view=None,color=None):
+
+        #
+        from numpy import sin,cos,linspace,ones_like,array,pi,max,sqrt,linalg
+        from mpl_toolkits.mplot3d import Axes3D
+        from matplotlib.pyplot import figure,plot,figaspect,text,axis
+
+        #
+        if view is None:
+            view = (30,-60)
+
+        #
+        if not 'dynamics' in this.__dict__:
+            warning('Dynamics must be loaded in order to plot 3D trajectories. We will now load dynamics for you using "this.load_dynamics()"')
+            this.load_dynamics()
+
+        # Collect components
+        x1,y1,z1 = this.dynamics[key].T
+        r1 = linalg.norm( this.dynamics[key] ,axis=1 )
+        x1,y1,z1 = [ v/r1 for v in (x1,y1,z1) ]
+
+        if ax is None:
+            fig = figure( figsize=4*figaspect(1) )
+            ax = fig.add_subplot(111,projection='3d')
+            plot_3d_mesh_sphere( ax, color='k', alpha=0.025, lw=1, axes_alpha=0.1 )
+
+        traj_alpha = 0.5
+        if color==None: color = '#ff1c03'
+
+        def plot_single_trajectory(xx,yy,zz,color='black',alpha=0.6,lw=2,plot_start=False,plot_end=False,label=None):
+
+            plot(xx,yy,zz,color=color,alpha=alpha,lw=lw,label=label if plot_end else None)
+            if plot_start: ax.scatter( xx[0], yy[0], zz[0],  label=r'Initial %s'%label, color=color, marker='o', s=20 )
+            if plot_end:   ax.scatter( xx[-1],yy[-1],zz[-1], label=r'Final %s'%label,   color=color, marker='v', s=20 )
+
+        #
+        def alpha_plot_trajectory( xx,yy,zz, nmasks=10, color='b', lw=1,label=None ):
+
+            nmask_len = int(float(len(xx))/nmasks)
+            masks = []; startdex,enddex = 0,nmask_len
+            for k in range(nmasks):
+                masks.append( range( startdex, enddex ) )
+                startdex=enddex
+                enddex = enddex+nmask_len
+                if k+1 == nmasks-1:
+                    enddex = len(xx)
+
+            #
+            alpha_min = 0.05
+            alpha_max = 0.99
+            for k,mask in enumerate(masks):
+                alpha = alpha_min+k*(alpha_max-alpha_min)/(len(masks)-1)
+                plot_end=(k==len(masks)-1)
+                plot_start=(k==0)
+                plot_single_trajectory(xx[mask],yy[mask],zz[mask],color=color,alpha=alpha,lw=lw,plot_start=plot_start,plot_end=plot_end,label=label if (plot_end or plot_start) else None)
+
+
+
+        alpha_plot_trajectory(x1,y1,z1,color=color,lw=1,label=r'$\vec{%s}$'%key)
+
+        ax.legend()
+        axlim = 0.64*array([-1,1])
+        ax.set_xlim(axlim)
+        ax.set_ylim(axlim)
+        ax.set_zlim(axlim)
+        axis('off')
+        #
+        ax.view_init(view[0],view[1])
+
+        return ax
+
+
+    #
+    def plot_3d_S(this,ax=None,view=None,color='#0392ff'):
+        '''Plot total spin S on the sphere'''
+        #
+        return this.__plot_3d_quantity__('S',ax=ax,view=view,color=color)
+
+    #
+    def plot_3d_L(this,ax=None,view=None,color='#ff1c03'):
+        '''Plot total orbital angular momentum L on the sphere'''
+        #
+        return this.__plot_3d_quantity__('L',ax=ax,view=view,color=color)
+
+    #
+    def plot_3d_J(this,ax=None,view=None,color='k'):
+        '''Plot total angular momentum J on the sphere'''
+        #
+        return this.__plot_3d_quantity__('J',ax=ax,view=view,color=color)
+
+    #
+    def plot_3d_dynamics(this,ax=None,view=None,color='k'):
+        ''' Plot L,J S on the sphere '''
+        from matplotlib.pyplot import Rectangle
+        if view is None: view=[30,-60]
+        if ax is None:
+            ax = this.plot_3d_S(view=view)
+        else:
+            this.plot_3d_S(ax,view=view)
+        this.plot_3d_L(ax,view=view)
+        this.plot_3d_J(ax,view=view,color='k')
+        return ax
+
     # Wrapper for core load function. NOTE that the extraction parameter input is independent of the usage in the class constructor.
     def __load__( this,                      # The current object
                   lmax=None,                 # max l to use
@@ -2837,9 +2942,12 @@ class gwylm:
     def r(this):
         ''' Return the current object's extraction radius'''
         return this.__r__()
+    def extraction_radius(this):
+        ''' Return the current object's extraction radius'''
+        return this.__r__()
     def __r__(this,extraction_parameter=None):
         #
-        if extraction_parameter==None:
+        if extraction_parameter!=None:
             # return the exctraction radius for a specific extraction parameter
             return this.__scentry__.loadhandler().extraction_map(this,extraction_parameter)
         else:
@@ -4864,26 +4972,34 @@ class gwylm:
         this.__lowpassfiltered__ = True
 
     # Load interpolated dynamics from the run directory
-    def load_dynamics(this,verbose=False,times=None):
+    def load_dynamics(this,waveform_times=None,verbose=False,output=False):
         '''
         Load interpolated dynamics from the run directory
         '''
 
         #
         alert('Trying to load source dynamics ...',verbose=verbose,header=True)
+
         #
-        alert('Calculating radiated quantities to estimate useful times ...',verbose=verbose)
-        if times is None:
-            this.__calc_radiated_quantities__()
-            times =  this.radiated['time_used']-
+        alert('Calculating dynamics times by adjusting input waveform_times by extraction radius',verbose=verbose)
+        if waveform_times is None:
+            error('The waveform times over which we want dynamics must be input')
+        dynamics_times = waveform_times - this.extraction_radius()
+
+        #
         sco = this.__scentry__
         alert('Retrieving method from handler for loading source dyanmics as this is specific to BAM, GT-MAYA, SXS, etc ...',verbose=verbose)
         handler = sco.loadhandler()
         alert('Loading/Learning dynamics ...',verbose=verbose)
-        this.dynamics = handler.learn_source_dynamics( sco, times,verbose=verbose )
-        alert('Done.',verbose=verbose)
+
         #
-        return None
+        dynamics = handler.learn_source_dynamics( sco, dynamics_times,verbose=verbose )
+        dynamics['waveform_times'] = waveform_times[:len(dynamics['dynamics_times'])]
+        alert('Done.',verbose=verbose)
+        if output:
+            return dynamics
+        else:
+            this.dynamics = dynamics
 
     #
     def __flip_cross_sign_convention__(this):

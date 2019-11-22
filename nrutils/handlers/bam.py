@@ -501,7 +501,7 @@ def infer_default_level_and_extraction_parameter( this,     # An scentry object
 
 
 #
-def learn_source_dynamics(scentry_object,time_series,verbose=False):
+def learn_source_dynamics(scentry_object,dynamics_times,verbose=False):
 
     '''
     Based on notebook by Jonathan Thompson, 2019self.
@@ -512,15 +512,15 @@ def learn_source_dynamics(scentry_object,time_series,verbose=False):
 
     USAGE
     ---
-    dict_with_source_dynamics = learn_source_dynamics(time_series,verbose=True)
+    dict_with_source_dynamics = learn_source_dynamics(dynamics_times,verbose=True)
 
     '''
 
     # Import usefuls
-    from positive import alert,smart_load,lim,spline
+    from positive import alert,smart_load,lim,spline,find
     from glob import glob as ls
     from nrutils.core.basics import straighten_wfarr
-    from numpy import array, cross
+    from numpy import array, cross, linalg
 
     # ---------------------------------- #
     # Load/Calculate Momenta
@@ -605,27 +605,38 @@ def learn_source_dynamics(scentry_object,time_series,verbose=False):
     R2_times,R2_ = straighten(L_times,R2_)
 
     #
+    abs_dr = linalg.norm( (R2_-R1_).T, axis=1 )
+    r0 = 3.1
+    # from matplotlib.pyplot import plot,show,axvline,axhline
+    # plot( R1_times, abs_dr )
+    internal_t_max = R1_times[ find(abs_dr < r0)[0] ]
+    # axhline( r0, color='k' )
+    # axvline( internal_t_max, color='k' )
+    # print internal_t_max, max(dynamics_times)
+    # show()
+    if internal_t_max<max(dynamics_times):
+        dynamics_times = dynamics_times[ dynamics_times<internal_t_max ]
     def mask( t ):
-        msk = (t>=min(time_series)) & (t<=max(time_series))
+        msk = (t>=min(dynamics_times)) & (t<=max(dynamics_times) )
         return msk
 
     # Interpolate everything of use. Some care is taken with the spins as the data files may have sligtly different time series.
-    time_series = time_series[ time_series < max(lim(L_times)[-1],lim(S1_times)[-1]) ]
+    dynamics_times = dynamics_times[ dynamics_times < max(lim(L_times)[-1],lim(S1_times)[-1]) ]
     #
     msk = mask( S1_times )
-    S1 = array(  [ spline(S1_times[msk],s[msk])(time_series) for s in S1_ ]  ).T
+    S1 = array(  [ spline(S1_times[msk],s[msk])(dynamics_times) for s in S1_ ]  ).T
     msk = mask( S2_times )
-    S2 = array(  [ spline(S2_times[msk],s[msk])(time_series) for s in S2_ ]  ).T
+    S2 = array(  [ spline(S2_times[msk],s[msk])(dynamics_times) for s in S2_ ]  ).T
     #
     msk = mask( L1_times )
-    L1 = array(  [ spline(L1_times[msk],l[msk])(time_series) for l in L1_ ]  ).T
+    L1 = array(  [ spline(L1_times[msk],l[msk])(dynamics_times) for l in L1_ ]  ).T
     msk = mask( L2_times )
-    L2 = array(  [ spline(L2_times[msk],l[msk])(time_series) for l in L2_ ]  ).T
+    L2 = array(  [ spline(L2_times[msk],l[msk])(dynamics_times) for l in L2_ ]  ).T
     #
     msk = mask( R1_times )
-    R1 = array(  [ spline(R1_times[msk],l[msk])(time_series) for l in R1_ ]  ).T
+    R1 = array(  [ spline(R1_times[msk],l[msk])(dynamics_times) for l in R1_ ]  ).T
     msk = mask( R2_times )
-    R2 = array(  [ spline(R2_times[msk],l[msk])(time_series) for l in R2_ ]  ).T
+    R2 = array(  [ spline(R2_times[msk],l[msk])(dynamics_times) for l in R2_ ]  ).T
 
     # Total angular momenta
     S = S1+S2   # Spin
@@ -635,16 +646,21 @@ def learn_source_dynamics(scentry_object,time_series,verbose=False):
     # Save everything in a standard dictionary
     # HERE we swap 1,2 labels to be consistent with nrutls' internal convention
     foo = {}
+    # ORBITAL MOMENTA
     foo['L2'] = L1
     foo['L1'] = L2
     foo['L'] = L
+    # SPIN MOMENTA
     foo['S2'] = S1
     foo['S1'] = S2
     foo['S'] = S
+    # TOTAL MOMENTA
     foo['J'] = J
+    # TRAJECTORIES
     foo['R2'] = R1
     foo['R1'] = R2
-    foo['times_used'] = time_series
+    # DYNAMICS TIMES USED
+    foo['dynamics_times'] = dynamics_times
 
     # Let's go! :D
     ans = foo
