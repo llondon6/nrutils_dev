@@ -2554,10 +2554,10 @@ class gwylm:
             this.__curate__()
 
         # #
-        msg = 'We have temporarily disabled enforcement of m-sign convention.'
-        warning(msg)
+        # msg = 'We have temporarily disabled enforcement of m-sign convention.'
+        # warning(msg)
         #say( msg, 'gwylm' )
-        # if load: this.__enforce_m_relative_phase_orientation__()
+        if load: this.__enforce_m_relative_phase_orientation__()
 
         # Populate a dictionary which contains the time series for source dynamics
         if load_dynamics:
