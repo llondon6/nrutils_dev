@@ -501,7 +501,7 @@ def infer_default_level_and_extraction_parameter( this,     # An scentry object
 
 
 #
-def learn_source_dynamics(scentry_object,time_series,verbose=True):
+def learn_source_dynamics(scentry_object,time_series,verbose=False):
 
     '''
     Based on notebook by Jonathan Thompson, 2019self.
@@ -517,12 +517,17 @@ def learn_source_dynamics(scentry_object,time_series,verbose=True):
     '''
 
     # Import usefuls
-    from scipy.interpolate import InterpolatedUnivariateSpline as IUS
+    from positive import alert,smart_load,lim,spline
+    from glob import glob as ls
+    from nrutils.core.basics import straighten_wfarr
     from numpy import array, cross
 
     #
-    if verbose:
-        alert('Trying to learn source dynamics from simulatoin files ...')
+    alert('Trying to learn source dynamics from simulation files ...',verbose=verbose,header=True)
+
+    # ---------------------------------- #
+    # Load/Calculate Momenta
+    # ---------------------------------- #
 
 
     # Reference masses
@@ -530,16 +535,22 @@ def learn_source_dynamics(scentry_object,time_series,verbose=True):
     mass2 = scentry_object.raw_metadata.mass2
 
     # Find puncture data locations
-    puncture_data_1_location = ls( scentry_object.simdir()+\
-                'moving_puncture_integrate1*' )[0]
-    puncture_data_2_location = ls( scentry_object.simdir()+ \
-                'moving_puncture_integrate2*' )[0]
+    try:
+        puncture_data_1_location = ls( scentry_object.simdir()+\
+                    'moving_puncture_integrate1*' )[0]
+        puncture_data_2_location = ls( scentry_object.simdir()+ \
+                    'moving_puncture_integrate2*' )[0]
+    except:
+        error('failed to find moving_puncture_integrate* files in ""%s"'%scentry_object.simdir())
 
     # Location of spin data
-    spin_data_1_location = ls( scentry_object.simdir()+\
-            'hspin_1*' )[0]
-    spin_data_2_location = ls( scentry_object.simdir()+ \
-                'hspin_2*' )[0]
+    try:
+        spin_data_1_location = ls( scentry_object.simdir()+\
+                'hspin_1*' )[0]
+        spin_data_2_location = ls( scentry_object.simdir()+ \
+                    'hspin_2*' )[0]
+    except:
+        error('failed to find hspin_* files in ""%s"'%scentry_object.simdir())
 
     # Load puncture and spin data
     puncture_data_1,_ = smart_load( puncture_data_1_location )
@@ -548,9 +559,9 @@ def learn_source_dynamics(scentry_object,time_series,verbose=True):
     spin_data_2,_ = smart_load( spin_data_2_location )
 
     # Extract Puncture Locations
-    R1 = array( [  puncture_data_1[:,0],puncture_data_1[:,1],\
+    R1_ = array( [  puncture_data_1[:,0],puncture_data_1[:,1],\
             puncture_data_1[:,2],  ] ).T
-    R2 = array( [  puncture_data_2[:,0],puncture_data_2[:,1],\
+    R2_ = array( [  puncture_data_2[:,0],puncture_data_2[:,1],\
                 puncture_data_2[:,2],  ] ).T
 
     # Compute component momenta:
@@ -568,31 +579,74 @@ def learn_source_dynamics(scentry_object,time_series,verbose=True):
                 spin_data_2[:,3],  ] )
 
     # Estimate the component angular momenta
-    L1 = cross(R1,P1)
-    L2 = cross(R2,P2)
-    L_ = L1+L2
+    L1_ = cross(R1_,P1)
+    L2_ = cross(R2_,P2)
+    L_ = L1_+L2_
 
     # Time values
     L_times  = puncture_data_1[:, -1]
     S1_times = spin_data_1[:, 0]
     S2_times = spin_data_2[:, 0]
 
-    # # Interpolate everything of use. Some care is taken with the spins as the data files may have sligtly different time series.
-    # time_series = L_times[ L_times > scentry_object.raw_metadata.after_junkradiation_time ]
+    #
+    def straighten(times,vec):
+        vx,vy,vz = vec if vec.shape[0]==3 else vec.T
+        varr = array( [ times,vx,vy,vz ] ).T
+        varr = straighten_wfarr( varr, verbose=True )
+        new_times,vx,vy,vz = varr.T
+        new_vec = array( [vx,vy,vz] ).T
+        return new_times, new_vec.T
+
+    #
+    S1_times,S1_ = straighten(S1_times,S1_)
+    S2_times,S2_ = straighten(S2_times,S2_)
+    #
+    L1_times,L1_ = straighten(L_times,L1_)
+    L2_times,L2_ = straighten(L_times,L2_)
+    #
+    R1_times,R1_ = straighten(L_times,R1_)
+    R2_times,R2_ = straighten(L_times,R2_)
+
+    #
+    def mask( t ):
+        msk = (t<=min(time_series)) & (t<=max(time_series))
+        return msk
+
+    # Interpolate everything of use. Some care is taken with the spins as the data files may have sligtly different time series.
     time_series = time_series[ time_series < max(lim(L_times)[-1],lim(S1_times)[-1]) ]
-    S1 = array(  [ IUS(S1_times,s)(time_series) for s in S1_ ]  ).T
-    S2 = array(  [ IUS(S2_times,s)(time_series) for s in S2_ ]  ).T
-    L = array(  [ IUS(L_times,l)(time_series) for l in L_.T ]  ).T
+    #
+    msk = mask( S1_times )
+    S1 = array(  [ spline(S1_times[msk],s[msk])(time_series) for s in S1_ ]  ).T
+    msk = mask( S2_times )
+    S2 = array(  [ spline(S2_times[msk],s[msk])(time_series) for s in S2_ ]  ).T
+    #
+    msk = mask( L1_times )
+    L1 = array(  [ spline(L1_times[msk],l[msk])(time_series) for l in L1_ ]  ).T
+    msk = mask( L2_times )
+    L2 = array(  [ spline(L2_times[msk],l[msk])(time_series) for l in L2_ ]  ).T
+    #
+    msk = mask( R1_times )
+    R1 = array(  [ spline(R1_times[msk],l[msk])(time_series) for l in R1_ ]  ).T
+    msk = mask( R2_times )
+    R2 = array(  [ spline(R2_times[msk],l[msk])(time_series) for l in R2_ ]  ).T
 
     # Total angular momenta
     S = S1+S2   # Spin
+    L = L1+L2   # Spin
     J = L+S     # Orbital  Spin
 
     # Save everything in a standard dictionary
+    # HERE we swap 1,2 labels to be consistent with nrutls' internal convention
     foo = {}
+    foo['L2'] = L1
+    foo['L1'] = L2
     foo['L'] = L
+    foo['S2'] = S1
+    foo['S1'] = S2
     foo['S'] = S
     foo['J'] = J
+    foo['R2'] = R1
+    foo['R1'] = R2
     foo['times_used'] = time_series
 
     # Let's go! :D
