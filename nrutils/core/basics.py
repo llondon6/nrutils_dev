@@ -1231,7 +1231,7 @@ def rotate_wfarrs_at_all_times( l,                          # the l of the new m
     alpha *= sign( ref_orientation[-1] )
 
     # Test to see if the original wfarr is complex and if so set the new wfarr to be complex as well
-    wfarr_type = type( like_l_multipoles_dict[2,2][:,1][0] )
+    wfarr_type = type( like_l_multipoles_dict[like_l_multipoles_dict.keys()[0]][:,1][0] )
 
     #
     # new_ylm = 0
