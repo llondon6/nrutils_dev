@@ -206,6 +206,8 @@ def pad_wfarr(wfarr,new_length,where=None,verbose=None,extend=True):
             left_pad = zeros( left_length )
             right_pad = zeros( right_length )
 
+            _wfarr[:,0] = dt * arange( 0, new_length ) + wfarr[0,0] - dt*(left_length-1)
+
             # # Pad the remaining columns
             # for k in arange(1,wfarr.shape[1]):
             #     _wfarr[:,k] = hstack( [left_pad,wfarr[:,k],right_pad] )
@@ -222,6 +224,8 @@ def pad_wfarr(wfarr,new_length,where=None,verbose=None,extend=True):
 
         elif where == 'right':
 
+            _wfarr[:,0] = dt * arange( 0, new_length ) + wfarr[0,0]
+
             # Create the pads for the other columns
             right_pad = zeros( new_length-length )
 
@@ -230,6 +234,8 @@ def pad_wfarr(wfarr,new_length,where=None,verbose=None,extend=True):
                 _wfarr[:,k] = hstack( [wfarr[:,k],right_pad] )
 
         elif where == 'left':
+
+            _wfarr[:,0] = dt * arange( 0, new_length ) + wfarr[0,0] - dt*int(new_length-length-1)
 
             # Create the pads for the other columns
             left_pad = zeros( int(new_length-length) )
@@ -983,8 +989,8 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
     # Import usefuls
     from scipy.linalg import eig,norm
     from scipy.integrate import cumtrapz
-    from numpy import arctan2,sin,arcsin,pi,ones,arccos,double
-    from numpy import unwrap,argmax,cos,array,sqrt,sign,argmin
+    from numpy import arctan2,sin,arcsin,pi,ones,arccos,double,array
+    from numpy import unwrap,argmax,cos,array,sqrt,sign,argmin,round
 
     # Handle optional input
     if ref_orientation is None: ref_orientation = ones(3)
@@ -1143,13 +1149,14 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
 
                     Z[k:] *= -1
 
+
     # # Enforce that the initial direction of Z is the same as the input reference orientation
     index_ref = find( domain_vals>min(abs(safe_domain_range)) )[0]
     Z_ref = Z[ index_ref ]
-    print 'len(domain_vals) = ',len(domain_vals)
-    print 'index_ref = ',index_ref
-    print 'Z_ref = ',Z_ref
-    print 'ref_orientation = ',ref_orientation
+    # print 'len(domain_vals) = ',len(domain_vals)
+    # print 'index_ref = ',index_ref
+    # print 'Z_ref = ',Z_ref
+    # print 'ref_orientation = ',ref_orientation
     if Z_ref != 0:
         if sign(Z_ref) != sign( ref_orientation[-1] ):
             warning('Reference orientation and calculated data inconsistent. We will reflect.')
@@ -1161,6 +1168,115 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
     X = double(X)
     Y = double(Y)
     Z = double(Z)
+
+    #################################################
+    # Reflect Y according to nrutils conventions    #
+    Y = -Y                                          #
+    #################################################
+
+    c = 2*pi
+    IS_FD = ( 0.5 == round(float(sum(domain_vals>0))/len(domain_vals),2) )
+    if IS_FD:
+        alert('The domain values seem evenly split between positive and negative values. Thus, we will interpret the input as corresponding to '+red('FREQUENCY DOMAIN')+' data.')
+    else:
+        alert('The domain values seem unevenly split between positive and negative values. Thus, we will interpret the input as corresponding to '+red('TIME DOMAIN')+' data.')
+
+
+    def minunwrap(v):
+        from numpy import unwrap,pi,mod
+        ans = unwrap(v)
+        ans = ans-ans[0]+mod(ans[0],2*pi)
+        return ans
+
+    if not IS_FD:
+        X0,Y0,Z0 = [ K[0] for K in (X,Y,Z) ]
+        X_,Y_,Z_ = [ minunwrap(K*c)/c for K in (X,Y,Z) ]
+        X_,Y_,Z_ = [ K-K[0]+K0 for K0,K in ((X0,X_),(Y0,Y_),(Z0,Z_)) ]
+    else:
+        X_,Y_,Z_ = [ K.copy() for K in (X,Y,Z) ]
+        safe_mask = (abs(domain_vals)>min(safe_domain_range)) & (abs(domain_vals)<max(safe_domain_range))
+        # positive side
+        mask = (domain_vals>0) & safe_mask
+        X0,Y0,Z0 = [ K[mask][0] for K in (X_,Y_,Z_) ]
+        X_[mask],Y_[mask],Z_[mask] = [ minunwrap(K[mask]*c)/c for K in (X_,Y_,Z_) ]
+        X_[mask],Y_[mask],Z_[mask] = [ K[mask]-K[mask][0]+K0 for K0,K in ((X0,X_),(Y0,Y_),(Z0,Z_)) ]
+        # negative side
+        mask = (domain_vals<=0) & safe_mask
+        X0,Y0,Z0 = [ K[mask][0] for K in (X_,Y_,Z_) ]
+        X_[mask],Y_[mask],Z_[mask] = [ minunwrap(K[mask]*c)/c for K in (X_,Y_,Z_) ]
+        X_[mask],Y_[mask],Z_[mask] = [ K[mask]-K[mask][0]+K0 for K0,K in ((X0,X_),(Y0,Y_),(Z0,Z_)) ]
+    # #
+    # X,Y,Z = [K for K in (X_,Y_,Z_)]
+    #
+    #
+    from matplotlib.pyplot import plot,show,figure,xlim,subplot
+    figure()
+    subplot(1,3,1)
+    plot(abs(domain_vals),X)
+    plot(abs(domain_vals),X_)
+    xlim(lim(safe_domain_range))
+    subplot(1,3,2)
+    plot(abs(domain_vals),Y)
+    plot(abs(domain_vals),Y_)
+    xlim(lim(safe_domain_range))
+    subplot(1,3,3)
+    plot(abs(domain_vals),Z)
+    plot(abs(domain_vals),Z_)
+    xlim(lim(safe_domain_range))
+
+    #
+    from matplotlib.pyplot import plot,show,figure,xlim,subplot,title
+    from numpy.linalg import norm
+    # warning('ref_orientation = '+str(ref_orientation))
+    # warning('ref_orientation = '+str(ref_orientation))
+    # figure()
+    a = array(ref_orientation)/norm(ref_orientation)
+    B = array([X,Y,Z]).T
+    b = (B.T/norm(B,axis=1)).T
+    xb,yb,zb = b.T
+    test_quantity = a[0]*xb+a[1]*yb+a[2]*zb
+
+    mask = (domain_vals>=min(safe_domain_range)) & (domain_vals<=max(safe_domain_range))
+
+    figure()
+    plot( abs(domain_vals), test_quantity )
+    xlim( lim(safe_domain_range) )
+    title('test quantity')
+    show()
+
+
+    if IS_FD:
+
+        k = domain_vals>0
+        mask = (domain_vals>=min(safe_domain_range)) & (domain_vals<=max(safe_domain_range))
+        if (test_quantity[mask][0])<0:
+            print(test_quantity[mask][0])
+            warning('flipping manually for positive domain')
+            X[k] = -X[k]
+            Y[k] = -Y[k]
+            Z[k] = -Z[k]
+        mask = (-domain_vals>=min(safe_domain_range)) & (-domain_vals<=max(safe_domain_range))
+
+        k = domain_vals<0
+        if 1*(test_quantity[mask][0])<0:
+            print(test_quantity[mask][0])
+            warning('flipping manually for negative domain')
+            X[k] = -X[k]
+            Y[k] = -Y[k]
+            Z[k] = -Z[k]
+
+    else:
+
+        mask = (domain_vals>=min(safe_domain_range)) & (domain_vals<=max(safe_domain_range))
+        if 1*(test_quantity[mask][0])<0:
+            warning('flipping manually for negative domain')
+            X = -X
+            Y = -Y
+            Z = -Z
+
+    # -~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~- #
+    #                          Calculate Angles                           #
+    # -~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~- #
 
     alpha = arctan2(Y,X)
     beta  = arccos(Z)
@@ -1185,13 +1301,40 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
         # NOTE that this is the same as above, but here we're choosing an integration constant such that the value is zero. Above, no explicit integration constant is chosen.
         gamma = 0
 
+    # #
+    # figure()
+    # subplot(1,3,1)
+    # title('hi')
+    # plot( domain_vals, alpha )
+    # xlim(lim(safe_domain_range))
+    # subplot(1,3,2)
+    # plot( domain_vals, beta )
+    # xlim(lim(safe_domain_range))
+    # subplot(1,3,3)
+    # plot( domain_vals, gamma )
+    # xlim(lim(safe_domain_range))
+    # show()
+    # #
+    # figure()
+    # subplot(1,3,1)
+    # title('hola')
+    # plot( domain_vals, X )
+    # xlim(lim(safe_domain_range))
+    # subplot(1,3,2)
+    # plot( domain_vals, Y )
+    # xlim(lim(safe_domain_range))
+    # subplot(1,3,3)
+    # plot( domain_vals, Z )
+    # xlim(lim(safe_domain_range))
+    # show()
+
     # Return answer
     if return_xyz == 'all':
         #
-        return alpha,beta,gamma,X,-Y,Z
+        return alpha,beta,gamma,X,Y,Z
     elif return_xyz:
         #
-        return X,-Y,Z
+        return X,Y,Z
     else:
         return alpha,beta,gamma
 

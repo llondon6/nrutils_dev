@@ -2325,7 +2325,7 @@ class gwylm:
     '''
 
     # Class constructor
-    def __init__( this,scentry_obj, lm=None, lmax=None, dt=0.15, load=None, clean=None, extraction_parameter=None, level=None, w22=None, lowpass=None, calcstrain=None, calcnews=None, enforce_polarization_convention=None, fftfactor=None, pad=None, __M_RELATIVE_SIGN_CONVENTION__=None, initial_j_align=None, load_dynamics=False,mutipole_dictionary=None, verbose=None, wfarr_dict=None ):
+    def __init__( this,scentry_obj, lm=None, lmax=None, dt=0.15, load=None, clean=None, extraction_parameter=None, level=None, w22=None, lowpass=None, calcstrain=None, calcnews=None, enforce_polarization_convention=None, fftfactor=None, pad=None, __M_RELATIVE_SIGN_CONVENTION__=None, initial_j_align=None, load_dynamics=True,mutipole_dictionary=None, verbose=None, wfarr_dict=None, enforce_m_relative_sign_convention=True ):
 
         '''
 
@@ -2353,7 +2353,7 @@ class gwylm:
         pad = None,                       # Optional padding length in samples of wfarr upon loading; not used if fftfactor is present; 'pad' samples dwill be added to the wfarr rows
         __M_RELATIVE_SIGN_CONVENTION__ = None,
         initial_j_align = None,           # Toggle for putting wabeform in frame where initial J is z-hat
-        load_dynamics = False, # Toggle for loading timeseries for L,S,J from dynamics
+        load_dynamics = True, # Toggle for loading timeseries for L,S,J from dynamics
         verbose               = None ):   # be verbose
 
         OUTPUT
@@ -2402,23 +2402,6 @@ class gwylm:
         # Confer the scentry_object's attributes to this object for ease of referencing
         for attr in scentry_obj.__dict__.keys():
             setattr( this, attr, scentry_obj.__dict__[attr] )
-
-        # If the source dynamics function has been written for this simulation's handler, then store that function to the current object if it doesn not already exist. NOTE that after the waveform data has been loaded, the associated time values will be used to polulate the source time series field in the current object.
-        if load_dynamics:
-            alert('Trying to load source timeseries from simulation directory using "learn_source_dynamics" in the handler script.',verbose=verbose)
-            if not ('__handler_dynamics_loader__' in this.__dict__):
-                #
-                handler = scentry_obj.loadhandler()
-                if 'learn_source_dynamics' in handler.__dict__:
-                    this.__handler_dynamics_loader__ = handler.learn_source_dynamics
-                else:
-                    # Turn off if-else cases below
-                    warning('could not load source dynamics time series')
-                    load_dynamics = False
-            else:
-                # Turn off if-else cases below
-                warning('could not load source dynamics time series')
-                load_dynamics = False
 
         # NOTE that we don't want the scentry's verbose property to overwrite the input above, so we definte this.verbose at this point, not before.
         this.verbose = verbose
@@ -2557,11 +2540,14 @@ class gwylm:
         # msg = 'We have temporarily disabled enforcement of m-sign convention.'
         # warning(msg)
         #say( msg, 'gwylm' )
-        if load: this.__enforce_m_relative_phase_orientation__()
+        if load:
+            if enforce_m_relative_sign_convention:
+                this.__enforce_m_relative_phase_orientation__()
 
         # Populate a dictionary which contains the time series for source dynamics
         if load_dynamics:
-            this.__source_timeseries__ = this.__handler_dynamics_loader__( scentry_obj,  this.t )
+            waveform_times = this.t[ (this.t>this.t[this.startindex]) & (this.t<this[2,2]['psi4'].intrp_t_amp_max) ]
+            this.load_dynamics(verbose=True,waveform_times=waveform_times)
 
 
     # Allow class to be indexed
@@ -2745,8 +2731,8 @@ class gwylm:
         def plot_single_trajectory(xx,yy,zz,color='black',alpha=0.6,lw=2,plot_start=False,plot_end=False,label=None):
 
             plot(xx,yy,zz,color=color,alpha=alpha,lw=lw,label=label if plot_end else None)
-            if plot_start: ax.scatter( xx[0], yy[0], zz[0],  label=r'Initial %s'%label, color=color, marker='o', s=20 )
-            if plot_end:   ax.scatter( xx[-1],yy[-1],zz[-1], label=r'Final %s'%label,   color=color, marker='v', s=20 )
+            if plot_start: ax.scatter( xx[0], yy[0], zz[0],  label=r'Initial %s (Dynamics)'%label, color=color, marker='o', s=20 )
+            if plot_end:   ax.scatter( xx[-1],yy[-1],zz[-1], label=r'Final %s (Dynamics)'%label,   color=color, marker='v', s=20 )
 
         #
         def alpha_plot_trajectory( xx,yy,zz, nmasks=10, color='b', lw=1,label=None ):
@@ -2811,7 +2797,7 @@ class gwylm:
         if ax is None:
             fig = figure( figsize=4*figaspect(1) )
             ax = fig.add_subplot(111,projection='3d')
-            plot_3d_mesh_sphere( ax, color='k', alpha=0.025, lw=1, axes_alpha=0.1 )
+            plot_3d_mesh_sphere( ax, color='k', alpha=0.025, lw=1, axes_alpha=0.1, view=view )
 
         traj_alpha = 0.5
         if color==None: color = '#ff1c03'
@@ -2819,8 +2805,11 @@ class gwylm:
         def plot_single_trajectory(xx,yy,zz,color='black',alpha=0.6,lw=2,plot_start=False,plot_end=False,label=None):
 
             plot(xx,yy,zz,color=color,alpha=alpha,lw=lw,label=label if plot_end else None)
-            if plot_start: ax.scatter( xx[0], yy[0], zz[0],  label=r'Initial %s'%label, color=color, marker='o', s=20 )
-            if plot_end:   ax.scatter( xx[-1],yy[-1],zz[-1], label=r'Final %s'%label,   color=color, marker='v', s=20 )
+            if plot_start:
+                ax.scatter( xx[0], yy[0], zz[0],s=20,  label=r'Initial %s (Dynamics)'%label, color=color, marker='p', edgecolors='k' )
+                if 'L' in label: print('gwylm: ',xx[0], yy[0], zz[0])
+            if plot_end:
+                ax.scatter( xx[-1],yy[-1],zz[-1],s=20, label=r'Final %s (Dynamics)'%label,   color=color, marker='v' )
 
         #
         def alpha_plot_trajectory( xx,yy,zz, nmasks=10, color='b', lw=1,label=None ):
@@ -3084,7 +3073,7 @@ class gwylm:
                     #
                     if this.verbose: alert( 'Padding wfarr. The old data length was %i, and the new one is %i'%(old_data_length,fftlen) )
                     # NOTE that this padding function only works with time domain data
-                    wfarr = pad_wfarr(wfarr,fftlen,where='sides',verbose=this.verbose)
+                    wfarr = pad_wfarr(wfarr,fftlen,where='right',verbose=this.verbose)
                 else:
                     error('fftfactor must be int corresponding to additional powers of 2 to which the data will be padded symetrically')
             else:
@@ -4086,7 +4075,7 @@ class gwylm:
         gamma = foo.radiation_axis['%s_gamma'%transform_domain]
 
         #
-        that = this.__rotate_frame_at_all_times__( [gamma,-beta,alpha], transform_domain=transform_domain )
+        that = this.__rotate_frame_at_all_times__( [-gamma,-beta,-alpha], transform_domain=transform_domain )
         that.previous_radiation_axis_info = foo
 
         #
@@ -4554,13 +4543,14 @@ class gwylm:
         that.L = R( this.L, start_index )
 
         # If source dynamics time series is stored, then rotate that too
-        if '__source_timeseries__' in this.__dict__:
-            alert('Attempting to rotate dynamics timeseries in this.__source_timeseries__')
+        if 'dynamics' in this.__dict__:
+            alert('Attempting to rotate dynamics timeseries in this.dynamics')
             #
-            times_used = this.__source_timeseries__['times_used']
-            J_ = this.__source_timeseries__['J'].copy()
-            L_ = this.__source_timeseries__['L'].copy()
-            S_ = this.__source_timeseries__['S'].copy()
+            times_used = this.dynamics['waveform_times']
+            #
+            J_ = this.dynamics['J'].copy()
+            L_ = this.dynamics['L'].copy()
+            S_ = this.dynamics['S'].copy()
             if not angles_are_arrays:
                 #
                 # print J.shape, len(J.T), alpha
@@ -4593,13 +4583,10 @@ class gwylm:
                     J = array( [ifft(j) for j in fd_J.T] ).T
                     L = array( [ifft(l) for l in fd_L.T] ).T
                     S = array( [ifft(s) for s in fd_S.T] ).T
-
-
-
             #
-            that.__source_timeseries__['J'] = J
-            that.__source_timeseries__['L'] = L
-            that.__source_timeseries__['S'] = S
+            that.dynamics['J'] = J
+            that.dynamics['L'] = L
+            that.dynamics['S'] = S
 
 
 
@@ -4977,29 +4964,53 @@ class gwylm:
         Load interpolated dynamics from the run directory
         '''
 
-        #
-        alert('Trying to load source dynamics ...',verbose=verbose,header=True)
-
-        #
-        alert('Calculating dynamics times by adjusting input waveform_times by extraction radius',verbose=verbose)
-        if waveform_times is None:
-            error('The waveform times over which we want dynamics must be input')
-        dynamics_times = waveform_times - this.extraction_radius()
-
-        #
-        sco = this.__scentry__
-        alert('Retrieving method from handler for loading source dyanmics as this is specific to BAM, GT-MAYA, SXS, etc ...',verbose=verbose)
-        handler = sco.loadhandler()
-        alert('Loading/Learning dynamics ...',verbose=verbose)
-
-        #
-        dynamics = handler.learn_source_dynamics( sco, dynamics_times,verbose=verbose )
-        dynamics['waveform_times'] = waveform_times[:len(dynamics['dynamics_times'])]
-        alert('Done.',verbose=verbose)
-        if output:
-            return dynamics
+        if 'dynamics' in this.__dict__:
+            warning('Dynamics have already been loaded for %s. We will not re-load.'%this.simname)
+            if output:
+                return this.dynamics
         else:
-            this.dynamics = dynamics
+
+            # Import usefuls
+            from numpy import dot
+            from numpy.linalg import norm
+
+            #
+            alert('Trying to load source dynamics ...',verbose=verbose,header=True)
+
+            #
+            alert('Calculating dynamics times by adjusting input waveform_times by extraction radius',verbose=verbose)
+            if waveform_times is None:
+                error('The waveform times over which we want dynamics must be input')
+            dynamics_times = waveform_times - this.extraction_radius()
+
+            #
+            sco = this.__scentry__
+            alert('Retrieving method from handler for loading source dyanmics as this is specific to BAM, GT-MAYA, SXS, etc ...',verbose=verbose)
+            handler = sco.loadhandler()
+            alert('Loading/Learning dynamics ...',verbose=verbose)
+
+            #
+            dynamics = handler.learn_source_dynamics( sco, dynamics_times,verbose= verbose )
+            dynamics['waveform_times'] = waveform_times[:len(dynamics['dynamics_times'])]
+
+            # Check for consistency between dynamics data and bbh file
+            test_quantity = dot(this.L/norm(this.L),dynamics['L'][0]/norm(dynamics['L'][0]))
+            if test_quantity<=0:
+                print('bbh: ',this.L)
+                print('dyn: ',dynamics['L'][0])
+                print('\n')
+                warning(red('There is an apparent discrepancy between the BBH L and the dynamics L. Either or both could be incorrect. For now, we will assume the dynamics data are correcect, and so use this in place of the BBH L when appropriate.'))
+                print('\n')
+                this.L = dynamics['L'][0]
+                this.L1 = dynamics['L1'][0]
+                this.L2 = dynamics['L2'][0]
+                this.J = this.L+this.S
+
+            alert('Done.',verbose=verbose)
+            if output:
+                return dynamics
+            else:
+                this.dynamics = dynamics
 
     #
     def __flip_cross_sign_convention__(this):

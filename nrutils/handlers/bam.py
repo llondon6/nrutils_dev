@@ -624,9 +624,9 @@ def learn_source_dynamics(scentry_object,dynamics_times,verbose=False):
     dynamics_times = dynamics_times[ dynamics_times < max(lim(L_times)[-1],lim(S1_times)[-1]) ]
     #
     msk = mask( S1_times )
-    S1 = array(  [ spline(S1_times[msk],s[msk])(dynamics_times) for s in S1_ ]  ).T
+    S1 = mass1**2 * array(  [ spline(S1_times[msk],s[msk])(dynamics_times) for s in S1_ ]  ).T
     msk = mask( S2_times )
-    S2 = array(  [ spline(S2_times[msk],s[msk])(dynamics_times) for s in S2_ ]  ).T
+    S2 = mass2**2 * array(  [ spline(S2_times[msk],s[msk])(dynamics_times) for s in S2_ ]  ).T
     #
     msk = mask( L1_times )
     L1 = array(  [ spline(L1_times[msk],l[msk])(dynamics_times) for l in L1_ ]  ).T
