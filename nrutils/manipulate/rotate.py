@@ -283,8 +283,7 @@ class gwylm_radiation_axis_workflow:
 
 
         #
-        lx,ly,lz = (gwylmo.L1+gwylmo.L2)/linalg.norm( gwylmo.L1+gwylmo.L2 )#
-        print(lx,ly,lz)
+        lx,ly,lz = (gwylmo.L1+gwylmo.L2)/linalg.norm( gwylmo.L1+gwylmo.L2 )
         ax.scatter( lx,ly,lz, marker='s', color='lawngreen', label='Initial $L$ (bbh-File)',edgecolors='k',zorder=20 )
 
         #

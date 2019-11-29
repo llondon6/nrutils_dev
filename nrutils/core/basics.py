@@ -1174,62 +1174,32 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
     Y = -Y                                          #
     #################################################
 
-    c = 2*pi
     IS_FD = ( 0.5 == round(float(sum(domain_vals>0))/len(domain_vals),2) )
     if IS_FD:
-        alert('The domain values seem evenly split between positive and negative values. Thus, we will interpret the input as corresponding to '+red('FREQUENCY DOMAIN')+' data.')
+        alert('The domain values seem evenly split between positive and negative values. Thus, we will interpret the input as corresponding to '+green('FREQUENCY DOMAIN')+' data.')
     else:
-        alert('The domain values seem unevenly split between positive and negative values. Thus, we will interpret the input as corresponding to '+red('TIME DOMAIN')+' data.')
+        alert('The domain values seem unevenly split between positive and negative values. Thus, we will interpret the input as corresponding to '+green('TIME DOMAIN')+' data.')
 
 
-    def minunwrap(v):
-        from numpy import unwrap,pi,mod
-        ans = unwrap(v)
-        ans = ans-ans[0]+mod(ans[0],2*pi)
-        return ans
-
-    if not IS_FD:
-        X0,Y0,Z0 = [ K[0] for K in (X,Y,Z) ]
-        X_,Y_,Z_ = [ minunwrap(K*c)/c for K in (X,Y,Z) ]
-        X_,Y_,Z_ = [ K-K[0]+K0 for K0,K in ((X0,X_),(Y0,Y_),(Z0,Z_)) ]
-    else:
-        X_,Y_,Z_ = [ K.copy() for K in (X,Y,Z) ]
-        safe_mask = (abs(domain_vals)>min(safe_domain_range)) & (abs(domain_vals)<max(safe_domain_range))
-        # positive side
-        mask = (domain_vals>0) & safe_mask
-        X0,Y0,Z0 = [ K[mask][0] for K in (X_,Y_,Z_) ]
-        X_[mask],Y_[mask],Z_[mask] = [ minunwrap(K[mask]*c)/c for K in (X_,Y_,Z_) ]
-        X_[mask],Y_[mask],Z_[mask] = [ K[mask]-K[mask][0]+K0 for K0,K in ((X0,X_),(Y0,Y_),(Z0,Z_)) ]
-        # negative side
-        mask = (domain_vals<=0) & safe_mask
-        X0,Y0,Z0 = [ K[mask][0] for K in (X_,Y_,Z_) ]
-        X_[mask],Y_[mask],Z_[mask] = [ minunwrap(K[mask]*c)/c for K in (X_,Y_,Z_) ]
-        X_[mask],Y_[mask],Z_[mask] = [ K[mask]-K[mask][0]+K0 for K0,K in ((X0,X_),(Y0,Y_),(Z0,Z_)) ]
-    # #
-    # X,Y,Z = [K for K in (X_,Y_,Z_)]
-    #
-    #
-    from matplotlib.pyplot import plot,show,figure,xlim,subplot
-    figure()
-    subplot(1,3,1)
-    plot(abs(domain_vals),X)
-    plot(abs(domain_vals),X_)
-    xlim(lim(safe_domain_range))
-    subplot(1,3,2)
-    plot(abs(domain_vals),Y)
-    plot(abs(domain_vals),Y_)
-    xlim(lim(safe_domain_range))
-    subplot(1,3,3)
-    plot(abs(domain_vals),Z)
-    plot(abs(domain_vals),Z_)
-    xlim(lim(safe_domain_range))
-
-    #
-    from matplotlib.pyplot import plot,show,figure,xlim,subplot,title
-    from numpy.linalg import norm
-    # warning('ref_orientation = '+str(ref_orientation))
-    # warning('ref_orientation = '+str(ref_orientation))
+    # from matplotlib.pyplot import plot,show,figure,xlim,subplot
     # figure()
+    # subplot(1,3,1)
+    # plot(abs(domain_vals),X)
+    # plot(abs(domain_vals),X_)
+    # xlim(lim(safe_domain_range))
+    # subplot(1,3,2)
+    # plot(abs(domain_vals),Y)
+    # plot(abs(domain_vals),Y_)
+    # xlim(lim(safe_domain_range))
+    # subplot(1,3,3)
+    # plot(abs(domain_vals),Z)
+    # plot(abs(domain_vals),Z_)
+    # xlim(lim(safe_domain_range))
+
+    #
+    # from matplotlib.pyplot import plot,show,figure,xlim,subplot,title
+    # from numpy.linalg import norm
+
     a = array(ref_orientation)/norm(ref_orientation)
     B = array([X,Y,Z]).T
     b = (B.T/norm(B,axis=1)).T
@@ -1238,11 +1208,11 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
 
     mask = (domain_vals>=min(safe_domain_range)) & (domain_vals<=max(safe_domain_range))
 
-    figure()
-    plot( abs(domain_vals), test_quantity )
-    xlim( lim(safe_domain_range) )
-    title('test quantity')
-    show()
+    # figure()
+    # plot( abs(domain_vals), test_quantity )
+    # xlim( lim(safe_domain_range) )
+    # title('test quantity')
+    # show()
 
 
     if IS_FD:
@@ -1300,33 +1270,6 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
     else:
         # NOTE that this is the same as above, but here we're choosing an integration constant such that the value is zero. Above, no explicit integration constant is chosen.
         gamma = 0
-
-    # #
-    # figure()
-    # subplot(1,3,1)
-    # title('hi')
-    # plot( domain_vals, alpha )
-    # xlim(lim(safe_domain_range))
-    # subplot(1,3,2)
-    # plot( domain_vals, beta )
-    # xlim(lim(safe_domain_range))
-    # subplot(1,3,3)
-    # plot( domain_vals, gamma )
-    # xlim(lim(safe_domain_range))
-    # show()
-    # #
-    # figure()
-    # subplot(1,3,1)
-    # title('hola')
-    # plot( domain_vals, X )
-    # xlim(lim(safe_domain_range))
-    # subplot(1,3,2)
-    # plot( domain_vals, Y )
-    # xlim(lim(safe_domain_range))
-    # subplot(1,3,3)
-    # plot( domain_vals, Z )
-    # xlim(lim(safe_domain_range))
-    # show()
 
     # Return answer
     if return_xyz == 'all':

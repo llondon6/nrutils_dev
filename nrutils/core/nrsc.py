@@ -2807,9 +2807,9 @@ class gwylm:
             plot(xx,yy,zz,color=color,alpha=alpha,lw=lw,label=label if plot_end else None)
             if plot_start:
                 ax.scatter( xx[0], yy[0], zz[0],s=20,  label=r'Initial %s (Dynamics)'%label, color=color, marker='p', edgecolors='k' )
-                if 'L' in label: print('gwylm: ',xx[0], yy[0], zz[0])
+                # if 'L' in label: print('gwylm: ',xx[0], yy[0], zz[0])
             if plot_end:
-                ax.scatter( xx[-1],yy[-1],zz[-1],s=20, label=r'Final %s (Dynamics)'%label,   color=color, marker='v' )
+                ax.scatter( xx[-1],yy[-1],zz[-1],s=20, label=r'Pre-Merger %s (Dynamics)'%label,   color=color, marker='v' )
 
         #
         def alpha_plot_trajectory( xx,yy,zz, nmasks=10, color='b', lw=1,label=None ):
@@ -4563,22 +4563,23 @@ class gwylm:
                     a = spline( this.t, alpha )( times_used )
                     b = spline( this.t, beta  )( times_used )
                     g = spline( this.t, gamma )( times_used )
-                    J = array( [rotate3( J[k],a[k],b[k],g[k] ) for j in range(len(J[:,0]))] )
-                    L = array( [rotate3( L[k],a[k],b[k],g[k] ) for j in range(len(L[:,0]))] )
-                    S = array( [rotate3( S[k],a[k],b[k],g[k] ) for j in range(len(S[:,0]))] )
+                    J = array( [rotate3( J_[k],a[k],b[k],g[k] ) for j in range(len(J_[:,0]))] )
+                    L = array( [rotate3( L_[k],a[k],b[k],g[k] ) for j in range(len(L_[:,0]))] )
+                    S = array( [rotate3( S_[k],a[k],b[k],g[k] ) for j in range(len(S_[:,0]))] )
                 else:
+                    #error('this path (rotating time domain dynamics with FD angles) must be avoided for now')
                     from scipy.fftpack import fft,ifftshift,ifft,fftfreq
-                    fd_J = array( [fft(j) for j in J_.T] ).T
-                    fd_L = array( [fft(l) for l in L_.T] ).T
-                    fd_S = array( [fft(s) for s in S_.T] ).T
+                    fd_J_ = array( [fft(j) for j in J_.T] ).T
+                    fd_L_ = array( [fft(l) for l in L_.T] ).T
+                    fd_S_ = array( [fft(s) for s in S_.T] ).T
                     freqs_needed = fftfreq( len(J), times_used[1]-times_used[0] )
                     a = spline( this.f, ifftshift( alpha ) )( freqs_needed )
                     b = spline( this.f, ifftshift( beta  ) )( freqs_needed )
                     g = spline( this.f, ifftshift( gamm  ) )( freqs_needed )
                     #
-                    fd_J = array( [rotate3( fd_J[k],a[k],b[k],g[k] ) for j in range(len(freqs_needed))] )
-                    fd_L = array( [rotate3( fd_L[k],a[k],b[k],g[k] ) for j in range(len(freqs_needed))] )
-                    fd_S = array( [rotate3( fd_S[k],a[k],b[k],g[k] ) for j in range(len(freqs_needed))] )
+                    fd_J = array( [rotate3( fd_J_[k],a[k],b[k],g[k] ) for j in range(len(freqs_needed))] )
+                    fd_L = array( [rotate3( fd_L_[k],a[k],b[k],g[k] ) for j in range(len(freqs_needed))] )
+                    fd_S = array( [rotate3( fd_S_[k],a[k],b[k],g[k] ) for j in range(len(freqs_needed))] )
                     #
                     J = array( [ifft(j) for j in fd_J.T] ).T
                     L = array( [ifft(l) for l in fd_L.T] ).T
