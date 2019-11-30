@@ -3089,7 +3089,7 @@ class gwylm:
                     #
                     if this.verbose: alert( 'Padding wfarr. The old data length was %i, and the new one is %i'%(old_data_length,new_data_length) )
                     # NOTE that this padding function only works with time domain data
-                    wfarr = pad_wfarr(wfarr,new_data_length,where='sides',verbose=this.verbose)
+                    wfarr = pad_wfarr(wfarr,new_data_length,where='right',verbose=this.verbose)
 
             # Initiate waveform object and check that sign convetion is in accordance with core settings
             def mkgwf(wfarr_):
