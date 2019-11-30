@@ -93,6 +93,9 @@ class gwylm_radiation_axis_workflow:
     # Encapsulation of calc angles given domain and type
     def calc_radiation_axis( this, domain=None, kind = None, safe_domain_range=None, __format__=None, ref_orientation=None ):
 
+        # Import usefuls
+        from numpy import pi
+
         # Calc radiation axis: alpha beta gamma and x y z
         kind = 'psi4' if kind is None else kind
         domain = 'time' if domain is None else domain
@@ -110,8 +113,28 @@ class gwylm_radiation_axis_workflow:
         # Domain values: time or freq
         domain_vals = gwylmo.lm[2,2][kind].t if domain in ('t','time') else gwylmo.lm[2,2][kind].f
 
+        #
+        domain_min = domain_vals[gwylmo.preinspiral.right_index] if domain in ('t','time') else gwylmo.wstart_pn/(2*pi)
+        domain_max = domain_vals[gwylmo.postringdown.left_index] if domain in ('t','time') else gwylmo.lm[2,2][kind].dt/pi
+        safe_domain_range = [domain_min,domain_max]
+
         # Calculate corotating angles using low-level function
-        alpha,beta,gamma,x,y,z = calc_coprecessing_angles( mp, domain_vals, ref_orientation=gwylmo.L if ref_orientation is None else ref_orientation, return_xyz='all', safe_domain_range = ([0.01,0.1] if safe_domain_range is None else safe_domain_range) if domain in ('f','freq') else None )
+        alpha,beta,gamma,x,y,z = calc_coprecessing_angles( mp, domain_vals, ref_orientation=gwylmo.L if ref_orientation is None else ref_orientation, return_xyz='all', safe_domain_range = safe_domain_range )
+        #
+        # #
+        # from matplotlib.pyplot import plot,title,subplot,show,figure,xlim
+        # figure()
+        # subplot(1,3,1)
+        # plot( domain_vals, alpha )
+        # if domain in ('f','freq') : xlim([0.01,0.1])
+        # subplot(1,3,2)
+        # plot( domain_vals, beta )
+        # if domain in ('f','freq') : xlim([0.01,0.1])
+        # subplot(1,3,3)
+        # plot( domain_vals, gamma )
+        # if domain in ('f','freq') : xlim([0.01,0.1])
+        # title('hi!!!')
+        # show()
 
         # return answers
         return alpha,beta,gamma,x,y,z,domain_vals
@@ -201,11 +224,11 @@ class gwylm_radiation_axis_workflow:
         return (fig,(ax1,ax2,ax3))
 
     #
-    def plot_radiation_axis_on_sphere( this, domain=None, kind = None, view = None ):
+    def plot_radiation_axis_on_sphere( this, domain=None, kind = None, view = None, ax = None, v_color='grey' ):
 
         import matplotlib as mpl
         from mpl_toolkits.mplot3d import Axes3D
-        from matplotlib.pyplot import figure, figaspect, plot, xlabel, ylabel, xlim, ylim, xscale, yscale, legend, subplot, grid, title, draw, show, savefig, axis
+        from matplotlib.pyplot import figure, figaspect, plot, xlabel, ylabel, xlim, ylim, xscale, yscale, legend, subplot, grid, title, draw, show, savefig, axis, gcf
         from matplotlib.pyplot import close as close_figure
         from numpy import mod,pi,hstack,array,ones,linalg,arange,zeros_like
         from os.path import join
@@ -230,12 +253,18 @@ class gwylm_radiation_axis_workflow:
         domain_vals = this.radiation_axis[tag+'_domain']
 
         #
-        fig = figure( figsize=4*figaspect(1) )
-        ax = fig.add_subplot(111, projection='3d')
-        color = rgb(3)
+        if ax is None:
+            fig = figure( figsize=4*figaspect(1) )
+            ax = fig.add_subplot(111, projection='3d')
+            ax.view_init(view[0],view[1])#
+            plot_3d_mesh_sphere( ax, color='k', alpha=0.05, lw=1 )
+        else:
+            fig = gcf()
 
         #
-        plot_3d_mesh_sphere( ax, color='k', alpha=0.05, lw=1 )
+        color = rgb(3)
+
+
 
         #
         gwylmo.__calc_radiated_quantities__(use_mask=False)
@@ -254,8 +283,8 @@ class gwylm_radiation_axis_workflow:
 
 
         #
-        lx,ly,lz = (gwylmo.L1+gwylmo.L2)/linalg.norm( gwylmo.L1+gwylmo.L2 )#
-        ax.scatter( lx,ly,lz, marker='h', color='lawngreen', label='Initial $L$ (nrutils)',edgecolors='k' )
+        lx,ly,lz = (gwylmo.L1+gwylmo.L2)/linalg.norm( gwylmo.L1+gwylmo.L2 )
+        ax.scatter( lx,ly,lz, marker='s', color='lawngreen', label='Initial $L$ (bbh-File)',edgecolors='k',zorder=20 )
 
         #
         ax.scatter( jx,jy,jz,marker='o', c='dodgerblue', label='Initial $J$ (Radiated Est.)' )
@@ -273,14 +302,14 @@ class gwylm_radiation_axis_workflow:
         S = gwylmo.S
         L = gwylmo.L
         bbh_jx,bbh_jy,bbh_jz = (L+S)/linalg.norm( L+S )
-        ax.scatter( bbh_jx,bbh_jy,bbh_jz, label='Initial $J$ (BBH)', color='tomato', marker='o' )
+        ax.scatter( bbh_jx,bbh_jy,bbh_jz, label='Initial $J$ (bbh-File)', color='tomato', marker='o' )
 
         #
         sfx,sfy,sfz = gwylmo.Sf/linalg.norm(gwylmo.Sf)
-        ax.scatter( sfx,sfy,sfz, color='tomato', label='Final $J$ (BBH)', marker='v' )
+        ax.scatter( sfx,sfy,sfz, color='tomato', label='Final $J$ (bbh-File)', marker='v' )
 
         #
-        plot( x[mask],y[mask],z[mask], lw=2, color='grey', label='$\hat{V}(%s)$'%('t' if tag=='td' else 'f') )
+        plot( x[mask],y[mask],z[mask], lw=2, color=v_color, label='$\hat{V}(%s)$ (Radiated Est.)'%('t' if tag=='td' else 'f') )
 
         #
         xlabel('$x$')
@@ -293,8 +322,7 @@ class gwylm_radiation_axis_workflow:
 
         axis('off')
 
-        #
-        ax.view_init(view[0],view[1])
+
 
         #
         legend( loc=1, frameon=True )
