@@ -521,6 +521,7 @@ def learn_source_dynamics(scentry_object,dynamics_times,verbose=False):
     from glob import glob as ls
     from nrutils.core.basics import straighten_wfarr
     from numpy import array, cross, linalg
+    from os.path import join
 
     # ---------------------------------- #
     # Load/Calculate Momenta
@@ -533,19 +534,21 @@ def learn_source_dynamics(scentry_object,dynamics_times,verbose=False):
 
     # Find puncture data locations
     try:
-        puncture_data_1_location = ls( scentry_object.simdir()+\
-                    'moving_puncture_integrate1*' )[0]
-        puncture_data_2_location = ls( scentry_object.simdir()+ \
-                    'moving_puncture_integrate2*' )[0]
+        puncture_data_1_location = ls( join(scentry_object.simdir(),\
+                    'moving_puncture_integrate1*') )[0]
+        puncture_data_2_location = ls( join(scentry_object.simdir(), \
+                    'moving_puncture_integrate2*') )[0]
     except:
+        print(scentry_object.simdir()+\
+                    'moving_puncture_integrate1*')
         error('failed to find moving_puncture_integrate* files in ""%s"'%scentry_object.simdir())
 
     # Location of spin data
     try:
-        spin_data_1_location = ls( scentry_object.simdir()+\
-                'hspin_1*' )[0]
-        spin_data_2_location = ls( scentry_object.simdir()+ \
-                    'hspin_2*' )[0]
+        spin_data_1_location = ls( join(scentry_object.simdir(),\
+                'hspin_1*') )[0]
+        spin_data_2_location = ls( join(scentry_object.simdir(), \
+                    'hspin_2*') )[0]
     except:
         error('failed to find hspin_* files in ""%s"'%scentry_object.simdir())
 
