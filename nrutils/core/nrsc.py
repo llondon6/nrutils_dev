@@ -4960,7 +4960,7 @@ class gwylm:
         this.__lowpassfiltered__ = True
 
     # Load interpolated dynamics from the run directory
-    def load_dynamics(this,waveform_times=None,verbose=False,output=False):
+    def load_dynamics(this,waveform_times=None,verbose=False,output=False,tortoise=False):
         '''
         Load interpolated dynamics from the run directory
         '''
@@ -4972,7 +4972,7 @@ class gwylm:
         else:
 
             # Import usefuls
-            from numpy import dot
+            from numpy import dot, log
             from numpy.linalg import norm
 
             #
@@ -4982,7 +4982,18 @@ class gwylm:
             alert('Calculating dynamics times by adjusting input waveform_times by extraction radius',verbose=verbose)
             if waveform_times is None:
                 error('The waveform times over which we want dynamics must be input')
-            dynamics_times = waveform_times - this.extraction_radius()
+            if tortoise:
+                alert('Using tortoise coordinate to map between dynamics and waveform ...',verbose=verbose)
+                adm_mass = this.raw_metadata.initial_ADM_energy
+                flat_radius = this.extraction_radius()
+                try:
+                    extraction_radius = flat_radius + 2.0 * adm_mass * log( flat_radius / ( 2.0 * adm_mass ) - 1.0 )
+                except:
+                    error('Something has gone awry when computing the tortoise coordinate. Please ensure that the ADM mass is positive definite and that "extraction_radius() / (2.0 * ADM mass) > 1.0"!')
+            else:
+                extraction_radius = this.extraction_radius()
+
+            dynamics_times = waveform_times - extraction_radius
 
             #
             sco = this.__scentry__
