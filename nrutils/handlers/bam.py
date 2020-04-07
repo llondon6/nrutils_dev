@@ -433,7 +433,9 @@ def learn_metadata_legacy( metadata_file_location ):
 # Here we define a function which maps between extraction_parameter and extraction radius -- IF such
 # a map can be constructed.
 def extraction_map( this,                   # this may be an nrsc object or an gwylm object (it must have a raw_metadata attribute )
-                    extraction_parameter ): # The extraction parameter that will be converted to radius
+                    extraction_parameter,   # The extraction parameter that will be converted to radius
+                    r_is_tortoise=False,    # Use tortoise coordinate for extraction radius
+                    verbose=False):         # verbosity
     '''Given an extraction parameter, return an extraction radius'''
 
     # NOTE that while some BAM runs have extraction radius information stored in the bbh file in various ways, this does not appear to the case for all simulations. The invariants_modes_r field appears to be more reliable.
@@ -448,7 +450,23 @@ def extraction_map( this,                   # this may be an nrsc object or an g
     # print this.raw_metadata.invariants_modes_r
     # print '>> map = ',_map_
     # raise
-    extraction_radius = _map_[ extraction_parameter-1 ]
+    flat_radius = _map_[ extraction_parameter-1 ]
+
+    if r_is_tortoise:
+        from numpy import log
+        if this.madm:
+            adm_mass = this.madm
+        else:
+            adm_mass = this.raw_metadata.initial_ADM_energy
+
+        alert('Using tortoise coordinate for extraction radius.', verbose)
+        try:
+            extraction_radius = flat_radius + 2.0 * adm_mass * log( flat_radius / (2.0 * adm_mass) - 1.0 )
+        except:
+            msg = 'Something has gone awry when computing the tortoise coordinate. Please ensure that the ADM mass is positive definite and that "flat_radius / (2.0 * ADM mass) > 1.0"!'
+            error(msg)
+    else:
+        extraction_radius = flat_radius
 
     return extraction_radius
 
@@ -461,7 +479,7 @@ def infer_default_level_and_extraction_parameter( this,     # An scentry object
     # NOTE that input must be scentry object
     # Import useful things
     from glob import glob
-    from numpy import array,argmin
+    from numpy import array,argmin,log
 
     # Handle the extraction radius input
     # NOTE that the default value of 90 is chosen to ensure that there is always a ringdown
@@ -472,7 +490,7 @@ def infer_default_level_and_extraction_parameter( this,     # An scentry object
     file_list = glob( search_string )
 
     # For all results
-    exr,lev,rad = [],[],[]
+    exr,lev,rad,rad_tort = [],[],[],[]
     for f in file_list:
 
         # Split filename string to find level and extraction parameter
@@ -481,9 +499,10 @@ def infer_default_level_and_extraction_parameter( this,     # An scentry object
         parts = f.split('.') # e.g. "psi3col.r6.l6.l2.m2.gz".split('.')
         exr_,lev_ = int(parts[1][-1]),int(parts[2][-1])
         # Also get related extraction radius (M)
-        rad_ = extraction_map( this, exr_ )
+        rad_ = extraction_map( this, exr_, verbose=verbose )
+        rad_tort_ = extraction_map (this, exr_, r_is_tortoise=True, verbose=verbose )
         # Append lists
-        exr.append(exr_);lev.append(lev_);rad.append(rad_)
+        exr.append(exr_);lev.append(lev_);rad.append(rad_);rad_tort.append(rad_tort_)
 
     # NOTE that we will use the extraction radius that is closest to desired_exraction_radius (in units of M)
 
@@ -494,6 +513,7 @@ def infer_default_level_and_extraction_parameter( this,     # An scentry object
     # And a dictionary between the level parameter and extraction radius
     extraction_map_dict = {}
     extraction_map_dict['radius_map'] = { exr[n]:r for n,r in enumerate(rad) }
+    extraction_map_dict['radius_map_tortoise'] = { exr[n]:r for n,r in enumerate(rad_tort) }
     extraction_map_dict['level_map'] = { exr[n]:l for n,l in enumerate(lev) }
 
     # Return answers
