@@ -541,6 +541,8 @@ def learn_source_dynamics(scentry_object,dynamics_times,verbose=False):
     from glob import glob as ls
     from nrutils.core.basics import straighten_wfarr
     from numpy import array, cross, linalg
+    from numpy import max as npmax
+    from numpy.linalg import norm
     from os.path import join
 
     # ---------------------------------- #
@@ -647,9 +649,9 @@ def learn_source_dynamics(scentry_object,dynamics_times,verbose=False):
     dynamics_times = dynamics_times[ dynamics_times < max(lim(L_times)[-1],lim(S1_times)[-1]) ]
     #
     msk = mask( S1_times )
-    S1 = mass1**2 * array(  [ spline(S1_times[msk],s[msk])(dynamics_times) for s in S1_ ]  ).T
+    S1 = array(  [ spline(S1_times[msk],s[msk])(dynamics_times) for s in S1_ ]  ).T
     msk = mask( S2_times )
-    S2 = mass2**2 * array(  [ spline(S2_times[msk],s[msk])(dynamics_times) for s in S2_ ]  ).T
+    S2 = array(  [ spline(S2_times[msk],s[msk])(dynamics_times) for s in S2_ ]  ).T
     #
     msk = mask( L1_times )
     L1 = array(  [ spline(L1_times[msk],l[msk])(dynamics_times) for l in L1_ ]  ).T
@@ -669,19 +671,35 @@ def learn_source_dynamics(scentry_object,dynamics_times,verbose=False):
     # Save everything in a standard dictionary
     # HERE we swap 1,2 labels to be consistent with nrutls' internal convention
     foo = {}
-    # ORBITAL MOMENTA
-    foo['L2'] = L1
-    foo['L1'] = L2
-    foo['L'] = L
-    # SPIN MOMENTA
-    foo['S2'] = S1
-    foo['S1'] = S2
-    foo['S'] = S
-    # TOTAL MOMENTA
-    foo['J'] = J
-    # TRAJECTORIES
-    foo['R2'] = R1
-    foo['R1'] = R2
+    if not (mass2/mass1 < 1.1 and npmax([norm(S1[0]/mass1**2),norm(S2[0]/mass2**2)])>0.70):
+        # ORBITAL MOMENTA
+        foo['L2'] = L1
+        foo['L1'] = L2
+        foo['L'] = L
+        # SPIN MOMENTA
+        foo['S2'] = S1
+        foo['S1'] = S2
+        foo['S'] = S
+        # TOTAL MOMENTA
+        foo['J'] = J
+        # TRAJECTORIES
+        foo['R2'] = R1
+        foo['R1'] = R2
+    else:
+        # ORBITAL MOMENTA
+        foo['L1'] = L1
+        foo['L2'] = L2
+        foo['L'] = L
+        # SPIN MOMENTA
+        foo['S1'] = S1
+        foo['S2'] = S2
+        foo['S'] = S
+        # TOTAL MOMENTA
+        foo['J'] = J
+        # TRAJECTORIES
+        foo['R1'] = R1
+        foo['R2'] = R2
+
     # DYNAMICS TIMES USED
     foo['dynamics_times'] = dynamics_times
 
