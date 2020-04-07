@@ -479,7 +479,7 @@ def infer_default_level_and_extraction_parameter( this,     # An scentry object
     # NOTE that input must be scentry object
     # Import useful things
     from glob import glob
-    from numpy import array,argmin,log
+    from numpy import array,argmin
 
     # Handle the extraction radius input
     # NOTE that the default value of 90 is chosen to ensure that there is always a ringdown
