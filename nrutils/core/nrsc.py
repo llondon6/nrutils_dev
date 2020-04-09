@@ -3921,16 +3921,25 @@ class gwylm:
         from numpy import arccos,arctan2,array,linalg,cos,sin,dot,zeros,ones
         from scipy.interpolate import InterpolatedUnivariateSpline as IUS
 
-        J_norm = linalg.norm(this.J)
-        thetaJ = arccos(this.J[2]/J_norm)
-        phiJ   = arctan2(this.J[1],this.J[0])
+        J = this.dynamics['J'][0]
+
+        # J_norm = linalg.norm(this.J)
+        # thetaJ = arccos(this.J[2]/J_norm)
+        # phiJ   = arctan2(this.J[1],this.J[0])
+        J_norm = linalg.norm(J)
+        thetaJ = arccos(J[2]/J_norm)
+        phiJ   = arctan2(J[1],J[0])
 
         # Define gamma and beta accordingly
         beta  = -thetaJ
         gamma = -phiJ
 
         # Define zeta0 (i.e. -alpha) such that L is along the y-z plane at the initial time step
-        L_new = rotate3 ( this.L1 + this.L2, 0, beta , gamma )
+        # L_new = rotate3 ( this.L1 + this.L2, 0, beta , gamma )
+        # zeta0 = arctan2( L_new.T[1], L_new.T[0] )
+        # alpha = -zeta0
+        L = this.dynamics['L'][0]
+        L_new = rotate3 ( L, 0, beta , gamma )
         zeta0 = arctan2( L_new.T[1], L_new.T[0] )
         alpha = -zeta0
 
@@ -4019,7 +4028,8 @@ class gwylm:
         beta  = -thetaJ
         gamma = -phiJ
         # Define alpha such that initial L is aling x
-        L_new = rotate3 ( this.L1 + this.L2, 0, beta[0], gamma[0] )
+        # L_new = rotate3 ( this.L1 + this.L2, 0, beta[0], gamma[0] )
+        L_new = rotate3 ( this.dynamics['L'][0], 0, beta[0], gamma[0] )
         zeta0 = arctan2( L_new.T[1], L_new.T[0] )
         alpha = -( zeta - zeta[0] + zeta0 )
 
