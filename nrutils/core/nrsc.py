@@ -3921,12 +3921,8 @@ class gwylm:
         from numpy import arccos,arctan2,array,linalg,cos,sin,dot,zeros,ones
         from scipy.interpolate import InterpolatedUnivariateSpline as IUS
 
-        J = this.dynamics['J'][0]
+        J_norm = linalg.norm(this.J)
 
-        # J_norm = linalg.norm(this.J)
-        # thetaJ = arccos(this.J[2]/J_norm)
-        # phiJ   = arctan2(this.J[1],this.J[0])
-        J_norm = linalg.norm(J)
         thetaJ = arccos(J[2]/J_norm)
         phiJ   = arctan2(J[1],J[0])
 
@@ -3935,11 +3931,8 @@ class gwylm:
         gamma = -phiJ
 
         # Define zeta0 (i.e. -alpha) such that L is along the y-z plane at the initial time step
-        # L_new = rotate3 ( this.L1 + this.L2, 0, beta , gamma )
-        # zeta0 = arctan2( L_new.T[1], L_new.T[0] )
-        # alpha = -zeta0
-        L = this.dynamics['L'][0]
-        L_new = rotate3 ( L, 0, beta , gamma )
+        L_new = rotate3 ( this.L1 + this.L2, 0, beta , gamma )
+
         zeta0 = arctan2( L_new.T[1], L_new.T[0] )
         alpha = -zeta0
 
@@ -4028,8 +4021,8 @@ class gwylm:
         beta  = -thetaJ
         gamma = -phiJ
         # Define alpha such that initial L is aling x
-        # L_new = rotate3 ( this.L1 + this.L2, 0, beta[0], gamma[0] )
-        L_new = rotate3 ( this.dynamics['L'][0], 0, beta[0], gamma[0] )
+        L_new = rotate3 ( this.L1 + this.L2, 0, beta[0], gamma[0] )
+
         zeta0 = arctan2( L_new.T[1], L_new.T[0] )
         alpha = -( zeta - zeta[0] + zeta0 )
 
@@ -4736,7 +4729,8 @@ class gwylm:
                                      use_mask = True,   # Toggle for chopping of noisey data. NOTE use_mask = False is useful if you need radiated quantities of the same length as the original waveforms
                                      ref_orientation = None,
                                      enforce_initial_J_consistency=True,
-                                     verbose=False):    # Toggle for letting the people know
+                                     verbose=False     # Toggle for letting the people know
+                                     ):
 
         ''' Reference: https://arxiv.org/pdf/0707.4654.pdf '''
 
