@@ -3921,8 +3921,8 @@ class gwylm:
         from numpy import arccos,arctan2,array,linalg,cos,sin,dot,zeros,ones
         from scipy.interpolate import InterpolatedUnivariateSpline as IUS
 
+        J = this.J.copy()
         J_norm = linalg.norm(this.J)
-
         thetaJ = arccos(J[2]/J_norm)
         phiJ   = arctan2(J[1],J[0])
 
@@ -4564,43 +4564,94 @@ class gwylm:
             J_ = this.dynamics['J'].copy()
             L_ = this.dynamics['L'].copy()
             S_ = this.dynamics['S'].copy()
+
+            L1_ = this.dynamics['L1'].copy()
+            L2_ = this.dynamics['L2'].copy()
+            R1_ = this.dynamics['R1'].copy()
+            R2_ = this.dynamics['R2'].copy()
+            S1_ = this.dynamics['S1'].copy()
+            S2_ = this.dynamics['S2'].copy()
+
             if not angles_are_arrays:
                 #
                 # print J.shape, len(J.T), alpha
                 J = array([rotate3( j, alpha[0],beta[0],gamma[0]) for j in J_])
                 L = array([rotate3( l, alpha[0],beta[0],gamma[0]) for l in L_])
                 S = array([rotate3( s, alpha[0],beta[0],gamma[0]) for s in S_])
+
+                L1 = array([rotate3( j, alpha[0],beta[0],gamma[0]) for j in L1_])
+                L2 = array([rotate3( l, alpha[0],beta[0],gamma[0]) for l in L2_])
+                S1 = array([rotate3( s, alpha[0],beta[0],gamma[0]) for s in S1_])
+                S2 = array([rotate3( s, alpha[0],beta[0],gamma[0]) for s in S2_])
+                R1 = array([rotate3( s, alpha[0],beta[0],gamma[0]) for s in R1_])
+                R2 = array([rotate3( s, alpha[0],beta[0],gamma[0]) for s in R2_])
             else:
                 #
                 if transform_domain=='td':
                     a = spline( this.t, alpha )( times_used )
                     b = spline( this.t, beta  )( times_used )
                     g = spline( this.t, gamma )( times_used )
-                    J = array( [rotate3( J_[k],a[k],b[k],g[k] ) for j in range(len(J_[:,0]))] )
-                    L = array( [rotate3( L_[k],a[k],b[k],g[k] ) for j in range(len(L_[:,0]))] )
-                    S = array( [rotate3( S_[k],a[k],b[k],g[k] ) for j in range(len(S_[:,0]))] )
+                    J = array( [rotate3( J_[k],a[k],b[k],g[k] ) for k in range(len(J_[:,0]))] )
+                    L = array( [rotate3( L_[k],a[k],b[k],g[k] ) for k in range(len(L_[:,0]))] )
+                    S = array( [rotate3( S_[k],a[k],b[k],g[k] ) for k in range(len(S_[:,0]))] )
+
+                    R1 = array( [rotate3( R1_[k],a[k],b[k],g[k] ) for k in range(len(R1_[:,0]))] )
+                    R2 = array( [rotate3( R2_[k],a[k],b[k],g[k] ) for k in range(len(R2_[:,0]))] )
+                    S1 = array( [rotate3( S1_[k],a[k],b[k],g[k] ) for k in range(len(S1_[:,0]))] )
+                    S2 = array( [rotate3( S2_[k],a[k],b[k],g[k] ) for k in range(len(S2_[:,0]))] )
+                    L1 = array( [rotate3( L1_[k],a[k],b[k],g[k] ) for k in range(len(L1_[:,0]))] )
+                    L2 = array( [rotate3( L2_[k],a[k],b[k],g[k] ) for k in range(len(L2_[:,0]))] )
                 else:
                     #error('this path (rotating time domain dynamics with FD angles) must be avoided for now')
                     from scipy.fftpack import fft,ifftshift,ifft,fftfreq
                     fd_J_ = array( [fft(j) for j in J_.T] ).T
                     fd_L_ = array( [fft(l) for l in L_.T] ).T
                     fd_S_ = array( [fft(s) for s in S_.T] ).T
+
+                    fd_L1_ = array( [fft(j) for j in L1_.T] ).T
+                    fd_L2_ = array( [fft(l) for l in L2_.T] ).T
+                    fd_S1_ = array( [fft(s) for s in S1_.T] ).T
+                    fd_S2_ = array( [fft(j) for j in S2_.T] ).T
+                    fd_R1_ = array( [fft(l) for l in R1_.T] ).T
+                    fd_R2_ = array( [fft(s) for s in R2_.T] ).T
+
                     freqs_needed = fftfreq( len(J), times_used[1]-times_used[0] )
                     a = spline( this.f, ifftshift( alpha ) )( freqs_needed )
                     b = spline( this.f, ifftshift( beta  ) )( freqs_needed )
                     g = spline( this.f, ifftshift( gamm  ) )( freqs_needed )
                     #
-                    fd_J = array( [rotate3( fd_J_[k],a[k],b[k],g[k] ) for j in range(len(freqs_needed))] )
-                    fd_L = array( [rotate3( fd_L_[k],a[k],b[k],g[k] ) for j in range(len(freqs_needed))] )
-                    fd_S = array( [rotate3( fd_S_[k],a[k],b[k],g[k] ) for j in range(len(freqs_needed))] )
+                    fd_J = array( [rotate3( fd_J_[k],a[k],b[k],g[k] ) for k in range(len(freqs_needed))] )
+                    fd_L = array( [rotate3( fd_L_[k],a[k],b[k],g[k] ) for k in range(len(freqs_needed))] )
+                    fd_S = array( [rotate3( fd_S_[k],a[k],b[k],g[k] ) for k in range(len(freqs_needed))] )
+
+                    fd_L1 = array( [rotate3( fd_L1_[k],a[k],b[k],g[k] ) for k in range(len(freqs_needed))] )
+                    fd_L2 = array( [rotate3( fd_L2_[k],a[k],b[k],g[k] ) for k in range(len(freqs_needed))] )
+                    fd_S1 = array( [rotate3( fd_S1_[k],a[k],b[k],g[k] ) for k in range(len(freqs_needed))] )
+                    fd_S2 = array( [rotate3( fd_S2_[k],a[k],b[k],g[k] ) for k in range(len(freqs_needed))] )
+                    fd_R1 = array( [rotate3( fd_R1_[k],a[k],b[k],g[k] ) for k in range(len(freqs_needed))] )
+                    fd_R2 = array( [rotate3( fd_R2_[k],a[k],b[k],g[k] ) for k in range(len(freqs_needed))] )
                     #
                     J = array( [ifft(j) for j in fd_J.T] ).T
                     L = array( [ifft(l) for l in fd_L.T] ).T
                     S = array( [ifft(s) for s in fd_S.T] ).T
+
+                    L1 = array( [ifft(j) for j in fd_L1.T] ).T
+                    L2 = array( [ifft(l) for l in fd_L2.T] ).T
+                    S1 = array( [ifft(s) for s in fd_S1.T] ).T
+                    S2 = array( [ifft(j) for j in fd_S2.T] ).T
+                    R1 = array( [ifft(l) for l in fd_R1.T] ).T
+                    R2 = array( [ifft(s) for s in fd_R2.T] ).T
             #
             that.dynamics['J'] = J
             that.dynamics['L'] = L
             that.dynamics['S'] = S
+
+            that.dynamics['L1'] = L1
+            that.dynamics['L2'] = L2
+            that.dynamics['S1'] = S1
+            that.dynamics['S2'] = S2
+            that.dynamics['R1'] = R1
+            that.dynamics['R2'] = R2
 
 
 
