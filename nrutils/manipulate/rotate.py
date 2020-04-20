@@ -31,6 +31,10 @@ class gwylm_radiation_axis_workflow:
         if kind is None: kind = 'psi4'
 
         #
+        if not ( kind in ('psi4','strain','news') ):
+            error('The kind keyword input must be in ("psi4","strain","news"), but '+red(str(kind))+' found.')
+
+        #
         this.save = save
 
         #

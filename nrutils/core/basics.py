@@ -1220,8 +1220,8 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
         k = domain_vals>0
         mask = (domain_vals>=min(safe_domain_range)) & (domain_vals<=max(safe_domain_range))
         if (test_quantity[mask][0])<0:
-            print(test_quantity[mask][0])
-            warning('flipping manually for positive domain')
+            # print(test_quantity[mask][0])
+            #warning('flipping manually for positive domain')
             X[k] = -X[k]
             Y[k] = -Y[k]
             Z[k] = -Z[k]
@@ -1229,11 +1229,26 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
 
         k = domain_vals<0
         if 1*(test_quantity[mask][0])<0:
-            print(test_quantity[mask][0])
-            warning('flipping manually for negative domain')
+            # print(test_quantity[mask][0])
+            #warning('flipping manually for negative domain')
             X[k] = -X[k]
             Y[k] = -Y[k]
             Z[k] = -Z[k]
+
+        # Finally, flip negative frequency values consistent with real-valued plus and cross waveforms in the co-precessing frame. In some or most cases, this step simply reverses the above.
+        from numpy import median
+        k = domain_vals < 0
+        kp= domain_vals >= 0
+        # print(sign(median(Z[k])))
+        # print(sign(median(Z[kp])))
+        if sign( median(Z[k]) ) != sign( median(Z[kp]) ):
+            # warning('** flipping manually for negative domain')
+            X[k] = -X[k]
+            Y[k] = -Y[k]
+            Z[k] = -Z[k]
+            # print(sign(median(Z[k])))
+            # print(sign(median(Z[kp])))
+        
 
     else:
 
@@ -1243,6 +1258,8 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
             X = -X
             Y = -Y
             Z = -Z
+
+
 
     # -~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~- #
     #                          Calculate Angles                           #
@@ -1294,6 +1311,8 @@ def rotate_wfarrs_at_all_times( l,                          # the l of the new m
     Given dictionary of multipoles all with the same l, calculate the roated multipole with (l,mp).
     Key reference -- arxiv:1012:2879
 
+    *NOTE* Note that the linear nature of this function allows it to be used for time OR frequency domain rotaitons.
+
     ~ LL,EZH 2018
     '''
 
@@ -1312,7 +1331,7 @@ def rotate_wfarrs_at_all_times( l,                          # the l of the new m
     if ref_orientation is None:
         ref_orientation = ones(3)
 
-    # Apply the desired offecrt for the reference orientation. NOTE that this is primarily useful for BAM run which have an atypical coordinate setup if Jz<0
+    # Apply the desired reflection for the reference orientation. NOTE that this is primarily useful for BAM run which have an atypical coordinate setup if Jz<0
     gamma *= sign( ref_orientation[-1] )
     alpha *= sign( ref_orientation[-1] )
 
