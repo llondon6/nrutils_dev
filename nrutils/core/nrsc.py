@@ -2414,7 +2414,7 @@ class gwylm:
         this.verbose = verbose
 
         #
-        this.frame = 'initial-simulation'
+        this.frame = 'raw-simulation'
 
         # #
         # if fftfactor is None:
@@ -2699,7 +2699,7 @@ class gwylm:
 
 
     #
-    def plot_3d_trajectory(this,ax=None,view=None,fig_scale=1,show_initials=False):
+    def plot_3d_trajectory(this,ax=None,view=None,fig_scale=1,show_initials=True,legend_on=False):
 
         #
         from numpy import sin,cos,linspace,ones_like,array,pi,max,sqrt,linalg
@@ -2770,19 +2770,32 @@ class gwylm:
         # Show other initial quantities
         if show_initials:
 
+            eps = 0.0
+            ts = 10
+            ta = 0.3
+
+            def plotpoint(vec,label,note,marker='o',s=20,color='g',mfc='none',va='bottom',ha='right'):
+                foo = vec/linalg.norm(vec)
+                ax.scatter( foo[0], foo[1], foo[2],  label=label, color=color, marker=marker, s=s, facecolor=mfc )
+                ax.text(foo[0]+eps, foo[1]+eps, foo[2],note,alpha=ta,verticalalignment=va,ha=ha,size=ts)
+
             foo = this.J
-            foo = foo/linalg.norm(foo)
-            ax.scatter( foo[0], foo[1], foo[2],  label=r'Initial J (BBH)', color='g', marker='o', s=20, facecolor='none' )
-            eps=0.03
-            ax.text(foo[0]+eps, foo[1]+eps, foo[2],'J-initial',alpha=0.5)
+            plotpoint(foo,r'Initial J (BBH)','J-initial',marker='o',color='g',s=20)
 
             foo = this.L
-            foo = foo/linalg.norm(foo)
-            ax.scatter( foo[0], foo[1], foo[2],  label=r'Initial L (Dynamics)', color='m', marker='s', s=20, facecolor='none' )
-            eps=0.03
-            ax.text(foo[0]+eps, foo[1]+eps, foo[2],'L-initial',alpha=0.5)
+            plotpoint(foo,r'Initial L (BBH)','L-initial',marker='s',color='m',s=20)
 
-        ax.legend()
+            foo = this.dynamics['J'][0]
+            plotpoint(foo, r'Initial J (Dynamics)', '',
+                      marker='x', color='g', s=20, mfc=None)
+
+            foo = this.dynamics['L'][0]
+            plotpoint(foo,r'Initial L (Dynamics)','',marker='x',color='m',s=20,mfc=None)
+
+            ax.text(x1[0],y1[0],z1[0],'$R_1$',alpha=ta,ha='right',va='bottom',size=ts)
+            ax.text(x2[0],y2[0],z2[0],'$R_2$',alpha=ta,ha='right',va='bottom',size=ts)
+
+        if legend_on: ax.legend()
         axlim = 0.64*array([-1,1])
         ax.set_xlim(axlim)
         ax.set_ylim(axlim)
@@ -3906,25 +3919,7 @@ class gwylm:
         return ans
 
     #
-    def getframe(this,frame_type,verbose=None,domain=None):
-
-        #
-        if domain is None: domain = 'time'
-
-        #
-        if not (domain in ('t','time')):
-            error('this method only handles time domain frames for the time being')
-
-        #
-        valid_frames = ('coprecessing','cp','jt','jinit')
-
-        #
-        if not (frame_type in valid_frames):
-            error( 'invalid/unknown frame type given' )
-
-
-    #
-    def __calc_initial_j_frame__(this,verbose=False):
+    def __calc_initial_j_frame__(this,use_dynamics=False,verbose=False):
         '''
         Rotate multipoles such that initial J is parallel to z-hat
         '''
@@ -3933,7 +3928,11 @@ class gwylm:
         from numpy import arccos,arctan2,array,linalg,cos,sin,dot,zeros,ones
         from scipy.interpolate import InterpolatedUnivariateSpline as IUS
 
-        J_norm = linalg.norm(this.J)
+        #
+        if verbose or this.verbose: 
+            alert('Using '+yellow('dynamics' if use_dynamics else 'bbh')+' data for initial J.')
+
+        J_norm = linalg.norm(this.J if (not use_dynamics) else this.dynamincs['J'][0])
         thetaJ = arccos(this.J[2]/J_norm)
         phiJ   = arctan2(this.J[1],this.J[0])
 
@@ -3953,7 +3952,7 @@ class gwylm:
         that = this.__rotate_frame_at_all_times__(angles,verbose=verbose)
 
         #
-        that.frame = 'J-initial'
+        that.frame = 'J-initial('+('dyn' if use_dynamics else 'bbh')+')'
 
         #
         return that
@@ -4111,6 +4110,9 @@ class gwylm:
         #
         that = this.__rotate_frame_at_all_times__( [-gamma,-beta,-alpha], transform_domain=transform_domain )
         that.previous_radiation_axis_info = foo
+
+        #
+        that.frame = transform_domain.lower()+'-cp-'+kind
 
         #
         return that
@@ -4488,6 +4490,11 @@ class gwylm:
         else:
             alert( 'Transforming to the coprecessing frame using %s angles.'%yellow(transform_domain.upper()),verbose=verbose )
 
+        #
+        transform_is_td_but_complex_angles_given = (transform_domain.lower()=='td') and sum( abs(array(euler_alpha_beta_gamma).flatten().imag) ) > 0
+        if transform_is_td_but_complex_angles_given:
+            error('Transform domain is TD but complex angles have been input.')
+
 
         # Perform roations for all kinds
         kinds = ['strain','psi4','news']
@@ -4558,13 +4565,17 @@ class gwylm:
             warning('Note that metadata vectors for initial data will be rotated according to positive frequency angles.')
             end_index = find(that.f >= that.lm[2,2]['psi4'].dt/4)[0]
         else:
-            start_index = 0
-            end_index = -1
+            if angles_are_arrays:
+                start_index = this.startindex+1
+                end_index = this.endindex+1
+            else:
+                start_index = 0
+                end_index = -1
+                
 
-        # print start_index,end_index
+        # R = lambda X,k: rotate3( X, a[k], b[k], g[k] )
         R = lambda X,k: rotate3( X, alpha[k], beta[k], gamma[k] )
         that.Sf = R( this.Sf, end_index ); that.Xf = R( this.Xf, end_index )
-
         # * initial spins
         that.S1 = R( this.S1, start_index ); that.S2 = R( this.S2, start_index )
         that.X1 = R( this.X1, start_index ); that.X2 = R( this.X2, start_index )
@@ -4573,7 +4584,7 @@ class gwylm:
         # * initial positions / position time series / maybe velocities
         that.R1 = R( this.R1, start_index ); that.R2 = R( this.R2, start_index )
         # * others
-        that.S = R( this.S, start_index ); that.J = R( this.J, start_index );
+        that.S = R( this.S, start_index ); that.J = R( this.J, start_index )
         that.L = R( this.L, start_index )
 
         # If source dynamics time series is stored, then rotate that too
@@ -4641,56 +4652,37 @@ class gwylm:
                     L2 = array([rotate3(L2_[k], a[k], b[k], g[k])
                                 for k in range(len(L2_[:, 0]))])
                 else:
-                    #error('this path (rotating time domain dynamics with FD angles) must be avoided for now')
-                    warning('Dynamics rotatios will NOT be performed as FD angles given')
+                    #
+                    warning('Dynamics rotatios will '+bold(red('not'))+' be performed as FD angles given. There may be a way to determine the relevant TD angles')
                     J,L,S,L1,L2,S1,S2,R1,R2 = J_,L_,S_,L1_,L2_,S1_,S2_,R1_,R2_
-                    # from scipy.fftpack import fft, ifftshift, ifft, fftfreq
-                    # fd_J_ = array([fft(j) for j in J_.T]).T
-                    # fd_L_ = array([fft(l) for l in L_.T]).T
-                    # fd_S_ = array([fft(s) for s in S_.T]).T
 
-                    # fd_L1_ = array([fft(j) for j in L1_.T]).T
-                    # fd_L2_ = array([fft(l) for l in L2_.T]).T
-                    # fd_S1_ = array([fft(s) for s in S1_.T]).T
-                    # fd_S2_ = array([fft(j) for j in S2_.T]).T
-                    # fd_R1_ = array([fft(l) for l in R1_.T]).T
-                    # fd_R2_ = array([fft(s) for s in R2_.T]).T
+                    # from numpy import pi
+                    # f = this[2,2]['psi4'].dphi/(2*pi)
+                    # _alpha = spline( this.f )
 
-                    # freqs_needed = fftfreq(len(J), times_used[1]-times_used[0])
-                    # a = spline(this.f, ifftshift(alpha))(freqs_needed)
-                    # b = spline(this.f, ifftshift(beta))(freqs_needed)
-                    # g = spline(this.f, ifftshift(gamm))(freqs_needed)
-                    # #
-                    # fd_J = array([rotate3(fd_J_[k], a[k], b[k], g[k])
-                    #               for k in range(len(freqs_needed))])
-                    # fd_L = array([rotate3(fd_L_[k], a[k], b[k], g[k])
-                    #               for k in range(len(freqs_needed))])
-                    # fd_S = array([rotate3(fd_S_[k], a[k], b[k], g[k])
-                    #               for k in range(len(freqs_needed))])
+                    # a = spline(this.t, _alpha)(times_used)
+                    # b = spline(this.t, _beta)(times_used)
+                    # g = spline(this.t, _gamma)(times_used)
+                    # J = array([rotate3(J_[k], a[k], b[k], g[k])
+                    #            for k in range(len(J_[:, 0]))])
+                    # L = array([rotate3(L_[k], a[k], b[k], g[k])
+                    #            for k in range(len(L_[:, 0]))])
+                    # S = array([rotate3(S_[k], a[k], b[k], g[k])
+                    #            for k in range(len(S_[:, 0]))])
 
-                    # fd_L1 = array([rotate3(fd_L1_[k], a[k], b[k], g[k])
-                    #                for k in range(len(freqs_needed))])
-                    # fd_L2 = array([rotate3(fd_L2_[k], a[k], b[k], g[k])
-                    #                for k in range(len(freqs_needed))])
-                    # fd_S1 = array([rotate3(fd_S1_[k], a[k], b[k], g[k])
-                    #                for k in range(len(freqs_needed))])
-                    # fd_S2 = array([rotate3(fd_S2_[k], a[k], b[k], g[k])
-                    #                for k in range(len(freqs_needed))])
-                    # fd_R1 = array([rotate3(fd_R1_[k], a[k], b[k], g[k])
-                    #                for k in range(len(freqs_needed))])
-                    # fd_R2 = array([rotate3(fd_R2_[k], a[k], b[k], g[k])
-                    #                for k in range(len(freqs_needed))])
-                    # #
-                    # J = array([ifft(j) for j in fd_J.T]).T
-                    # L = array([ifft(l) for l in fd_L.T]).T
-                    # S = array([ifft(s) for s in fd_S.T]).T
-
-                    # L1 = array([ifft(j) for j in fd_L1.T]).T
-                    # L2 = array([ifft(l) for l in fd_L2.T]).T
-                    # S1 = array([ifft(s) for s in fd_S1.T]).T
-                    # S2 = array([ifft(j) for j in fd_S2.T]).T
-                    # R1 = array([ifft(l) for l in fd_R1.T]).T
-                    # R2 = array([ifft(s) for s in fd_R2.T]).T
+                    # R1 = array([rotate3(R1_[k], a[k], b[k], g[k])
+                    #             for k in range(len(R1_[:, 0]))])
+                    # R2 = array([rotate3(R2_[k], a[k], b[k], g[k])
+                    #             for k in range(len(R2_[:, 0]))])
+                    # S1 = array([rotate3(S1_[k], a[k], b[k], g[k])
+                    #             for k in range(len(S1_[:, 0]))])
+                    # S2 = array([rotate3(S2_[k], a[k], b[k], g[k])
+                    #             for k in range(len(S2_[:, 0]))])
+                    # L1 = array([rotate3(L1_[k], a[k], b[k], g[k])
+                    #             for k in range(len(L1_[:, 0]))])
+                    # L2 = array([rotate3(L2_[k], a[k], b[k], g[k])
+                    #             for k in range(len(L2_[:, 0]))])
+                    
             #
             that.dynamics['J'] = J
             that.dynamics['L'] = L
@@ -4706,7 +4698,10 @@ class gwylm:
 
 
         # Rotate system radiated and remnant quantities
-        if not ( 'remnant' in this.__dict__ ) : this.__calc_radiated_quantities__(use_mask=False)
+        if not ( 'remnant' in this.__dict__ ) : 
+            this.__calc_radiated_quantities__(use_mask=False)
+            that.remnant = this.remnant
+            that.radiated = this.radiated
         that.old_remnant = copy.deepcopy(this.remnant)
         that.old_radiated = copy.deepcopy(this.radiated)
 

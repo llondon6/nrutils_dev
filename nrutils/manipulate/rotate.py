@@ -10,7 +10,7 @@ class gwylm_radiation_axis_workflow:
     '''
 
     #
-    def __init__( this, gwylmo, kind=None, plot=False, outdir=None, save=False, safe_domain_range=None, verbose=True,__format__=None, ref_orientation=None ):
+    def __init__( this, gwylmo, kind=None, plot=False, outdir=None, save=False, safe_domain_range=None, verbose=True,__format__=None, ref_orientation=None, domain='both' ):
 
         #
         from os.path import expanduser
@@ -20,8 +20,17 @@ class gwylm_radiation_axis_workflow:
         alert('Calculating Radiated Quantities','gwylm_radiation_axis_workflow',verbose=verbose)
         gwylmo.__calc_radiated_quantities__(use_mask=False)
 
+        #
+        if not( domain in ('time','freq','both') ):
+            error('domain keyword value must be in ("time","freq","both") but '+red(bold(str(domain)))+' found.')
+
         # Store reference to input gwylmo
         this.gwylmo = gwylmo
+
+        # warn if not in J related frame
+        if not ( 'j' in str(gwylmo.frame).lower() ):
+            warning('This function works best if the gwylm object input is in a J-aligned frame, but %s frame found' %
+                    bold(red(gwylmo.frame)))
 
         # NOTE that relevant information will be stored within the current object
         this.radiation_axis = {}
@@ -44,10 +53,13 @@ class gwylm_radiation_axis_workflow:
             mkdir( this.outdir, verbose=verbose )
 
         # Calculate radiation axes in time and frequency domain
-        alert('Calculating TD Radiation Axis Series','gwylm_radiation_axis_workflow',verbose=verbose)
-        td_alpha,td_beta,td_gamma,td_x,td_y,td_z,td_domain = this.calc_radiation_axis( domain = 'time', kind = kind, safe_domain_range=None, __format__=__format__  )
-        alert('Calculating FD Radiation Axis Series','gwylm_radiation_axis_workflow',verbose=verbose)
-        fd_alpha,fd_beta,fd_gamma,fd_x,fd_y,fd_z,fd_domain = this.calc_radiation_axis( domain = 'freq', kind = kind, safe_domain_range=safe_domain_range, __format__=__format__  )
+        if domain.lower() in ('time','both','t'):
+            alert('Calculating TD Radiation Axis Series','gwylm_radiation_axis_workflow',verbose=verbose)
+            td_alpha,td_beta,td_gamma,td_x,td_y,td_z,td_domain = this.calc_radiation_axis( domain = 'time', kind = kind, safe_domain_range=None, __format__=__format__  )
+
+        if domain.lower() in ('freq', 'both', 'f'):
+            alert('Calculating FD Radiation Axis Series','gwylm_radiation_axis_workflow',verbose=verbose)
+            fd_alpha,fd_beta,fd_gamma,fd_x,fd_y,fd_z,fd_domain = this.calc_radiation_axis( domain = 'freq', kind = kind, safe_domain_range=safe_domain_range, __format__=__format__  )
 
         # # Mask away Nans
         # mask = array([not isnan(v) for v in fd_beta+fd_alpha+fd_gamma])
@@ -260,10 +272,12 @@ class gwylm_radiation_axis_workflow:
         if ax is None:
             fig = figure( figsize=4*figaspect(1) )
             ax = fig.add_subplot(111, projection='3d')
-            ax.view_init(view[0],view[1])#
-            plot_3d_mesh_sphere( ax, color='k', alpha=0.05, lw=1 )
         else:
             fig = gcf()
+        
+        #
+        ax.view_init(view[0],view[1])#
+        plot_3d_mesh_sphere( ax, color='k', alpha=0.05, lw=1 )
 
         #
         color = rgb(3)
@@ -326,11 +340,11 @@ class gwylm_radiation_axis_workflow:
 
         axis('off')
 
-
+        this.gwylmo.plot_3d_L(ax=ax)
 
         #
-        legend( loc=1, frameon=True )
-        title(('Time Domain: ' if tag=='td' else 'Frequency Domain: ' ) + this.gwylmo.simname, loc='right', alpha=0.5, fontsize=16)
+        legend( loc=3, frameon=True )
+        title(('Time Domain\n' if tag=='td' else 'Frequency Domain\n' ) + this.gwylmo.simname, loc='left', alpha=0.5, fontsize=12)
 
         #
         if this.save:

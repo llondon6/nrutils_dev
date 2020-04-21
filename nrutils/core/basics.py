@@ -1,4 +1,5 @@
 #
+# from __future__ import print_function
 from positive import *
 from positive.physics import *
 
@@ -990,7 +991,7 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
     from scipy.linalg import eig,norm
     from scipy.integrate import cumtrapz
     from numpy import arctan2,sin,arcsin,pi,ones,arccos,double,array
-    from numpy import unwrap,argmax,cos,array,sqrt,sign,argmin,round
+    from numpy import unwrap,argmax,cos,array,sqrt,sign,argmin,round,median
 
     # Handle optional input
     if ref_orientation is None: ref_orientation = ones(3)
@@ -1051,18 +1052,7 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
         dominant_vec = vec[ :, dominant_dex ]
 
         # There is a z axis degeneracy that we will break here
-        # by imposing that the z component is always positive
-        # NOTE the following exceptions:
-        #  * The optimal emission direction crosses the x-y plane
-        #  * Data is processed in a frequency-like domain where f<0 may have z<0
-
-        # if not flip_z_convention:
-        #     if sign(dominant_vec[-1]) == -sign(ref_orientation[-1]): dominant_vec *= -1
-        # else:
-        #     if sign(dominant_vec[-1]) ==  sign(ref_orientation[-1]): dominant_vec *= -1
-
-        # dominant_vec *= sign(domain_vals[k])*sign(ref_orientation[-1])
-        # if sign(dominant_vec[-1]) == -sign(ref_orientation[-1]): dominant_vec *= -1
+        # by imposing that the z component is always consistent with the initial L
 
         if not flip_z_convention:
             if sign(dominant_vec[-1]) == -sign(ref_orientation[-1]): dominant_vec *= -1
@@ -1102,17 +1092,6 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
     Y = array(Y)
     Z = array(Z)
 
-    # #
-    # if sum(domain_vals<0):
-    #     neg_ref = find(domain_vals<0)[0]
-    #     X_neg_sign_ref = sign( X[neg_ref] )
-    #     Y_neg_sign_ref = sign( Y[neg_ref] )
-    #     Z_neg_sign_ref = sign( Z[neg_ref] )
-    #     pos_ref = find(domain_vals>0)[0]
-    #     X_pos_sign_ref = sign( X[pos_ref] )
-    #     Y_pos_sign_ref = sign( Y[pos_ref] )
-    #     Z_pos_sign_ref = sign( Z[pos_ref] )
-
     # 3-point vector reflect unwrapping
     # print safe_domain_range
     tol = 0.1
@@ -1149,21 +1128,6 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
 
                     Z[k:] *= -1
 
-
-    # # Enforce that the initial direction of Z is the same as the input reference orientation
-    index_ref = find( domain_vals>min(abs(safe_domain_range)) )[0]
-    Z_ref = Z[ index_ref ]
-    # print 'len(domain_vals) = ',len(domain_vals)
-    # print 'index_ref = ',index_ref
-    # print 'Z_ref = ',Z_ref
-    # print 'ref_orientation = ',ref_orientation
-    if Z_ref != 0:
-        if sign(Z_ref) != sign( ref_orientation[-1] ):
-            warning('Reference orientation and calculated data inconsistent. We will reflect.')
-            Z *= -1
-            Y *= -1
-            X *= -1
-
     # Make sure that imag parts are gone
     X = double(X)
     Y = double(Y)
@@ -1181,47 +1145,17 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
         alert('The domain values seem unevenly split between positive and negative values. Thus, we will interpret the input as corresponding to '+green('TIME DOMAIN')+' data.')
 
 
-    # from matplotlib.pyplot import plot,show,figure,xlim,subplot
-    # figure()
-    # subplot(1,3,1)
-    # plot(abs(domain_vals),X)
-    # plot(abs(domain_vals),X_)
-    # xlim(lim(safe_domain_range))
-    # subplot(1,3,2)
-    # plot(abs(domain_vals),Y)
-    # plot(abs(domain_vals),Y_)
-    # xlim(lim(safe_domain_range))
-    # subplot(1,3,3)
-    # plot(abs(domain_vals),Z)
-    # plot(abs(domain_vals),Z_)
-    # xlim(lim(safe_domain_range))
-
-    #
-    # from matplotlib.pyplot import plot,show,figure,xlim,subplot,title
-    # from numpy.linalg import norm
-
     a = array(ref_orientation)/norm(ref_orientation)
     B = array([X,Y,Z]).T
     b = (B.T/norm(B,axis=1)).T
     xb,yb,zb = b.T
     test_quantity = a[0]*xb+a[1]*yb+a[2]*zb
 
-    mask = (domain_vals>=min(safe_domain_range)) & (domain_vals<=max(safe_domain_range))
-
-    # figure()
-    # plot( abs(domain_vals), test_quantity )
-    # xlim( lim(safe_domain_range) )
-    # title('test quantity')
-    # show()
-
-
     if IS_FD:
 
         k = domain_vals>0
         mask = (domain_vals>=min(safe_domain_range)) & (domain_vals<=max(safe_domain_range))
         if (test_quantity[mask][0])<0:
-            # print(test_quantity[mask][0])
-            #warning('flipping manually for positive domain')
             X[k] = -X[k]
             Y[k] = -Y[k]
             Z[k] = -Z[k]
@@ -1229,26 +1163,57 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
 
         k = domain_vals<0
         if 1*(test_quantity[mask][0])<0:
-            # print(test_quantity[mask][0])
-            #warning('flipping manually for negative domain')
             X[k] = -X[k]
             Y[k] = -Y[k]
             Z[k] = -Z[k]
 
         # Finally, flip negative frequency values consistent with real-valued plus and cross waveforms in the co-precessing frame. In some or most cases, this step simply reverses the above.
         from numpy import median
-        k = domain_vals < 0
-        kp= domain_vals >= 0
-        # print(sign(median(Z[k])))
-        # print(sign(median(Z[kp])))
-        if sign( median(Z[k]) ) != sign( median(Z[kp]) ):
-            # warning('** flipping manually for negative domain')
-            X[k] = -X[k]
-            Y[k] = -Y[k]
-            Z[k] = -Z[k]
-            # print(sign(median(Z[k])))
-            # print(sign(median(Z[kp])))
+        mask = (abs(domain_vals)>=min(safe_domain_range)) & (abs(domain_vals)<=max(safe_domain_range))
+
+        k = domain_vals[mask] < 0
+        kp = domain_vals[mask] >= 0
+
+        if sign(median(Z[mask][k])) != -sign(median(Z[mask][kp])):
+            k_ = domain_vals < 0
+            X[k_] = -X[k_]
+            Y[k_] = -Y[k_]
+            Z[k_] = -Z[k_]
+            
+        if (sign(median(Z[mask][k])) == -sign(ref_orientation[-1])):
+            k_ = domain_vals < 0
+            X[k_] = -X[k_]
+            Y[k_] = -Y[k_]
+            Z[k_] = -Z[k_]
+        if (sign(median(Z[mask][kp])) == -sign(ref_orientation[-1])):
+            kp_ = domain_vals < 0
+            X[kp_] = -X[kp_]
+            Y[kp_] = -Y[kp_]
+            Z[kp_] = -Z[kp_]
+
+        safe_positive_mask = (domain_vals >= min(safe_domain_range) ) & (domain_vals <= max(safe_domain_range))
+        safe_negative_mask = (-domain_vals >= min(safe_domain_range)) & (
+            -domain_vals <= max(safe_domain_range))
         
+        Xp = X[ safe_positive_mask ]
+        Yp = Y[ safe_positive_mask ]
+        Zp = Z[ safe_positive_mask ]
+        
+        mask = safe_negative_mask
+        Xm = X[mask][::-1]
+        Ym = Y[mask][::-1]
+        Zm = Z[mask][::-1]
+        
+        another_test_quantity = sign( median( Xp*Xm + Yp*Ym + Zp*Zm ) )
+        if another_test_quantity == -1:
+            if Zp[0]*ref_orientation[-1] < 0:
+                X[domain_vals > 0] *= -1
+                Y[domain_vals > 0] *= -1
+                Z[domain_vals > 0] *= -1
+            if Zm[0]*ref_orientation[-1] < 0:
+                X[domain_vals < 0] *= -1
+                Y[domain_vals < 0] *= -1
+                Z[domain_vals < 0] *= -1
 
     else:
 
@@ -1258,8 +1223,6 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
             X = -X
             Y = -Y
             Z = -Z
-
-
 
     # -~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~- #
     #                          Calculate Angles                           #
