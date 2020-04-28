@@ -1389,6 +1389,13 @@ class gwf:
         else:
             msg = 'unhandled waveform array configuration: input wfarr is %s and this.wfarr is %s'%(wfarr,this.wfarr)
             error(msg,'gwf.setfields')
+            
+        #
+        from numpy import ndarray
+        if not isinstance(wfarr,ndarray):
+            error('wfarr (waveform array) must be numpy ndarray object')
+        if len(wfarr.flatten())==0:
+            error('empty waveform array given')
 
         # If given dt, then interpolote waveform array accordingly
         wfarr = straighten_wfarr( wfarr, this.verbose )
@@ -2211,10 +2218,6 @@ class gwf:
         that = this.copy()
 
         #
-        if transform_domain is None:
-            transform_domain = 'td'
-
-        #
         allowed_transform_domains = ('td','fd')
         if not ( transform_domain.lower() in allowed_transform_domains ):
             error('Transform domain must be in %s'%str(allowed_transform_domains))
@@ -2249,7 +2252,7 @@ class gwf:
             t     = this.t
             td_re = ifft(ifftshift( fd_p )).real * this.df*this.n
             td_im = ifft(ifftshift( fd_c )).real * this.df*this.n
-            rotated_wfarr = array( [t,td_re,td_im], dtype=float ).T
+            rotated_wfarr = array( [t,-td_re,-td_im], dtype=float ).T
             # NOTE that there can be an overall time shift at this stage
 
         # Reset related fields using the new data
@@ -4066,24 +4069,25 @@ class gwylm:
 
         #
         if transform_domain is None:
-            transform_domain = 'td'
+            error('The '+bold(blue('transform_domain'))+' keyword must be set by the user to "td" or "fd".')
+        if kind is None:
+            error('The '+bold(blue('kind'))+' keyword must be set by the user to "strain", "psi4" or "news".')
 
         #
         if ref_orientation is None:
             ref_orientation = this.L
 
         #
-        if kind is None:
-            kind = 'psi4'
-
-        #
         if not (kind in ('psi4', 'strain', 'news')):
             error('The kind keyword input must be in ("psi4","strain","news"), but ' +
                   red(str(kind))+' found.')
+
+        #
+        if not( transform_domain in ('td','fd') ):
+            error('transform_domain keyword value must be in ("td","fd") but '+red(bold(str(transform_domain)))+' found.')
         
         #
         if verbose: alert('We will use '+yellow(kind)+' to compute the co-precessing frame.')
-
         #
         allowed_transform_domains = ('td','fd')
         if not ( transform_domain.lower() in allowed_transform_domains ):
@@ -4096,7 +4100,7 @@ class gwylm:
             safe_domain_range=[0.009,0.3]
 
         #
-        foo = gwylm_radiation_axis_workflow(this,plot=False,save=False,verbose=False,safe_domain_range=safe_domain_range,__format__=__format__,ref_orientation=ref_orientation,kind=kind)
+        foo = gwylm_radiation_axis_workflow(this,plot=False,save=False,verbose=False,safe_domain_range=safe_domain_range,__format__=__format__,ref_orientation=ref_orientation,kind=kind,domain=transform_domain)
 
         #
         if verbose: alert('Storing radiation axis information to this.radiation_axis_info')

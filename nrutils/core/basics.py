@@ -957,6 +957,324 @@ def calc_Lab_tensor( multipole_dict ):
     #
     return L
 
+
+# # Given a dictionary of multipole data, calculate the Euler angles corresponding to a co-precessing frame
+# def calc_coprecessing_angles(multipole_dict,       # Dict of multipoles { ... l,m:data_lm ... }
+#                              domain_vals=None,   # The time or freq series for multipole data
+#                              ref_orientation=None,  # e.g. initial J; used for breaking degeneracies in calculation
+#                              return_xyz=False,
+#                              safe_domain_range=None,
+#                              verbose=None):
+#     '''
+#     Given a dictionary of multipole data, calculate the Euler angles corresponding to a co-precessing frame
+#     Key referece: https://arxiv.org/pdf/1304.3176.pdf
+#     Secondary ref: https://arxiv.org/pdf/1205.2287.pdf
+#     INPUT
+#     ---
+#     multipole_dict,       # dict of multipoles { ... l,m:data_lm ... }
+#     t,                    # The time series corresponding to multipole data; needed
+#                             only to calculate gamma; Optional
+#     verbose,              # Toggle for verbosity
+#     OUTPUT
+#     ---
+#     alpha,beta,gamma euler angles as defined in https://arxiv.org/pdf/1205.2287.pdf
+#     AUTHOR
+#     ---
+#     Lionel London (spxll) 2017
+#     '''
+
+#     # Import usefuls
+#     from scipy.linalg import eig, norm
+#     from scipy.integrate import cumtrapz
+#     from numpy import arctan2, sin, arcsin, pi, ones, arccos, double, array
+#     from numpy import unwrap, argmax, cos, array, sqrt, sign, argmin, round, median
+
+#     # Handle optional input
+#     if ref_orientation is None:
+#         ref_orientation = ones(3)
+
+#     #-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-#
+#     # Enforce that multipole data is array typed with a well defined length
+#     #-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-#
+#     y = multipole_dict
+#     for l, m in y:
+#         if isinstance(y[l, m], (float, int)):
+#             y[l, m] = array([y[l, m], ])
+#         else:
+#             if not isinstance(y[l, m], dict):
+#                 # Some input validation
+#                 if domain_vals is None:
+#                     error(
+#                         'Since your multipole data is a series, you must also input the related domain_vals (i.e. times or frequencies) array')
+#                 if len(domain_vals) != len(y[l, m]):
+#                     error('domain_vals array and multipole data not of same length')
+
+#     #-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-#
+#     # Calculate the emission tensor corresponding to the input data
+#     #-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-#
+#     L = calc_Lab_tensor(multipole_dict)
+
+#     #-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-#
+#     # Compute the eigenvectors and values of this tensor
+#     #-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-#
+
+#     # NOTE that members of L have the same length as each y[l,m]; the latter has been
+#     # forced to always have a length above
+
+#     # Initialize idents for angles. NOTE that gamma will be handled below
+#     alpha, beta = [], []
+#     X, Y, Z = [], [], []
+
+#     #
+#     # reference_z_scale = None
+#     old_dom_dex = None
+
+#     # For all multipole instances
+#     ref_x, ref_y, ref_z = None, None, None
+#     flip_z_convention = False
+#     for k in range(len(L[0, 0, :])):
+
+#         # Select the emission matrix for this instance, k
+#         _L = L[:, :, k]
+
+#         # Compute the eigen vals and vecs for this instance
+#         vals, vec = eig(_L)
+
+#         # Find the dominant direction's index
+#         dominant_dex = argmax(vals)
+#         if old_dom_dex is None:
+#             old_dom_dex = dominant_dex
+#         if old_dom_dex != dominant_dex:
+#             # print dominant_dex
+#             old_dom_dex = dominant_dex
+
+#         # Select the corresponding vector
+#         dominant_vec = vec[:, dominant_dex]
+
+#         # There is a z axis degeneracy that we will break here
+#         # by imposing that the z component is always consistent with the initial L
+
+#         if not flip_z_convention:
+#             if sign(dominant_vec[-1]) == -sign(ref_orientation[-1]):
+#                 dominant_vec *= -1
+#         else:
+#             if sign(dominant_vec[-1]) == sign(ref_orientation[-1]):
+#                 dominant_vec *= -1
+
+#         # dominant_vec *= sign(domain_vals[k])
+
+#         # Extract the components of the dominant eigenvector
+#         _x, _y, _z = dominant_vec
+
+#         # Store reference values if they are None
+#         if ref_x == None:
+#             ref_x = _x
+#             ref_y = _y
+#             ref_z = _z
+#         else:
+#             if (ref_x*_x < 0) and (ref_y*_y < 0):
+#                 _x *= -1
+#                 _y *= -1
+#                 _x *= -1
+
+#         # Store unit components for reference in the next iternation
+#         ref_x = _x
+#         ref_y = _y
+#         ref_z = _z
+
+#         # Look for and handle trivial cases
+#         if abs(_x)+abs(_y) < 1e-8:
+#             _x = _y = 0
+
+#         #
+#         X.append(_x)
+#         Y.append(_y)
+#         Z.append(_z)
+
+#     # Look for point reflection in X
+#     X = reflect_unwrap(array(X))
+#     Y = array(Y)
+#     Z = array(Z)
+
+#     # 3-point vector reflect unwrapping
+#     # print safe_domain_range
+#     tol = 0.1
+#     if safe_domain_range is None:
+#         safe_domain_range = lim(abs(domain_vals))
+#     safe_domain_range = array(safe_domain_range)
+#     from numpy import arange, mean
+#     for k in range(len(X))[1:-1]:
+#         if k > 0 and k < (len(domain_vals)-1):
+
+#             if (abs(domain_vals[k]) > min(abs(safe_domain_range))) and (abs(domain_vals[k]) < max(abs(safe_domain_range))):
+
+#                 left_x_has_reflected = abs(X[k]+X[k-1]) < tol*abs(X[k-1])
+#                 left_y_has_reflected = abs(Y[k]+Y[k-1]) < tol*abs(X[k-1])
+
+#                 right_x_has_reflected = abs(X[k]+X[k+1]) < tol*abs(X[k])
+#                 right_y_has_reflected = abs(Y[k]+Y[k+1]) < tol*abs(X[k])
+
+#                 x_has_reflected = right_x_has_reflected or left_x_has_reflected
+#                 y_has_reflected = left_y_has_reflected or right_y_has_reflected
+
+#                 if x_has_reflected and y_has_reflected:
+
+#                     # print domain_vals[k]
+
+#                     if left_x_has_reflected:
+#                         X[k:] *= -1
+#                     if right_x_has_reflected:
+#                         X[k+1:] *= -1
+
+#                     if left_y_has_reflected:
+#                         Y[k:] *= -1
+#                     if right_y_has_reflected:
+#                         Y[k+1:] *= -1
+
+#                     Z[k:] *= -1
+
+#     # Make sure that imag parts are gone
+#     X = double(X)
+#     Y = double(Y)
+#     Z = double(Z)
+
+#     #################################################
+#     # Reflect Y according to nrutils conventions    #
+#     Y = -Y                                          #
+#     #################################################
+
+#     IS_FD = (0.5 == round(float(sum(domain_vals > 0))/len(domain_vals), 2))
+#     if IS_FD:
+#         alert('The domain values seem evenly split between positive and negative values. Thus, we will interpret the input as corresponding to ' +
+#               green('FREQUENCY DOMAIN')+' data.')
+#     else:
+#         alert('The domain values seem unevenly split between positive and negative values. Thus, we will interpret the input as corresponding to '+green('TIME DOMAIN')+' data.')
+
+#     a = array(ref_orientation)/norm(ref_orientation)
+#     B = array([X, Y, Z]).T
+#     b = (B.T/norm(B, axis=1)).T
+#     xb, yb, zb = b.T
+#     test_quantity = a[0]*xb+a[1]*yb+a[2]*zb
+
+#     if IS_FD:
+
+#         k = domain_vals > 0
+#         mask = (domain_vals >= min(safe_domain_range)) & (
+#             domain_vals <= max(safe_domain_range))
+#         if (test_quantity[mask][0]) < 0:
+#             X[k] = -X[k]
+#             Y[k] = -Y[k]
+#             Z[k] = -Z[k]
+#         mask = (-domain_vals >= min(safe_domain_range)
+#                 ) & (-domain_vals <= max(safe_domain_range))
+
+#         k = domain_vals < 0
+#         if 1*(test_quantity[mask][0]) < 0:
+#             X[k] = -X[k]
+#             Y[k] = -Y[k]
+#             Z[k] = -Z[k]
+
+#         # Finally, flip negative frequency values consistent with real-valued plus and cross waveforms in the co-precessing frame. In some or most cases, this step simply reverses the above.
+#         from numpy import median
+#         mask = (abs(domain_vals) >= min(safe_domain_range)) & (
+#             abs(domain_vals) <= max(safe_domain_range))
+
+#         k = domain_vals[mask] < 0
+#         kp = domain_vals[mask] >= 0
+
+#         if sign(median(Z[mask][k])) != -sign(median(Z[mask][kp])):
+#             k_ = domain_vals < 0
+#             X[k_] = -X[k_]
+#             Y[k_] = -Y[k_]
+#             Z[k_] = -Z[k_]
+
+#         if (sign(median(Z[mask][k])) == -sign(ref_orientation[-1])):
+#             k_ = domain_vals < 0
+#             X[k_] = -X[k_]
+#             Y[k_] = -Y[k_]
+#             Z[k_] = -Z[k_]
+#         if (sign(median(Z[mask][kp])) == -sign(ref_orientation[-1])):
+#             kp_ = domain_vals < 0
+#             X[kp_] = -X[kp_]
+#             Y[kp_] = -Y[kp_]
+#             Z[kp_] = -Z[kp_]
+
+#         safe_positive_mask = (domain_vals >= min(safe_domain_range)) & (
+#             domain_vals <= max(safe_domain_range))
+#         safe_negative_mask = (-domain_vals >= min(safe_domain_range)) & (
+#             -domain_vals <= max(safe_domain_range))
+
+#         Xp = X[safe_positive_mask]
+#         Yp = Y[safe_positive_mask]
+#         Zp = Z[safe_positive_mask]
+
+#         mask = safe_negative_mask
+#         Xm = X[mask][::-1]
+#         Ym = Y[mask][::-1]
+#         Zm = Z[mask][::-1]
+
+#         another_test_quantity = sign(median(Xp*Xm + Yp*Ym + Zp*Zm))
+#         if another_test_quantity == -1:
+#             if Zp[0]*ref_orientation[-1] < 0:
+#                 X[domain_vals > 0] *= -1
+#                 Y[domain_vals > 0] *= -1
+#                 Z[domain_vals > 0] *= -1
+#             if Zm[0]*ref_orientation[-1] < 0:
+#                 X[domain_vals < 0] *= -1
+#                 Y[domain_vals < 0] *= -1
+#                 Z[domain_vals < 0] *= -1
+
+#     else:
+
+#         mask = (domain_vals >= min(safe_domain_range)) & (
+#             domain_vals <= max(safe_domain_range))
+#         if 1*(test_quantity[mask][0]) < 0:
+#             warning('flipping manually for negative domain')
+#             X = -X
+#             Y = -Y
+#             Z = -Z
+
+#     # -~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~- #
+#     #                          Calculate Angles                           #
+#     # -~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~- #
+
+#     alpha = arctan2(Y, X)
+#     beta = arccos(Z)
+
+#     # Make sure that angles are unwrapped
+#     alpha = unwrap(alpha)
+#     beta = unwrap(beta)
+
+#     # Calculate gamma (Eq. A4 of of arxiv:1304.3176)
+#     if len(alpha) > 1:
+#         k = 1
+#         # NOTE that spline_diff and spline_antidiff live in positive.maths
+#         gamma = - spline_antidiff(domain_vals, cos(beta)
+#                                   * spline_diff(domain_vals, alpha, k=k), k=k)
+#         gamma = unwrap(gamma)
+#         # Enforce like integration constant for neg and positive frequency gamma; this assumes time series will not have negative values (i.e. the code should work for TD and FD cases)
+#         neg_mask = domain_vals < 0
+#         _mask = (-domain_vals) > 0.01
+#         mask_ = domain_vals > 0.01
+#         if sum(neg_mask):
+#             gamma[neg_mask] = gamma[neg_mask] - \
+#                 gamma[_mask][-1] + gamma[mask_][0]
+#     else:
+#         # NOTE that this is the same as above, but here we're choosing an integration constant such that the value is zero. Above, no explicit integration constant is chosen.
+#         gamma = 0
+
+#     # Return answer
+#     if return_xyz == 'all':
+#         #
+#         return alpha, beta, gamma, X, Y, Z
+#     elif return_xyz:
+#         #
+#         return X, Y, Z
+#     else:
+#         return alpha, beta, gamma
+
+
+
 # Given a dictionary of multipole data, calculate the Euler angles corresponding to a co-precessing frame
 def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l,m:data_lm ... }
                               domain_vals = None,   # The time or freq series for multipole data
@@ -991,7 +1309,7 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
     from scipy.linalg import eig,norm
     from scipy.integrate import cumtrapz
     from numpy import arctan2,sin,arcsin,pi,ones,arccos,double,array
-    from numpy import unwrap,argmax,cos,array,sqrt,sign,argmin,round,median
+    from numpy import unwrap,argmax,cos,array,sqrt,sign,argmin,round,median,mean
 
     # Handle optional input
     if ref_orientation is None: ref_orientation = ones(3)
@@ -1088,9 +1406,18 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
         X.append(_x);Y.append(_y);Z.append(_z)
 
     # Look for point reflection in X
-    X = reflect_unwrap(array(X))
-    Y = array(Y)
-    Z = array(Z)
+    #
+    # c = 2*pi 
+    # X,Y,Z = [ unwrap( c*array(Q) )/c for Q in (X,Y,Z) ]
+        
+    from numpy import isnan
+    for Q in [X,Y,Z]:
+        if sum(isnan(Q)):
+            error('them nans')
+        
+    X = array(X,dtype=double)
+    Y = array(Y,dtype=double)
+    Z = array(Z,dtype=double)
 
     # 3-point vector reflect unwrapping
     # print safe_domain_range
@@ -1128,22 +1455,18 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
 
                     Z[k:] *= -1
 
-    # Make sure that imag parts are gone
-    X = double(X)
-    Y = double(Y)
-    Z = double(Z)
-
-    #################################################
-    # Reflect Y according to nrutils conventions    #
-    Y = -Y                                          #
-    #################################################
-
+    #
     IS_FD = ( 0.5 == round(float(sum(domain_vals>0))/len(domain_vals),2) )
     if IS_FD:
         alert('The domain values seem evenly split between positive and negative values. Thus, we will interpret the input as corresponding to '+green('FREQUENCY DOMAIN')+' data.')
     else:
         alert('The domain values seem unevenly split between positive and negative values. Thus, we will interpret the input as corresponding to '+green('TIME DOMAIN')+' data.')
+    
 
+    #################################################
+    # Reflect Y according to nrutils conventions    #
+    Y = -Y                                          #
+    #################################################
 
     a = array(ref_orientation)/norm(ref_orientation)
     B = array([X,Y,Z]).T
@@ -1194,17 +1517,28 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
         safe_positive_mask = (domain_vals >= min(safe_domain_range) ) & (domain_vals <= max(safe_domain_range))
         safe_negative_mask = (-domain_vals >= min(safe_domain_range)) & (
             -domain_vals <= max(safe_domain_range))
-        
-        Xp = X[ safe_positive_mask ]
-        Yp = Y[ safe_positive_mask ]
+            
         Zp = Z[ safe_positive_mask ]
-        
-        mask = safe_negative_mask
-        Xm = X[mask][::-1]
-        Ym = Y[mask][::-1]
-        Zm = Z[mask][::-1]
-        
-        another_test_quantity = sign( median( Xp*Xm + Yp*Ym + Zp*Zm ) )
+        Zm = Z[ safe_negative_mask ][::-1]
+            
+        def calc_another_test_quantity(XX,YY,ZZ):
+            
+            safe_positive_mask = (domain_vals >= min(safe_domain_range) ) & (domain_vals <= max(safe_domain_range))
+            safe_negative_mask = (-domain_vals >= min(safe_domain_range)) & (
+            -domain_vals <= max(safe_domain_range))
+            
+            Xp = XX[ safe_positive_mask ]
+            Yp = YY[ safe_positive_mask ]
+            Zp = ZZ[ safe_positive_mask ]
+            
+            mask = safe_negative_mask
+            Xm = XX[mask][::-1]
+            Ym = YY[mask][::-1]
+            Zm = ZZ[mask][::-1]
+            
+            return sign( median( Xp*Xm + Yp*Ym + Zp*Zm ) )
+            
+        another_test_quantity = calc_another_test_quantity(X,Y,Z)
         if another_test_quantity == -1:
             if Zp[0]*ref_orientation[-1] < 0:
                 X[domain_vals > 0] *= -1
@@ -1214,6 +1548,8 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
                 X[domain_vals < 0] *= -1
                 Y[domain_vals < 0] *= -1
                 Z[domain_vals < 0] *= -1
+        if calc_another_test_quantity(X, Y, Z) == -1:
+            error('unable to correctly reflect positive and negative frequency ends')
 
     else:
 
@@ -1223,6 +1559,13 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
             X = -X
             Y = -Y
             Z = -Z
+
+    # One more unwrap step
+    if not IS_FD:
+        c = 2*pi
+        X,Y,Z = [ unwrap(c*Q)/c for Q in (X,Y,Z) ]
+        R = sqrt( X**2 + Y**2 + Z**2 )
+        X,Y,Z = [ Q/R for Q in (X,Y,Z) ]
 
     # -~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~- #
     #                          Calculate Angles                           #
@@ -1241,12 +1584,20 @@ def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l
         # NOTE that spline_diff and spline_antidiff live in positive.maths
         gamma = - spline_antidiff( domain_vals, cos(beta) * spline_diff(domain_vals,alpha,k=k), k=k  )
         gamma = unwrap( gamma )
-        # Enforce like integration constant for neg and positive frequency gamma; this assumes time series will not have negative values (i.e. the code should work for TD and FD cases)
-        neg_mask = domain_vals<0
-        _mask = (-domain_vals)>0.01
-        mask_ =  domain_vals>0.01
-        if sum(neg_mask):
-            gamma[neg_mask] = gamma[neg_mask] - gamma[_mask][-1] + gamma[mask_][0]
+        # Enforce like integration constant for neg and positive frequency gamma
+        if IS_FD:
+            
+            safe_positive_mask = (domain_vals >= min(safe_domain_range) ) & (domain_vals <= max(safe_domain_range))
+            safe_negative_mask = (-domain_vals >= min(safe_domain_range)) & (
+            -domain_vals <= max(safe_domain_range))
+            
+            gamma[safe_negative_mask] = gamma[safe_negative_mask]-mean(gamma[safe_negative_mask]) + mean(gamma[safe_positive_mask])
+            
+            # neg_mask = domain_vals<0
+            # _mask = (-domain_vals)>0.01
+            # mask_ =  domain_vals>0.01
+            # if sum(neg_mask):
+            #     gamma[neg_mask] = gamma[neg_mask] - gamma[_mask][-1] + gamma[mask_][0]
     else:
         # NOTE that this is the same as above, but here we're choosing an integration constant such that the value is zero. Above, no explicit integration constant is chosen.
         gamma = 0
