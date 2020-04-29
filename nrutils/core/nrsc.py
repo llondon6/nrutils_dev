@@ -2252,7 +2252,7 @@ class gwf:
             t     = this.t
             td_re = ifft(ifftshift( fd_p )).real * this.df*this.n
             td_im = ifft(ifftshift( fd_c )).real * this.df*this.n
-            rotated_wfarr = array( [t,-td_re,-td_im], dtype=float ).T
+            rotated_wfarr = array( [t,td_re,td_im], dtype=float ).T
             # NOTE that there can be an overall time shift at this stage
 
         # Reset related fields using the new data

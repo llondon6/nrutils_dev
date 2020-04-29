@@ -131,9 +131,10 @@ class gwylm_radiation_axis_workflow:
         domain_vals = gwylmo.lm[2,2][kind].t if domain in ('t','time') else gwylmo.lm[2,2][kind].f
 
         #
-        domain_min = domain_vals[gwylmo.preinspiral.right_index] if domain in ('t','time') else gwylmo.wstart_pn/(2*pi)
-        domain_max = domain_vals[gwylmo.postringdown.left_index] if domain in ('t','time') else gwylmo.lm[2,2][kind].dt/pi
-        safe_domain_range = [domain_min,domain_max]
+        if safe_domain_range is None:
+            domain_min = domain_vals[gwylmo.preinspiral.right_index] if domain in ('t','time') else gwylmo.wstart_pn/(2*pi)
+            domain_max = domain_vals[gwylmo.postringdown.left_index] if domain in ('t','time') else gwylmo.lm[2,2][kind].dt/pi
+            safe_domain_range = [domain_min,domain_max]
 
         # Calculate corotating angles using low-level function
         alpha,beta,gamma,x,y,z = calc_coprecessing_angles( mp, domain_vals, ref_orientation=gwylmo.L if ref_orientation is None else ref_orientation, return_xyz='all', safe_domain_range = safe_domain_range )
