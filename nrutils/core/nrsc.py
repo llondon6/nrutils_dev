@@ -393,6 +393,7 @@ class scentry:
             this.default_level = this.config.default_par_list[1]
             this.extraction_map_dict = {}
             this.extraction_map_dict['radius_map'] = None
+            this.extraction_map_dict['radius_map_tortoise'] = None
             this.extraction_map_dict['level_map'] = None
             # NOTE: this.extraction_map_dict is a dictionary that contains two maps. extraction_map_dict['radius_map'] and extraction_map_dict['level_map']
             # The default values are to set these to None.
@@ -2335,7 +2336,7 @@ class gwylm:
     '''
 
     # Class constructor
-    def __init__( this,scentry_obj, lm=None, lmax=None, dt=0.15, load=None, clean=None, extraction_parameter=None, level=None, w22=None, lowpass=None, calcstrain=None, calcnews=None, enforce_polarization_convention=None, fftfactor=None, pad=None, __M_RELATIVE_SIGN_CONVENTION__=None, initial_j_align=None, load_dynamics=True,mutipole_dictionary=None, verbose=None, wfarr_dict=None, enforce_m_relative_sign_convention=True ):
+    def __init__( this,scentry_obj, lm=None, lmax=None, dt=0.15, load=None, clean=None, extraction_parameter=None, level=None, w22=None, lowpass=None, calcstrain=None, calcnews=None, enforce_polarization_convention=None, fftfactor=None, pad=None, __M_RELATIVE_SIGN_CONVENTION__=None, initial_j_align=None, load_dynamics=True,use_tortoise_for_dynamics=True,mutipole_dictionary=None, verbose=None, wfarr_dict=None, enforce_m_relative_sign_convention=True ):
 
         '''
 
@@ -2364,6 +2365,7 @@ class gwylm:
         __M_RELATIVE_SIGN_CONVENTION__ = None,
         initial_j_align = None,           # Toggle for putting wabeform in frame where initial J is z-hat
         load_dynamics = True, # Toggle for loading timeseries for L,S,J from dynamics
+        use_tortoise_for_dynamics = True, # Toggle between tortoise coordinate and flat extraction radius for map between dynamics and waveform times
         verbose               = None ):   # be verbose
 
         OUTPUT
@@ -2475,11 +2477,13 @@ class gwylm:
             else:
                 this.level = this.extraction_parameter
 
+        # Store flag for tortoise coordinate
+        this.r_is_tortoise = use_tortoise_for_dynamics
         # Store the extraction radius if a map is provided in the handler file
         if 'loadhandler' in scentry_obj.__dict__:
             special_method,handler = 'extraction_map',scentry_obj.loadhandler()
             if special_method in handler.__dict__:
-                this.extraction_radius = handler.__dict__[special_method]( scentry_obj, this.extraction_parameter )
+                this.extraction_radius = handler.__dict__[special_method]( scentry_obj, this.extraction_parameter, r_is_tortoise=this.r_is_tortoise, verbose=verbose )
             else:
                 this.extraction_radius = None
 
@@ -2557,7 +2561,7 @@ class gwylm:
         # Populate a dictionary which contains the time series for source dynamics
         if load_dynamics:
             waveform_times = this.t[ (this.t>this.t[this.startindex]) & (this.t<this[2,2]['psi4'].intrp_t_amp_max) ]
-            this.load_dynamics(verbose=True,waveform_times=waveform_times)
+            this.load_dynamics(verbose=verbose,waveform_times=waveform_times)
 
 
     # Allow class to be indexed
@@ -2972,14 +2976,20 @@ class gwylm:
     def extraction_radius(this):
         ''' Return the current object's extraction radius'''
         return this.__r__()
-    def __r__(this,extraction_parameter=None):
+    def __r__(this,extraction_parameter=None,r_for_scaling=False,verbose=False):
         #
         if extraction_parameter!=None:
-            # return the exctraction radius for a specific extraction parameter
-            return this.__scentry__.loadhandler().extraction_map(this,extraction_parameter)
+            # return the exctraction radius for a specific extraction parameter. Can't be tortoise coordinate if used for re-scaling the psi4 modes.
+            if r_for_scaling:
+                return this.__scentry__.loadhandler().extraction_map(this,extraction_parameter,r_is_tortoise=False,verbose=verbose)
+            else:
+                return this.__scentry__.loadhandler().extraction_map(this,extraction_parameter,r_is_tortoise=this.r_is_tortoise,verbose=verbose)
         else:
-            # return the extractoin radius of the current object
-            return this.extraction_map_dict['radius_map'][this.extraction_parameter]
+            # return the extraction radius of the current object
+            if r_for_scaling or not this.r_is_tortoise:
+                return this.extraction_map_dict['radius_map'][this.extraction_parameter]
+            else:
+                return this.extraction_map_dict['radius_map_tortoise'][this.extraction_parameter]
 
     # load the waveform data
     def load(this,                  # The current object
@@ -3077,7 +3087,7 @@ class gwylm:
             # Handle extraction radius scaling
             if not this.config.is_rscaled:
                 # If the data is not in the format r*Psi4, then multiply by r (units M) to make it so
-                extraction_radius = this.__r__(extraction_parameter)
+                extraction_radius = this.__r__(extraction_parameter,r_for_scaling=True)
                 wfarr[:,1:3] *= extraction_radius
 
             # Fix nans, nonmonotinicities and jumps in time series waveform array
@@ -3931,13 +3941,10 @@ class gwylm:
         from numpy import arccos,arctan2,array,linalg,cos,sin,dot,zeros,ones
         from scipy.interpolate import InterpolatedUnivariateSpline as IUS
 
-        #
-        if verbose or this.verbose: 
-            alert('Using '+yellow('dynamics' if use_dynamics else 'bbh')+' data for initial J.')
-
-        J_norm = linalg.norm(this.J if (not use_dynamics) else this.dynamincs['J'][0])
-        thetaJ = arccos(this.J[2]/J_norm)
-        phiJ   = arctan2(this.J[1],this.J[0])
+        J = this.J.copy()
+        J_norm = linalg.norm(this.J)
+        thetaJ = arccos(J[2]/J_norm)
+        phiJ   = arctan2(J[1],J[0])
 
         # Define gamma and beta accordingly
         beta  = -thetaJ
@@ -3945,6 +3952,7 @@ class gwylm:
 
         # Define zeta0 (i.e. -alpha) such that L is along the y-z plane at the initial time step
         L_new = rotate3 ( this.L1 + this.L2, 0, beta , gamma )
+
         zeta0 = arctan2( L_new.T[1], L_new.T[0] )
         alpha = -zeta0
 
@@ -4034,6 +4042,7 @@ class gwylm:
         gamma = -phiJ
         # Define alpha such that initial L is aling x
         L_new = rotate3 ( this.L1 + this.L2, 0, beta[0], gamma[0] )
+
         zeta0 = arctan2( L_new.T[1], L_new.T[0] )
         alpha = -( zeta - zeta[0] + zeta0 )
 
@@ -4657,7 +4666,7 @@ class gwylm:
                                 for k in range(len(L2_[:, 0]))])
                 else:
                     #
-                    warning('Dynamics rotatios will '+bold(red('not'))+' be performed as FD angles given. There may be a way to determine the relevant TD angles')
+                    warning('Dynamics rotations will '+bold(red('not'))+' be performed as FD angles given. There may be a way to determine the relevant TD angles')
                     J,L,S,L1,L2,S1,S2,R1,R2 = J_,L_,S_,L1_,L2_,S1_,S2_,R1_,R2_
 
                     # from numpy import pi
@@ -4829,7 +4838,8 @@ class gwylm:
                                      use_mask = True,   # Toggle for chopping of noisey data. NOTE use_mask = False is useful if you need radiated quantities of the same length as the original waveforms
                                      ref_orientation = None,
                                      enforce_initial_J_consistency=True,
-                                     verbose=False):    # Toggle for letting the people know
+                                     verbose=False     # Toggle for letting the people know
+                                     ):
 
         ''' Reference: https://arxiv.org/pdf/0707.4654.pdf '''
 
@@ -5073,7 +5083,7 @@ class gwylm:
         this.__lowpassfiltered__ = True
 
     # Load interpolated dynamics from the run directory
-    def load_dynamics(this,waveform_times=None,verbose=False,output=False,tortoise=False):
+    def load_dynamics(this,waveform_times=None,verbose=False,output=False):
         '''
         Load interpolated dynamics from the run directory
         '''
@@ -5095,16 +5105,8 @@ class gwylm:
             alert('Calculating dynamics times by adjusting input waveform_times by extraction radius',verbose=verbose)
             if waveform_times is None:
                 error('The waveform times over which we want dynamics must be input')
-            if tortoise:
-                alert('Using tortoise coordinate to map between dynamics and waveform ...',verbose=verbose)
-                adm_mass = this.raw_metadata.initial_ADM_energy
-                flat_radius = this.extraction_radius()
-                try:
-                    extraction_radius = flat_radius + 2.0 * adm_mass * log( flat_radius / ( 2.0 * adm_mass ) - 1.0 )
-                except:
-                    error('Something has gone awry when computing the tortoise coordinate. Please ensure that the ADM mass is positive definite and that "extraction_radius() / (2.0 * ADM mass) > 1.0"!')
-            else:
-                extraction_radius = this.extraction_radius()
+
+            extraction_radius = this.extraction_radius()
 
             dynamics_times = waveform_times - extraction_radius
 

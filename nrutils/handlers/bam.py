@@ -433,7 +433,9 @@ def learn_metadata_legacy( metadata_file_location ):
 # Here we define a function which maps between extraction_parameter and extraction radius -- IF such
 # a map can be constructed.
 def extraction_map( this,                   # this may be an nrsc object or an gwylm object (it must have a raw_metadata attribute )
-                    extraction_parameter ): # The extraction parameter that will be converted to radius
+                    extraction_parameter,   # The extraction parameter that will be converted to radius
+                    r_is_tortoise=False,    # Use tortoise coordinate for extraction radius
+                    verbose=False):         # verbosity
     '''Given an extraction parameter, return an extraction radius'''
 
     # NOTE that while some BAM runs have extraction radius information stored in the bbh file in various ways, this does not appear to the case for all simulations. The invariants_modes_r field appears to be more reliable.
@@ -448,7 +450,23 @@ def extraction_map( this,                   # this may be an nrsc object or an g
     # print this.raw_metadata.invariants_modes_r
     # print '>> map = ',_map_
     # raise
-    extraction_radius = _map_[ extraction_parameter-1 ]
+    flat_radius = _map_[ extraction_parameter-1 ]
+
+    if r_is_tortoise:
+        from numpy import log
+        if this.madm:
+            adm_mass = this.madm
+        else:
+            adm_mass = this.raw_metadata.initial_ADM_energy
+
+        alert('Using tortoise coordinate for extraction radius.', verbose)
+        try:
+            extraction_radius = flat_radius + 2.0 * adm_mass * log( flat_radius / (2.0 * adm_mass) - 1.0 )
+        except:
+            msg = 'Something has gone awry when computing the tortoise coordinate. Please ensure that the ADM mass is positive definite and that "flat_radius / (2.0 * ADM mass) > 1.0"!'
+            error(msg)
+    else:
+        extraction_radius = flat_radius
 
     return extraction_radius
 
@@ -472,7 +490,7 @@ def infer_default_level_and_extraction_parameter( this,     # An scentry object
     file_list = glob( search_string )
 
     # For all results
-    exr,lev,rad = [],[],[]
+    exr,lev,rad,rad_tort = [],[],[],[]
     for f in file_list:
 
         # Split filename string to find level and extraction parameter
@@ -481,9 +499,10 @@ def infer_default_level_and_extraction_parameter( this,     # An scentry object
         parts = f.split('.') # e.g. "psi3col.r6.l6.l2.m2.gz".split('.')
         exr_,lev_ = int(parts[1][-1]),int(parts[2][-1])
         # Also get related extraction radius (M)
-        rad_ = extraction_map( this, exr_ )
+        rad_ = extraction_map( this, exr_, verbose=verbose )
+        rad_tort_ = extraction_map (this, exr_, r_is_tortoise=True, verbose=verbose )
         # Append lists
-        exr.append(exr_);lev.append(lev_);rad.append(rad_)
+        exr.append(exr_);lev.append(lev_);rad.append(rad_);rad_tort.append(rad_tort_)
 
     # NOTE that we will use the extraction radius that is closest to desired_exraction_radius (in units of M)
 
@@ -494,6 +513,7 @@ def infer_default_level_and_extraction_parameter( this,     # An scentry object
     # And a dictionary between the level parameter and extraction radius
     extraction_map_dict = {}
     extraction_map_dict['radius_map'] = { exr[n]:r for n,r in enumerate(rad) }
+    extraction_map_dict['radius_map_tortoise'] = { exr[n]:r for n,r in enumerate(rad_tort) }
     extraction_map_dict['level_map'] = { exr[n]:l for n,l in enumerate(lev) }
 
     # Return answers
@@ -521,6 +541,8 @@ def learn_source_dynamics(scentry_object,dynamics_times,verbose=False):
     from glob import glob as ls
     from nrutils.core.basics import straighten_wfarr
     from numpy import array, cross, linalg
+    from numpy import max as npmax
+    from numpy.linalg import norm
     from os.path import join
 
     # ---------------------------------- #
@@ -627,9 +649,9 @@ def learn_source_dynamics(scentry_object,dynamics_times,verbose=False):
     dynamics_times = dynamics_times[ dynamics_times < max(lim(L_times)[-1],lim(S1_times)[-1]) ]
     #
     msk = mask( S1_times )
-    S1 = mass1**2 * array(  [ spline(S1_times[msk],s[msk])(dynamics_times) for s in S1_ ]  ).T
+    S1 = array(  [ spline(S1_times[msk],s[msk])(dynamics_times) for s in S1_ ]  ).T
     msk = mask( S2_times )
-    S2 = mass2**2 * array(  [ spline(S2_times[msk],s[msk])(dynamics_times) for s in S2_ ]  ).T
+    S2 = array(  [ spline(S2_times[msk],s[msk])(dynamics_times) for s in S2_ ]  ).T
     #
     msk = mask( L1_times )
     L1 = array(  [ spline(L1_times[msk],l[msk])(dynamics_times) for l in L1_ ]  ).T
@@ -649,19 +671,35 @@ def learn_source_dynamics(scentry_object,dynamics_times,verbose=False):
     # Save everything in a standard dictionary
     # HERE we swap 1,2 labels to be consistent with nrutls' internal convention
     foo = {}
-    # ORBITAL MOMENTA
-    foo['L2'] = L1
-    foo['L1'] = L2
-    foo['L'] = L
-    # SPIN MOMENTA
-    foo['S2'] = S1
-    foo['S1'] = S2
-    foo['S'] = S
-    # TOTAL MOMENTA
-    foo['J'] = J
-    # TRAJECTORIES
-    foo['R2'] = R1
-    foo['R1'] = R2
+    if not (mass2/mass1 < 1.1 and npmax([norm(S1[0]/mass1**2),norm(S2[0]/mass2**2)])>0.70):
+        # ORBITAL MOMENTA
+        foo['L2'] = L1
+        foo['L1'] = L2
+        foo['L'] = L
+        # SPIN MOMENTA
+        foo['S2'] = S1
+        foo['S1'] = S2
+        foo['S'] = S
+        # TOTAL MOMENTA
+        foo['J'] = J
+        # TRAJECTORIES
+        foo['R2'] = R1
+        foo['R1'] = R2
+    else:
+        # ORBITAL MOMENTA
+        foo['L1'] = L1
+        foo['L2'] = L2
+        foo['L'] = L
+        # SPIN MOMENTA
+        foo['S1'] = S1
+        foo['S2'] = S2
+        foo['S'] = S
+        # TOTAL MOMENTA
+        foo['J'] = J
+        # TRAJECTORIES
+        foo['R1'] = R1
+        foo['R2'] = R2
+
     # DYNAMICS TIMES USED
     foo['dynamics_times'] = dynamics_times
 
