@@ -1080,7 +1080,7 @@ def scsearch( catalog = None,           # Manually input list of scentry objects
         from numpy import array
         # Let the people know
         if verbose:
-            warning('Applying remant fit to scentry objects. This should be done if the final mass and spin meta data are not trustworth. '+magenta('The fit being used only works for non-precessing systems.'))
+            warning('Applying remant fit to scentry objects. This should be done if the final mass and spin meta data are not trustworthy. '+magenta('The fit being used only works for non-precessing systems.'))
         #
         for e in catalog:
             #e.mf,e.xf = Mf14067295(e.m1,e.m2,e.X1[-1],e.X2[-1]),jf14067295(e.m1,e.m2,e.X1[-1],e.X2[-1])
@@ -5114,30 +5114,41 @@ class gwylm:
             sco = this.__scentry__
             alert('Retrieving method from handler for loading source dyanmics as this is specific to BAM, GT-MAYA, SXS, etc ...',verbose=verbose)
             handler = sco.loadhandler()
-            alert('Loading/Learning dynamics ...',verbose=verbose)
-
+            
             #
-            dynamics = handler.learn_source_dynamics( sco, dynamics_times,verbose= verbose )
-            dynamics['waveform_times'] = waveform_times[:len(dynamics['dynamics_times'])]
+            __HAS_DYNAMICS__ = 'learn_source_dynamics' in handler.__dict__
+            if __HAS_DYNAMICS__:
+                alert('Loading/Learning dynamics ...',verbose=verbose)
+                dynamics = handler.learn_source_dynamics( sco, dynamics_times,verbose= verbose )
+                dynamics['waveform_times'] = waveform_times[:len(dynamics['dynamics_times'])]
+            else:
+                warning('Dynamics will not belo loaded becuase there is NO method named "learn_source_dynamics" in the handler.')
+                
 
             # Check for consistency between dynamics data and bbh file
-            test_quantity = dot(this.L/norm(this.L),dynamics['L'][0]/norm(dynamics['L'][0]))
-            if test_quantity<=0:
-                print('bbh: ',this.L)
-                print('dyn: ',dynamics['L'][0])
-                print('\n')
-                warning(red('There is an apparent discrepancy between the BBH L and the dynamics L. Either or both could be incorrect. For now, we will assume the dynamics data are correcect, and so use this in place of the BBH L when appropriate.'))
-                print('\n')
-                this.L = dynamics['L'][0]
-                this.L1 = dynamics['L1'][0]
-                this.L2 = dynamics['L2'][0]
-                this.J = this.L+this.S
-
-            alert('Done.',verbose=verbose)
-            if output:
-                return dynamics
+            
+            if __HAS_DYNAMICS__:
+                test_quantity = dot(this.L/norm(this.L),dynamics['L'][0]/norm(dynamics['L'][0]))
+                if test_quantity<=0:
+                    print('bbh: ',this.L)
+                    print('dyn: ',dynamics['L'][0])
+                    print('\n')
+                    warning(red('There is an apparent discrepancy between the BBH L and the dynamics L. Either or both could be incorrect. For now, we will assume the dynamics data are correcect, and so use this in place of the BBH L when appropriate.'))
+                    print('\n')
+                    this.L = dynamics['L'][0]
+                    this.L1 = dynamics['L1'][0]
+                    this.L2 = dynamics['L2'][0]
+                    this.J = this.L+this.S
+                    
+                    alert('Done.',verbose=verbose)
+                    if output:
+                        return dynamics
+                    else:
+                        this.dynamics = dynamics
             else:
-                this.dynamics = dynamics
+                warning('We cannot check the consistency of dynamics and metadata information.')
+
+            
 
     #
     def __flip_cross_sign_convention__(this):
