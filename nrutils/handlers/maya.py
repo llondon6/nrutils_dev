@@ -207,7 +207,7 @@ def learn_metadata( metadata_file_location ):
 
 
 # Given an extraction parameter, return an extraction radius
-def extraction_map( this, extraction_parameter ):
+def extraction_map( this, extraction_parameter, r_is_tortoise=False, verbose=False ):
 
     # Given an extraction parameter, return an extraction radius
     extraction_radius = extraction_parameter

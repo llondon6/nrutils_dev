@@ -2977,6 +2977,10 @@ class gwylm:
         ''' Return the current object's extraction radius'''
         return this.__r__()
     def __r__(this,extraction_parameter=None,r_for_scaling=False,verbose=False):
+        
+        # Temporary fix 
+        r_for_scaling = this.config.institute=='gt'
+        
         #
         if extraction_parameter!=None:
             # return the exctraction radius for a specific extraction parameter. Can't be tortoise coordinate if used for re-scaling the psi4 modes.
