@@ -2885,6 +2885,49 @@ class gwylm:
 
         return ax
 
+    #
+    def __symmetrize__(this,verbose=False):
+        
+        #
+        from numpy import array 
+        
+        #
+        kinds = this[2,2].keys()
+        
+        #
+        select_lm = [ (l,m) for l,m in this.__lmlist__ if m>=0 ]
+        
+        #
+        that = this.copy()
+        transform = lambda X,L: ((-1)**L) * X.conj()
+        
+        #
+        for kind in kinds:
+            
+            #
+            for l,m in select_lm:
+                
+                #
+                y_positive = this[l,+m][kind].y
+                y_negative = this[l,-m][kind].y
+                
+                #
+                y_transformed_negative = transform(y_negative,l)
+                
+                #
+                y_symmetric_positive = 0.5 * ( y_positive + 1j*y_transformed_negative )
+                y_symmetric_negative = transform(y_symmetric_positive,l)
+                
+                #
+                wfarr = array( [this.t,y_symmetric_positive.real,y_symmetric_positive.imag] ).T
+                that[l,+m][kind].setfields( wfarr=wfarr )
+                
+                #
+                wfarr = array( [this.t,y_symmetric_negative.real,y_symmetric_negative.imag] ).T
+                that[l,-m][kind].setfields( wfarr=wfarr )
+                
+        #
+        return that
 
     #
     def plot_3d_S(this,ax=None,view=None,color='#0392ff'):
