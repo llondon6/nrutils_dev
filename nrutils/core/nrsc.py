@@ -2914,7 +2914,7 @@ class gwylm:
                 #
                 y_transformed_negative = transform(y_negative,l)
                 
-                #
+                # NOTE: it must be better understoof whether the factor of 1j should be in the line below
                 y_symmetric_positive = 0.5 * ( y_positive + 1j*y_transformed_negative )
                 y_symmetric_negative = transform(y_symmetric_positive,l)
                 
