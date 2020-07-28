@@ -469,6 +469,7 @@ def infer_default_level_and_extraction_parameter( this,     # An scentry object
 
     # Find all l=m=2 waveforms
     search_string = ( this.simdir() + '/Psi4ModeDecomp/*l2.m2*.gz' ).replace('//','/')
+    alert(search_string)
     file_list = glob( search_string )
 
     # For all results

@@ -123,6 +123,7 @@ class scconfig(smart_object):
             config_path = global_settings.config_path
             stale_config_name = this.config_file_location.split('/')[-1]
             fresh_config_file_location = expanduser( config_path + '/' + stale_config_name )
+            alert(fresh_config_file_location)
             # If the new config path exists, then store it and use it to reconfigure the current object
             if os.path.exists( fresh_config_file_location ):
                 this.config_file_location = fresh_config_file_location
@@ -874,7 +875,7 @@ def scsearch( catalog = None,           # Manually input list of scentry objects
 
     # Print non None inputs to screen
     thisfun = inspect.stack()[0][3]
-    if verbose is not None:
+    if verbose:
         for k in dir():
             if (eval(k) is not None) and (k != 'thisfun'):
                 # alert('Found %s keyword.' % (textul(k)) )
