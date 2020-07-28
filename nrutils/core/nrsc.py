@@ -393,7 +393,6 @@ class scentry:
             this.default_level = this.config.default_par_list[1]
             this.extraction_map_dict = {}
             this.extraction_map_dict['radius_map'] = None
-            this.extraction_map_dict['radius_map_tortoise'] = None
             this.extraction_map_dict['level_map'] = None
             # NOTE: this.extraction_map_dict is a dictionary that contains two maps. extraction_map_dict['radius_map'] and extraction_map_dict['level_map']
             # The default values are to set these to None.
@@ -2336,7 +2335,7 @@ class gwylm:
     '''
 
     # Class constructor
-    def __init__( this,scentry_obj, lm=None, lmax=None, dt=0.15, load=None, clean=None, extraction_parameter=None, level=None, w22=None, lowpass=None, calcstrain=None, calcnews=None, enforce_polarization_convention=None, fftfactor=None, pad=None, __M_RELATIVE_SIGN_CONVENTION__=None, initial_j_align=None, load_dynamics=True,use_tortoise_for_dynamics=True,mutipole_dictionary=None, verbose=None, wfarr_dict=None, enforce_m_relative_sign_convention=True ):
+    def __init__( this,scentry_obj, lm=None, lmax=None, dt=0.15, load=None, clean=None, extraction_parameter=None, level=None, w22=None, lowpass=None, calcstrain=None, calcnews=None, enforce_polarization_convention=None, fftfactor=None, pad=None, __M_RELATIVE_SIGN_CONVENTION__=None, initial_j_align=None, load_dynamics=True,use_tortoise_for_dynamics=False,mutipole_dictionary=None, verbose=None, wfarr_dict=None, enforce_m_relative_sign_convention=True ):
 
         '''
 
@@ -2365,7 +2364,7 @@ class gwylm:
         __M_RELATIVE_SIGN_CONVENTION__ = None,
         initial_j_align = None,           # Toggle for putting wabeform in frame where initial J is z-hat
         load_dynamics = True, # Toggle for loading timeseries for L,S,J from dynamics
-        use_tortoise_for_dynamics = True, # Toggle between tortoise coordinate and flat extraction radius for map between dynamics and waveform times
+        use_tortoise_for_dynamics = False, # Toggle between tortoise coordinate and flat extraction radius for retarded time mapping between dynamics and waveform frames
         verbose               = None ):   # be verbose
 
         OUTPUT
@@ -2478,12 +2477,12 @@ class gwylm:
                 this.level = this.extraction_parameter
 
         # Store flag for tortoise coordinate
-        this.r_is_tortoise = use_tortoise_for_dynamics
+        this.use_tortoise_for_dynamics = use_tortoise_for_dynamics
         # Store the extraction radius if a map is provided in the handler file
         if 'loadhandler' in scentry_obj.__dict__:
             special_method,handler = 'extraction_map',scentry_obj.loadhandler()
             if special_method in handler.__dict__:
-                this.extraction_radius = handler.__dict__[special_method]( scentry_obj, this.extraction_parameter, r_is_tortoise=this.r_is_tortoise, verbose=verbose )
+                this.extraction_radius = handler.__dict__[special_method]( scentry_obj, this.extraction_parameter, verbose=verbose )
             else:
                 this.extraction_radius = None
 
@@ -2979,17 +2978,11 @@ class gwylm:
     def __r__(this,extraction_parameter=None,r_for_scaling=False,verbose=False):
         #
         if extraction_parameter!=None:
-            # return the exctraction radius for a specific extraction parameter. Can't be tortoise coordinate if used for re-scaling the psi4 modes.
-            if r_for_scaling:
-                return this.__scentry__.loadhandler().extraction_map(this,extraction_parameter,r_is_tortoise=False,verbose=verbose)
-            else:
-                return this.__scentry__.loadhandler().extraction_map(this,extraction_parameter,r_is_tortoise=this.r_is_tortoise,verbose=verbose)
+            # return the exctraction radius for a specific extraction parameter.
+            return this.__scentry__.loadhandler().extraction_map(this,extraction_parameter,verbose=verbose)
         else:
             # return the extraction radius of the current object
-            if r_for_scaling or not this.r_is_tortoise:
-                return this.extraction_map_dict['radius_map'][this.extraction_parameter]
-            else:
-                return this.extraction_map_dict['radius_map_tortoise'][this.extraction_parameter]
+            return this.extraction_map_dict['radius_map'][this.extraction_parameter]
 
     # load the waveform data
     def load(this,                  # The current object
@@ -5083,11 +5076,14 @@ class gwylm:
         this.__lowpassfiltered__ = True
 
     # Load interpolated dynamics from the run directory
-    def load_dynamics(this,waveform_times=None,verbose=False,output=False):
+    def load_dynamics(this,waveform_times=None,verbose=False,output=False,tortoise=False):
         '''
         Load interpolated dynamics from the run directory
         '''
+        #
+        from positive.physics import Schwarzschild_tortoise
 
+        #
         if 'dynamics' in this.__dict__:
             warning('Dynamics have already been loaded for %s. We will not re-load.'%this.simname)
             if output:
@@ -5106,9 +5102,14 @@ class gwylm:
             if waveform_times is None:
                 error('The waveform times over which we want dynamics must be input')
 
-            extraction_radius = this.extraction_radius()
+            #
+            if tortoise:
+                radius = Schwarzschild_tortoise( this.extraction_radius(), this.madm ) 
+            else:
+                radius = this.extraction_radius()
 
-            dynamics_times = waveform_times - extraction_radius
+            # NOTE This is the retarded time used to connect the dynamics frame to the waveform frame.
+            dynamics_times = waveform_times - radius
 
             #
             sco = this.__scentry__
@@ -5122,7 +5123,7 @@ class gwylm:
                 dynamics = handler.learn_source_dynamics( sco, dynamics_times,verbose= verbose )
                 dynamics['waveform_times'] = waveform_times[:len(dynamics['dynamics_times'])]
             else:
-                warning('Dynamics will not belo loaded becuase there is NO method named "learn_source_dynamics" in the handler.')
+                warning('Dynamics will not below loaded becuase there is NO method named "learn_source_dynamics" in the handler.')
                 
 
             # Check for consistency between dynamics data and bbh file
