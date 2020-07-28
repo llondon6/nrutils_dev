@@ -5076,7 +5076,7 @@ class gwylm:
         this.__lowpassfiltered__ = True
 
     # Load interpolated dynamics from the run directory
-    def load_dynamics(this,waveform_times=None,verbose=False,output=False,tortoise=False):
+    def load_dynamics(this,waveform_times=None,verbose=False,output=False,tortoise=False,force_loading=False):
         '''
         Load interpolated dynamics from the run directory
         '''
@@ -5084,7 +5084,7 @@ class gwylm:
         from positive.physics import Schwarzschild_tortoise
 
         #
-        if 'dynamics' in this.__dict__:
+        if ('dynamics' in this.__dict__) and (not force_loading):
             warning('Dynamics have already been loaded for %s. We will not re-load.'%this.simname)
             if output:
                 return this.dynamics
