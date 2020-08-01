@@ -40,6 +40,7 @@ def validate( metadata_file_location, config = None, verbose = True ):
     #
     return status
 
+
 #
 def learn_metadata( metadata_file_location ):
 
@@ -118,7 +119,16 @@ def learn_metadata( metadata_file_location ):
     def shiftt_to_initial_bh_location(key):
         shiftt0_file_location = [ f for f in shift_tracker_file_list if key in f ][0]
         fid = open( shiftt0_file_location )
-        return array( [ float(a) for a in fid.readline().replace('\n','').split('\t')][2:5] )
+        #return array( [ float(a) for a in fid.readline().replace('\n','').split('\t')][2:5] )
+        done = False
+        while not done:
+            raw_line = fid.readline()
+            done = raw_line[0] != '#'
+        #
+        line = raw_line.replace('\n','').split('\t')
+        # get x y z from columns of first non-commented line
+        ans = array( [ float(a) for a in line][2:5] )
+        return ans
     R1 = shiftt_to_initial_bh_location("ShiftTracker0")
     R2 = shiftt_to_initial_bh_location("ShiftTracker1")
 
@@ -198,6 +208,11 @@ def learn_metadata( metadata_file_location ):
     x.R1_afterjunk,x.R2_afterjunk = None,None
     x.P1_afterjunk,x.P2_afterjunk = None,None
     x.J_afterjunk = None
+    
+    #
+    x.S = x.S1 + x.S2
+    x.L = x.L1 + x.L2
+    x.J = x.L + x.S
 
     #
     x.valid = True
@@ -207,13 +222,14 @@ def learn_metadata( metadata_file_location ):
 
 
 # Given an extraction parameter, return an extraction radius
-def extraction_map( this, extraction_parameter ):
+def extraction_map( this, extraction_parameter, verbose=False ):
 
     # Given an extraction parameter, return an extraction radius
     extraction_radius = extraction_parameter
 
     #
     return extraction_radius
+
 
 # Estimate a good extraction radius and level for an input scentry object from the BAM catalog
 def infer_default_level_and_extraction_parameter( this,     # An scentry object

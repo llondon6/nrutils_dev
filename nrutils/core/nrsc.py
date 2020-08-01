@@ -274,19 +274,19 @@ class scentry:
             if this.verbose: print '## Working: %s' % cyan(metadata_file_location)
             this.log += ' This entry\'s metadata file is valid.'
 
-            # # i.e. learn the meta_data_file
-            # this.learn_metadata(); # raise(TypeError,'This line should only be uncommented when debugging.')
-            # this.label = sclabel( this )
+            # i.e. learn the meta_data_file
+            this.learn_metadata(); # raise(TypeError,'This line should only be uncommented when debugging.')
+            this.label = sclabel( this )
 
-            try:
-                this.learn_metadata()
-                this.label = sclabel( this )
-            except:
-                emsg = sys.exc_info()[1].message
-                this.log += '%80s'%' [FATALERROR] The metadata failed to be read. There may be an external formatting inconsistency. It is being marked as invalid with None. The system says: %s'%emsg
-                if this.verbose: warning( 'The following error message will be logged: '+red(emsg),'scentry')
-                this.isvalid = None # An external program may use this to do something
-                this.label = 'invalid!'
+            # try:
+            #     this.learn_metadata()
+            #     this.label = sclabel( this )
+            # except:
+            #     emsg = sys.exc_info()[1].message
+            #     this.log += '%80s'%' [FATALERROR] The metadata failed to be read. There may be an external formatting inconsistency. It is being marked as invalid with None. The system says: %s'%emsg
+            #     if this.verbose: warning( 'The following error message will be logged: '+red(emsg),'scentry')
+            #     this.isvalid = None # An external program may use this to do something
+            #     this.label = 'invalid!'
 
         elif this.isvalid is False:
             if config_obj:
@@ -2719,17 +2719,23 @@ class gwylm:
         #
         if not 'dynamics' in this.__dict__:
             warning('Dynamics must be loaded in order to plot 3D trajectories. We will now load dynamics for you using "this.load_dynamics()"')
-            this.load_dynamics()
+            #this.load_dynamics()
 
-        # Collect compoenents 1
-        x1,y1,z1 = this.dynamics['R1'].T
-        max_r1 = max(sqrt( x1**2 + y1**2 + z1**2 ))
-        x1,y1,z1 = [ v/max_r1 for v in (x1,y1,z1) ]
+        # Collect compoenents
+        if 'dynamics' in this.__dict__:
+            
+            # Collect compoenents 1
+            x1,y1,z1 = this.dynamics['R1'].T
+            max_r1 = max(sqrt( x1**2 + y1**2 + z1**2 ))
 
-        # Collect compoenents 2
-        x2,y2,z2 = this.dynamics['R2'].T
-        max_r2 = max(sqrt( x2**2 + y2**2 + z2**2 ))
-        x2,y2,z2 = [ v/max_r2 for v in (x2,y2,z2) ]
+            # Collect compoenents 2
+            x2,y2,z2 = this.dynamics['R2'].T
+            max_r2 = max(sqrt( x2**2 + y2**2 + z2**2 ))
+            
+            # Normalize
+            max_r = max( max_r1, max_r2 )
+            x2,y2,z2 = [ v/max_r for v in (x2,y2,z2) ]
+            x1,y1,z1 = [ v/max_r for v in (x1,y1,z1) ]
 
         if ax is None:
             fig = figure( figsize=fig_scale*4*figaspect(1) )
@@ -2828,12 +2834,13 @@ class gwylm:
         #
         if not 'dynamics' in this.__dict__:
             warning('Dynamics must be loaded in order to plot 3D trajectories. We will now load dynamics for you using "this.load_dynamics()"')
-            this.load_dynamics()
+            #this.load_dynamics()
 
         # Collect components
-        x1,y1,z1 = this.dynamics[key].T
-        r1 = linalg.norm( this.dynamics[key] ,axis=1 )
-        x1,y1,z1 = [ v/r1 for v in (x1,y1,z1) ]
+        if 'dynamics' in this.__dict__:
+            x1,y1,z1 = this.dynamics[key].T
+            r1 = linalg.norm( this.dynamics[key] ,axis=1 )
+            x1,y1,z1 = [ v/r1 for v in (x1,y1,z1) ]
 
         if ax is None:
             fig = figure( figsize=4*figaspect(1) )
@@ -2874,8 +2881,8 @@ class gwylm:
                 plot_single_trajectory(xx[mask],yy[mask],zz[mask],color=color,alpha=alpha,lw=lw,plot_start=plot_start,plot_end=plot_end,label=label if (plot_end or plot_start) else None)
 
 
-
-        alpha_plot_trajectory(x1,y1,z1,color=color,lw=1,label=r'$\vec{%s}$'%key)
+        if 'dynamics' in this.__dict__:
+            alpha_plot_trajectory(x1,y1,z1,color=color,lw=1,label=r'$\vec{%s}$'%key)
 
         ax.legend()
         axlim = 0.64*array([-1,1])
@@ -5129,23 +5136,24 @@ class gwylm:
             # Check for consistency between dynamics data and bbh file
             
             if __HAS_DYNAMICS__:
-                test_quantity = dot(this.L/norm(this.L),dynamics['L'][0]/norm(dynamics['L'][0]))
-                if test_quantity<=0:
-                    print('bbh: ',this.L)
-                    print('dyn: ',dynamics['L'][0])
-                    print('\n')
-                    warning(red('There is an apparent discrepancy between the BBH L and the dynamics L. Either or both could be incorrect. For now, we will assume the dynamics data are correcect, and so use this in place of the BBH L when appropriate.'))
-                    print('\n')
-                    this.L = dynamics['L'][0]
-                    this.L1 = dynamics['L1'][0]
-                    this.L2 = dynamics['L2'][0]
-                    this.J = this.L+this.S
-                    
-                    alert('Done.',verbose=verbose)
-                    if output:
-                        return dynamics
-                    else:
-                        this.dynamics = dynamics
+                # test_quantity = dot(this.L/norm(this.L),dynamics['L'][0]/norm(dynamics['L'][0]))
+                # if test_quantity<=0:
+                #     print('bbh: ',this.L)
+                #     print('dyn: ',dynamics['L'][0])
+                #     print('\n')
+                #     warning(red('There is an apparent discrepancy between the BBH L and the dynamics L. Either or both could be incorrect. For now, we will assume the dynamics data are correcect, and so use this in place of the BBH L when appropriate.'))
+                #     print('\n')
+                #     this.L = dynamics['L'][0]
+                #     this.L1 = dynamics['L1'][0]
+                #     this.L2 = dynamics['L2'][0]
+                #     this.J = this.L+this.S
+                
+                # Always soter/output dynamics
+                alert('Done.',verbose=verbose)
+                if output:
+                    return dynamics
+                else:
+                    this.dynamics = dynamics
             else:
                 warning('We cannot check the consistency of dynamics and metadata information.')
 

@@ -429,6 +429,7 @@ def learn_metadata_legacy( metadata_file_location ):
     #
     return standard_metadata, raw_metadata
 
+
 # There are instances when having the extraction radius rather than the extraction paramer is useful.
 # Here we define a function which maps between extraction_parameter and extraction radius -- IF such
 # a map can be constructed.
@@ -453,6 +454,7 @@ def extraction_map( this,                   # this may be an nrsc object or an g
     extraction_radius = _map_[ extraction_parameter-1 ]
 
     return extraction_radius
+
 
 # Estimate a good extraction radius and level for an input scentry object from the BAM catalog
 def infer_default_level_and_extraction_parameter( this,     # An scentry object
