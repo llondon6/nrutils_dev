@@ -2705,7 +2705,7 @@ class gwylm:
 
 
     #
-    def plot_3d_trajectory(this,ax=None,view=None,fig_scale=1,show_initials=True,legend_on=False):
+    def plot_3d_trajectory(this,ax=None,view=None,fig_scale=1,show_initials=True,legend_on=False,normalize=True):
 
         #
         from numpy import sin,cos,linspace,ones_like,array,pi,max,sqrt,linalg
@@ -2733,9 +2733,9 @@ class gwylm:
             max_r2 = max(sqrt( x2**2 + y2**2 + z2**2 ))
             
             # Normalize
-            max_r = max( max_r1, max_r2 )
-            x2,y2,z2 = [ v/max_r for v in (x2,y2,z2) ]
-            x1,y1,z1 = [ v/max_r for v in (x1,y1,z1) ]
+            max_r = max( [max_r1, max_r2] )
+            x2,y2,z2 = [ v/(max_r if normalize else max_r2) for v in (x2,y2,z2) ]
+            x1,y1,z1 = [ v/(max_r if normalize else max_r1) for v in (x1,y1,z1) ]
 
         if ax is None:
             fig = figure( figsize=fig_scale*4*figaspect(1) )
@@ -4081,6 +4081,10 @@ class gwylm:
             error('The '+bold(blue('transform_domain'))+' keyword must be set by the user to "td" or "fd".')
         if kind is None:
             error('The '+bold(blue('kind'))+' keyword must be set by the user to "strain", "psi4" or "news".')
+            
+        #
+        if 'J-initial' not in this.frame:
+            warning('calculating the co-precessing frame in a non-initial J frame is prone to errors. please consider placing your gwylm object in a frame where J is initially along z-hat via gwylmo.__calc_initial_j_frame__()')
 
         #
         if ref_orientation is None:
