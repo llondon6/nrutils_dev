@@ -123,6 +123,7 @@ class scconfig(smart_object):
             config_path = global_settings.config_path
             stale_config_name = this.config_file_location.split('/')[-1]
             fresh_config_file_location = expanduser( config_path + '/' + stale_config_name )
+            alert(fresh_config_file_location)
             # If the new config path exists, then store it and use it to reconfigure the current object
             if os.path.exists( fresh_config_file_location ):
                 this.config_file_location = fresh_config_file_location
@@ -874,7 +875,7 @@ def scsearch( catalog = None,           # Manually input list of scentry objects
 
     # Print non None inputs to screen
     thisfun = inspect.stack()[0][3]
-    if verbose is not None:
+    if verbose:
         for k in dir():
             if (eval(k) is not None) and (k != 'thisfun'):
                 # alert('Found %s keyword.' % (textul(k)) )
@@ -2905,6 +2906,59 @@ class gwylm:
 
         return ax
 
+    #
+    def __symmetrize__(this,verbose=False):
+        
+        #
+        from numpy import array 
+        
+        #
+        kinds = this[2,2].keys()
+        
+        #
+        alert('Symmetrising multipole moments in: %s'%magenta(this.simname),verbose=verbose, header=True)
+        
+        #
+        if not ('cp' in this.frame):
+            warning('WE ARE BORG. You have asked us to symmetrise in a frame'+' (%s)'%red(str(this.frame))+' that is not co-precessing. If the system is precessing, or generally not in an L-aligned frame, then using this function will result in nonsense. We are sorry for this unavoidable reality. RESISTANCE IS FUTILE.')
+        
+        #
+        select_lm = [ (l,m) for l,m in this.__lmlist__ if m>=0 ]
+        
+        #
+        that = this.copy()
+        transform = lambda X,L,M: ((-1)**(L+M)) * X.conj()
+        
+        #
+        for kind in kinds:
+            
+            #
+            alert('Symmetrising %s'%red(kind),verbose=verbose)
+            
+            #
+            for l,m in select_lm:
+                
+                #
+                y_positive = this[l,+m][kind].y
+                y_negative = this[l,-m][kind].y
+                
+                #
+                y_transformed_negative = transform(y_negative,l,m)
+                
+                # 
+                y_symmetric_positive = 0.5 * ( y_positive + y_transformed_negative )
+                y_symmetric_negative = transform(y_symmetric_positive,l,m)
+                
+                #
+                wfarr = array( [this.t,y_symmetric_positive.real,y_symmetric_positive.imag] ).T
+                that[l,+m][kind].setfields( wfarr=wfarr )
+                
+                #
+                wfarr = array( [this.t,y_symmetric_negative.real,y_symmetric_negative.imag] ).T
+                that[l,-m][kind].setfields( wfarr=wfarr )
+                
+        #
+        return that
 
     #
     def plot_3d_S(this,ax=None,view=None,color='#0392ff',mask=None):
@@ -3881,7 +3935,7 @@ class gwylm:
 
         if this.M_RELATIVE_SIGN_CONVENTION != this.external_sign_convention:
             # Let the people know what is happening.
-            msg = yellow('[Verify stage] Re-orienting waveform phase')+' to be consistent with internal sign convention for Psi4, where sign(dPhi/dt)=%i*sign(m)*sign(this.L[-1]).' % this.M_RELATIVE_SIGN_CONVENTION + ' Note that the internal sign convention is defined in ... nrutils/core/__init__.py as "M_RELATIVE_SIGN_CONVENTION". This message has appeared becuase the waveform is determined to obey and sign convention: sign(dPhi/dt)=%i*sign(m)*sign(this.L[-1]). Note the appearance of the initial z angular momentum, this.L[-1].'%(this.external_sign_convention)
+            msg = yellow('[Verify stage] Re-orienting waveform phase')+' to be consistent with internal sign convention for Psi4, where sign(dPhi/dt)=%i*sign(m)*sign(this.L[-1]).' % this.M_RELATIVE_SIGN_CONVENTION + ' Note that the internal sign convention is defined in ... nrutils/core/__init__.py as "M_RELATIVE_SIGN_CONVENTION". This message has appeared becuase the waveform is determined to obey a sign convention: sign(dPhi/dt)=%i*sign(m)*sign(this.L[-1]). Note the appearance of the initial z angular momentum, this.L[-1].'%(this.external_sign_convention)
             thisfun=inspect.stack()[0][3]
             warning( msg, verbose=this.verbose )
             #
@@ -4089,7 +4143,7 @@ class gwylm:
 
 
     # output corotating waveform
-    def __calc_coprecessing_frame__(this,safe_domain_range=None,verbose=None,transform_domain=None,__format__=None,ref_orientation=None,kind=None):
+    def __calc_coprecessing_frame__(this,safe_domain_range=None,verbose=None,transform_domain=None,__format__=None,ref_orientation=None,kind=None,plot=False):
 
         '''
         Output gwylm object in coprecessing frame, where the optimal emission axis is always along z
@@ -4135,10 +4189,14 @@ class gwylm:
 
         #
         if safe_domain_range is None:
-            safe_domain_range=[0.009,0.3]
+            safe_domain_range=[0.009,0.1]
 
         #
         foo = gwylm_radiation_axis_workflow(this,plot=False,save=False,verbose=False,safe_domain_range=safe_domain_range,__format__=__format__,ref_orientation=ref_orientation,kind=kind,domain=transform_domain)
+        
+        #
+        if plot:
+            foo.plot()
 
         #
         if verbose: alert('Storing radiation axis information to this.radiation_axis_info')

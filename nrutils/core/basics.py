@@ -964,6 +964,7 @@ def calc_coprecessing_angles(multipole_dict,       # Dict of multipoles { ... l,
                              ref_orientation=None,  # e.g. initial J; used for breaking degeneracies in calculation
                              return_xyz=False,
                              safe_domain_range=None,
+                             transform_domain=None,
                              verbose=None):
     '''
     Given a dictionary of multipole data, calculate the Euler angles corresponding to a co-precessing frame
@@ -992,6 +993,14 @@ def calc_coprecessing_angles(multipole_dict,       # Dict of multipoles { ... l,
     # Handle optional input
     if ref_orientation is None:
         ref_orientation = ones(3)
+        
+    #
+    # if (transform_domain in None) or (not isinstance(transform_domain,str)):
+    #     error('transform_domain keyword input is required and must be in ("td","fd").')
+    # if transform_domain.lower() in ('td','time','time_domain'):
+    #     IS_FD = False
+    # elif transform_domain.lower() in ('fd','freq','frequency_domain'):
+    #     IS_FD = True
 
     #-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-#
     # Enforce that multipole data is array typed with a well defined length
@@ -1138,12 +1147,13 @@ def calc_coprecessing_angles(multipole_dict,       # Dict of multipoles { ... l,
     Y = double(Y)
     Z = double(Z)
 
+    #
+    IS_FD = (0.5 == round(float(sum(domain_vals > 0))/len(domain_vals), 2))
+
     #################################################
     # Reflect Y according to nrutils conventions    #
-    Y = -Y                                          #
+    Y *= -1                         #
     #################################################
-
-    IS_FD = (0.5 == round(float(sum(domain_vals > 0))/len(domain_vals), 2))
     if IS_FD:
         alert('The domain values seem evenly split between positive and negative values. Thus, we will interpret the input as corresponding to ' +
               green('FREQUENCY DOMAIN')+' data.')
@@ -1152,9 +1162,10 @@ def calc_coprecessing_angles(multipole_dict,       # Dict of multipoles { ... l,
 
     a = array(ref_orientation)/norm(ref_orientation)
     B = array([X, Y, Z]).T
-    b = (B.T/norm(B, axis=1)).T
-    xb, yb, zb = b.T
-    test_quantity = a[0]*xb+a[1]*yb+a[2]*zb
+    b = (B.T/norm(B, axis=1))
+    
+    # Here we define a test quantity that is always sensitive to each dimension. NOTE that a simple dot product does not have this property if eg a component of the reference orientation is zero. There is likely a better solution here.
+    test_quantity = sum( [ a[k]*b[k] if a[k] else b[k] for k in range(3) ] )
 
     if IS_FD:
 
