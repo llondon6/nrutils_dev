@@ -2760,7 +2760,7 @@ class gwylm:
             masks = []; startdex,enddex = 0,nmask_len
             for k in range(nmasks):
                 masks.append( range( startdex, enddex ) )
-                startdex=enddex
+                startdex=enddex-1 # No gaps
                 enddex = enddex+nmask_len
                 if k+1 == nmasks-1:
                     enddex = len(xx)
@@ -2798,8 +2798,9 @@ class gwylm:
             plotpoint(foo,r'Initial L (BBH)','L-initial',marker='s',color='m',s=20)
 
             foo = this.dynamics['J'][0]
-            plotpoint(foo, r'Initial J (Dynamics)', '',
-                      marker='x', color='g', s=20, mfc=None)
+            if linalg.norm(foo):
+                plotpoint(foo, r'Initial J (Dynamics)', '',
+                        marker='x', color='g', s=20, mfc=None)
 
             foo = this.dynamics['L'][0]
             plotpoint(foo,r'Initial L (Dynamics)','',marker='x',color='m',s=20,mfc=None)
@@ -2820,7 +2821,7 @@ class gwylm:
 
 
     #
-    def __plot_3d_quantity__(this,key,ax=None,view=None,color=None):
+    def __plot_3d_quantity__(this,key,ax=None,view=None,color=None,mask=None):
 
         #
         from numpy import sin,cos,linspace,ones_like,array,pi,max,sqrt,linalg
@@ -2834,13 +2835,22 @@ class gwylm:
         #
         if not 'dynamics' in this.__dict__:
             warning('Dynamics must be loaded in order to plot 3D trajectories. We will now load dynamics for you using "this.load_dynamics()"')
-            #this.load_dynamics()
+            this.load_dynamics()
 
         # Collect components
         if 'dynamics' in this.__dict__:
             x1,y1,z1 = this.dynamics[key].T
             r1 = linalg.norm( this.dynamics[key] ,axis=1 )
             x1,y1,z1 = [ v/r1 for v in (x1,y1,z1) ]
+        else:
+            error('Dynamics not loaded.')
+  
+        # Initialize mask if needed
+        if mask is None:
+            mask = range(0,len(x1))
+            
+        # Apply mask 
+        x1,y1,z1 = [ k[mask] for k in (x1,y1,z1) ]
 
         if ax is None:
             fig = figure( figsize=4*figaspect(1) )
@@ -2897,34 +2907,49 @@ class gwylm:
 
 
     #
-    def plot_3d_S(this,ax=None,view=None,color='#0392ff'):
+    def plot_3d_S(this,ax=None,view=None,color='#0392ff',mask=None):
         '''Plot total spin S on the sphere'''
         #
-        return this.__plot_3d_quantity__('S',ax=ax,view=view,color=color)
+        return this.__plot_3d_quantity__('S',ax=ax,view=view,color=color,mask=mask)
 
     #
-    def plot_3d_L(this,ax=None,view=None,color='#ff1c03'):
+    def plot_3d_L(this,ax=None,view=None,color='#ff1c03',mask=None):
         '''Plot total orbital angular momentum L on the sphere'''
         #
-        return this.__plot_3d_quantity__('L',ax=ax,view=view,color=color)
+        return this.__plot_3d_quantity__('L',ax=ax,view=view,color=color,mask=mask)
 
     #
-    def plot_3d_J(this,ax=None,view=None,color='k'):
+    def plot_3d_J(this,ax=None,view=None,color='k',mask=None):
         '''Plot total angular momentum J on the sphere'''
         #
-        return this.__plot_3d_quantity__('J',ax=ax,view=view,color=color)
+        return this.__plot_3d_quantity__('J',ax=ax,view=view,color=color,mask=mask)
 
     #
-    def plot_3d_dynamics(this,ax=None,view=None,color='k'):
+    def plot_3d_dynamics(this,ax=None,view=None,color='k',verbose=True):
         ''' Plot L,J S on the sphere '''
-        from matplotlib.pyplot import Rectangle
+        
+        # Import usefuls
+        from matplotlib.pyplot import Rectangle,plot,show
+        from numpy.linalg import norm
         if view is None: view=[30,-60]
-        if ax is None:
-            ax = this.plot_3d_S(view=view)
+        
+        # Determine mask for meaningful values 
+        if sum(norm(this.dynamics['S'],axis=1)):
+            test_quantity = norm( this.dynamics['S']-this.dynamics['J'], axis=1 ) / norm( this.dynamics['J'], axis=1 ) 
+            mask = test_quantity > 1e-2
+            warning(red('Note')+' that values are masked to hide post-merger noise, but there may be physical data hidden as well. Plot quantities manually if further verification is desired.',verbose=verbose)
         else:
-            this.plot_3d_S(ax,view=view)
-        this.plot_3d_L(ax,view=view)
-        this.plot_3d_J(ax,view=view,color='k')
+            mask = None
+        
+        #
+        if ax is None:
+            ax = this.plot_3d_S(view=view,mask=mask)
+        else:
+            this.plot_3d_S(ax,view=view,mask=mask)
+        this.plot_3d_L(ax,view=view,mask=mask)
+        this.plot_3d_J(ax,view=view,mask=mask,color='k')
+        
+        #
         return ax
 
     # Wrapper for core load function. NOTE that the extraction parameter input is independent of the usage in the class constructor.

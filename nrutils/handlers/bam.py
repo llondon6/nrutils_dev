@@ -616,9 +616,10 @@ def learn_source_dynamics(scentry_object,dynamics_times,verbose=False):
     #
     abs_dr = linalg.norm( (R2_-R1_).T, axis=1 )
     r0 = 3.1
+    premerger_t_max = R1_times[ find(abs_dr < r0)[0] ]
+    internal_t_max = max(dynamics_times)
     # from matplotlib.pyplot import plot,show,axvline,axhline
     # plot( R1_times, abs_dr )
-    internal_t_max = R1_times[ find(abs_dr < r0)[0] ]
     # axhline( r0, color='k' )
     # axvline( internal_t_max, color='k' )
     # print internal_t_max, max(dynamics_times)
@@ -686,6 +687,9 @@ def learn_source_dynamics(scentry_object,dynamics_times,verbose=False):
 
     # DYNAMICS TIMES USED
     foo['dynamics_times'] = dynamics_times
+    
+    #
+    foo['premerger_t_max'] = premerger_t_max
 
     # Let's go! :D
     ans = foo

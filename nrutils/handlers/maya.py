@@ -280,3 +280,192 @@ def infer_default_level_and_extraction_parameter( this,     # An scentry object
 
     # Return answers
     return extraction_parameter,level,extraction_map_dict
+
+
+
+#
+def learn_source_dynamics(scentry_object,dynamics_times,verbose=False):
+
+    '''
+    Based on notebook by Jonathan Thompson, 2019self.
+
+    NOTES
+    ---
+    * For now, only S, L and J will be calculated and stored. This is to be useful while avoiding faff due to mass ratio convetions.
+
+    USAGE
+    ---
+    dict_with_source_dynamics = learn_source_dynamics(dynamics_times,verbose=True)
+
+    '''
+
+    # Import usefuls
+    from positive import alert,smart_load,lim,spline,find
+    from glob import glob as ls
+    from nrutils.core.basics import straighten_wfarr
+    from numpy import array, cross, linalg
+    from numpy import max as npmax
+    from numpy.linalg import norm
+    from os.path import join
+    
+    # Look for ShiftTracker files
+    simdir = scentry_object.simdir()
+    from glob import glob as ls
+    shift_tracker_file_list = ls( simdir+'Shift*' )
+    
+    # Read initial locations from the ShiftTracker files
+    def sparse_read_shifttracker(key):
+        
+        #
+        from numpy import array
+        
+        shiftt0_file_location = [ f for f in shift_tracker_file_list if key in f ][0]
+        fid = open( shiftt0_file_location )
+        #return array( [ float(a) for a in fid.readline().replace('\n','').split('\t')][2:5] )
+        done = False
+        # print '>>',shiftt0_file_location
+        dt = 1
+        warning('Due to large size of GT dynamics files, data are loaded with 1M resolution. Finer time spacing may be wanted and can be acheved using the dt keyword input.')
+        lines = []
+        while not done:
+            raw_line = fid.readline()
+            # print raw_line
+            done = raw_line[0] != '#'
+            if done:
+                line = [ float(k) for k in raw_line.replace('\n','').split('\t') ]
+                itt,time,x,y,z,vx,vy,vz,ax,ay,az = line
+                lines.append( line )
+        #
+        done = False
+        while not done:
+            raw_line = fid.readline()
+            try:
+                line = [ float(k) for k in raw_line.replace('\n','').split('\t') ]
+            except:
+                # print '>>',raw_line
+                if raw_line=='':
+                    break
+            trial_itt,trial_time,trial_x,trial_y,trial_z,trial_vx,trial_vy,trial_vz,trial_ax,trial_ay,trial_az = line
+            #print (trial_time-time)
+            if (trial_time-time) >= dt:
+                itt,time,x,y,z,vx,vy,vz,ax,ay,az = line
+                lines.append( line )
+                #print line
+                
+        #
+        dynamics = array(lines)
+        
+        #
+        return dynamics
+
+    #
+    dynamics1 = sparse_read_shifttracker("ShiftTracker0")
+    dynamics2 = sparse_read_shifttracker("ShiftTracker1")
+
+    # Note that columns are sometimes defined in the ShiftTracker header files 
+    # itt	time	x	y	z	vx	vy	vz	ax	ay	az
+    itt,time1,x1,y1,z1,vx1,vy1,vz1,ax1,ay1,az1 = dynamics1.T
+    itt,time2,x2,y2,z2,vx2,vy2,vz2,ax2,ay2,az2 = dynamics2.T
+    
+    # # Most likely, velocities are actually shifts and should be negated
+    # vy1,vz1,ax1,ay1,az1 = [ -k for k in (vy1,vz1,ax1,ay1,az1) ]
+    # vy2,vz2,ax2,ay2,az2 = [ -k for k in (vy2,vz2,ax2,ay2,az2) ]
+    
+    #
+    mass1 = scentry_object.m1
+    mass2 = scentry_object.m2
+    
+    # Positions
+    R1_ = array( [ x1,y1,z1 ] ).T
+    R2_ = array( [ x2,y2,z2 ] ).T
+    
+    # Momenta
+    P1 = mass1 * array( [ vx1,vy1,vz1 ] ).T
+    P2 = mass2 * array( [ vx2,vy2,vz2 ] ).T
+    
+    # Estimate the component angular momenta
+    L1_ = cross(R1_,P1)
+    L2_ = cross(R2_,P2)
+    L_ = L1_+L2_
+    
+    # Time values
+    L_times  = time1
+    
+    #
+    def straighten(times,vec):
+        vx,vy,vz = vec if vec.shape[0]==3 else vec.T
+        varr = array( [ times,vx,vy,vz ] ).T
+        varr = straighten_wfarr( varr, verbose=True )
+        new_times,vx,vy,vz = varr.T
+        new_vec = array( [vx,vy,vz] ).T
+        return new_times, new_vec.T
+        
+    #
+    L1_times,L1_ = straighten(L_times,L1_)
+    L2_times,L2_ = straighten(L_times,L2_)
+    #
+    R1_times,R1_ = straighten(L_times,R1_)
+    R2_times,R2_ = straighten(L_times,R2_)
+    
+    #
+    S1_times = L1_times
+
+    #
+    abs_dr = linalg.norm( (R2_-R1_).T, axis=1 )
+    r0 = 3.1
+    premerger_t_max = R1_times[ find(abs_dr < r0)[0] ]
+    internal_t_max = max(dynamics_times)
+    
+    #
+    if internal_t_max<max(dynamics_times):
+        dynamics_times = dynamics_times[ dynamics_times<internal_t_max ]
+        
+    #
+    def mask( t ):
+        msk = (t>=min(dynamics_times)) & (t<=max(dynamics_times) )
+        return msk
+
+    # Interpolate everything of use. Some care is taken with the spins as the data files may have sligtly different time series.
+    dynamics_times = dynamics_times[ dynamics_times < max(lim(L_times)[-1],lim(S1_times)[-1]) ]
+    
+    #
+    msk = mask( L1_times )
+    L1 = array(  [ spline(L1_times[msk],l[msk])(dynamics_times) for l in L1_ ]  ).T
+    msk = mask( L2_times )
+    L2 = array(  [ spline(L2_times[msk],l[msk])(dynamics_times) for l in L2_ ]  ).T
+    
+    #
+    msk = mask( R1_times )
+    R1 = array(  [ spline(R1_times[msk],l[msk])(dynamics_times) for l in R1_ ]  ).T
+    msk = mask( R2_times )
+    R2 = array(  [ spline(R2_times[msk],l[msk])(dynamics_times) for l in R2_ ]  ).T
+
+    # Total angular momenta
+    L = L1+L2   # Spin
+
+    #
+    foo = {}
+    
+    # ORBITAL MOMENTA
+    foo['L1'] = L1
+    foo['L2'] = L2
+    foo['L'] = L
+    # SPIN MOMENTA
+    foo['S1'] = L1*0
+    foo['S2'] = L1*0
+    foo['S'] = L1*0
+    # TOTAL MOMENTA
+    foo['J'] = L1*0
+    # TRAJECTORIES
+    foo['R1'] = R1
+    foo['R2'] = R2
+
+    # DYNAMICS TIMES USED
+    foo['dynamics_times'] = dynamics_times
+    
+    #
+    foo['premerger_t_max'] = premerger_t_max
+
+    # Let's go! :D
+    ans = foo
+    return ans
