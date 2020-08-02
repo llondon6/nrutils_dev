@@ -429,6 +429,7 @@ def learn_metadata_legacy( metadata_file_location ):
     #
     return standard_metadata, raw_metadata
 
+
 # There are instances when having the extraction radius rather than the extraction paramer is useful.
 # Here we define a function which maps between extraction_parameter and extraction radius -- IF such
 # a map can be constructed.
@@ -453,6 +454,7 @@ def extraction_map( this,                   # this may be an nrsc object or an g
     extraction_radius = _map_[ extraction_parameter-1 ]
 
     return extraction_radius
+
 
 # Estimate a good extraction radius and level for an input scentry object from the BAM catalog
 def infer_default_level_and_extraction_parameter( this,     # An scentry object
@@ -614,9 +616,10 @@ def learn_source_dynamics(scentry_object,dynamics_times,verbose=False):
     #
     abs_dr = linalg.norm( (R2_-R1_).T, axis=1 )
     r0 = 3.1
+    premerger_t_max = R1_times[ find(abs_dr < r0)[0] ]
+    internal_t_max = max(dynamics_times)
     # from matplotlib.pyplot import plot,show,axvline,axhline
     # plot( R1_times, abs_dr )
-    internal_t_max = R1_times[ find(abs_dr < r0)[0] ]
     # axhline( r0, color='k' )
     # axvline( internal_t_max, color='k' )
     # print internal_t_max, max(dynamics_times)
@@ -684,6 +687,9 @@ def learn_source_dynamics(scentry_object,dynamics_times,verbose=False):
 
     # DYNAMICS TIMES USED
     foo['dynamics_times'] = dynamics_times
+    
+    #
+    foo['premerger_t_max'] = premerger_t_max
 
     # Let's go! :D
     ans = foo
