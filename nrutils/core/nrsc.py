@@ -2258,7 +2258,7 @@ class gwf:
             # which must be included. As a result, the code below can be incorrect:
             # td_re = ifft(ifftshift( fd_p )).real * this.df*this.n
             # td_im = ifft(ifftshift( fd_c )).real * this.df*this.n
-            
+            # alert('Working with FD angles ...')
             # And the correct code is
             td_re_temp = ifft(ifftshift( fd_p )) * this.df*this.n
             td_im_temp = ifft(ifftshift( fd_c )) * this.df*this.n
