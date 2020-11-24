@@ -2242,6 +2242,8 @@ class gwf:
             from scipy.fftpack import ifftshift,ifft,fft
             that.raw_transformed_fd_wfarr = rotated_wfarr.copy()
             f,fd_p,fd_c = rotated_wfarr.T
+            t     = this.t
+            
             ## DIAGNOSTIC PLOTTING
             # if (this.l,this.m)==(2,2):
             #     alert('diagnostic plotting for '+red(this.kind)+': ')
@@ -2250,20 +2252,21 @@ class gwf:
             #     ff = abs(f)
             #     loglog(ff,abs(fd_p+1j*fd_c))
             #     show()
-            t     = this.t
 
             # the FD rotation introduces a non-trivial phase shift
             # that results in a complex term in the TD polarizations
-            # which must be included.
-            # old code:
+            # which must be included. As a result, the code below can be incorrect:
             # td_re = ifft(ifftshift( fd_p )).real * this.df*this.n
             # td_im = ifft(ifftshift( fd_c )).real * this.df*this.n
-            # updated:
+            
+            # And the correct code is
             td_re_temp = ifft(ifftshift( fd_p )) * this.df*this.n
             td_im_temp = ifft(ifftshift( fd_c )) * this.df*this.n
+            td_y = td_re_temp + 1j*td_im_temp
 
-            td_re = (td_re_temp + 1j*td_im_temp).real
-            td_im = (td_re_temp + 1j*td_im_temp).imag
+            # Where the real valued polarizations are polarizations 
+            td_re = td_y.real
+            td_im = td_y.imag
 
             rotated_wfarr = array( [t,td_re,td_im], dtype=float ).T
             # NOTE that there can be an overall time shift at this stage
