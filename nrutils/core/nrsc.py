@@ -1390,7 +1390,7 @@ class gwf:
         else:
             msg = 'unhandled waveform array configuration: input wfarr is %s and this.wfarr is %s'%(wfarr,this.wfarr)
             error(msg,'gwf.setfields')
-            
+
         #
         from numpy import ndarray
         if not isinstance(wfarr,ndarray):
@@ -2245,14 +2245,26 @@ class gwf:
             ## DIAGNOSTIC PLOTTING
             # if (this.l,this.m)==(2,2):
             #     alert('diagnostic plotting for '+red(this.kind)+': ')
-            #     from matplotlib.pyplot import plot,show,loglog,xscale,yscale 
+            #     from matplotlib.pyplot import plot,show,loglog,xscale,yscale
             #     from numpy import sqrt
             #     ff = abs(f)
             #     loglog(ff,abs(fd_p+1j*fd_c))
             #     show()
             t     = this.t
-            td_re = ifft(ifftshift( fd_p )).real * this.df*this.n
-            td_im = ifft(ifftshift( fd_c )).real * this.df*this.n
+
+            # the FD rotation introduces a non-trivial phase shift
+            # that results in a complex term in the TD polarizations
+            # which must be included.
+            # old code:
+            # td_re = ifft(ifftshift( fd_p )).real * this.df*this.n
+            # td_im = ifft(ifftshift( fd_c )).real * this.df*this.n
+            # updated:
+            td_re_temp = ifft(ifftshift( fd_p )) * this.df*this.n
+            td_im_temp = ifft(ifftshift( fd_c )) * this.df*this.n
+
+            td_re = (td_re_temp + 1j*td_im_temp).real
+            td_im = (td_re_temp + 1j*td_im_temp).imag
+
             rotated_wfarr = array( [t,td_re,td_im], dtype=float ).T
             # NOTE that there can be an overall time shift at this stage
 
@@ -2724,7 +2736,7 @@ class gwylm:
 
         # Collect compoenents
         if 'dynamics' in this.__dict__:
-            
+
             # Collect compoenents 1
             x1,y1,z1 = this.dynamics['R1'].T
             max_r1 = max(sqrt( x1**2 + y1**2 + z1**2 ))
@@ -2732,7 +2744,7 @@ class gwylm:
             # Collect compoenents 2
             x2,y2,z2 = this.dynamics['R2'].T
             max_r2 = max(sqrt( x2**2 + y2**2 + z2**2 ))
-            
+
             # Normalize
             max_r = max( [max_r1, max_r2] )
             x2,y2,z2 = [ v/(max_r if normalize else max_r2) for v in (x2,y2,z2) ]
@@ -2845,12 +2857,12 @@ class gwylm:
             x1,y1,z1 = [ v/r1 for v in (x1,y1,z1) ]
         else:
             error('Dynamics not loaded.')
-  
+
         # Initialize mask if needed
         if mask is None:
             mask = range(0,len(x1))
-            
-        # Apply mask 
+
+        # Apply mask
         x1,y1,z1 = [ k[mask] for k in (x1,y1,z1) ]
 
         if ax is None:
@@ -2908,55 +2920,55 @@ class gwylm:
 
     #
     def __symmetrize__(this,verbose=False):
-        
+
         #
-        from numpy import array 
-        
+        from numpy import array
+
         #
         kinds = this[2,2].keys()
-        
+
         #
         alert('Symmetrising multipole moments in: %s'%magenta(this.simname),verbose=verbose, header=True)
-        
+
         #
         if not ('cp' in this.frame):
             warning('WE ARE BORG. You have asked us to symmetrise in a frame'+' (%s)'%red(str(this.frame))+' that is not co-precessing. If the system is precessing, or generally not in an L-aligned frame, then using this function will result in nonsense. We are sorry for this unavoidable reality. RESISTANCE IS FUTILE.')
-        
+
         #
         select_lm = [ (l,m) for l,m in this.__lmlist__ if m>=0 ]
-        
+
         #
         that = this.copy()
         transform = lambda X,L,M: ((-1)**(L+M)) * X.conj()
-        
+
         #
         for kind in kinds:
-            
+
             #
             alert('Symmetrising %s'%red(kind),verbose=verbose)
-            
+
             #
             for l,m in select_lm:
-                
+
                 #
                 y_positive = this[l,+m][kind].y
                 y_negative = this[l,-m][kind].y
-                
+
                 #
                 y_transformed_negative = transform(y_negative,l,m)
-                
-                # 
+
+                #
                 y_symmetric_positive = 0.5 * ( y_positive + y_transformed_negative )
                 y_symmetric_negative = transform(y_symmetric_positive,l,m)
-                
+
                 #
                 wfarr = array( [this.t,y_symmetric_positive.real,y_symmetric_positive.imag] ).T
                 that[l,+m][kind].setfields( wfarr=wfarr )
-                
+
                 #
                 wfarr = array( [this.t,y_symmetric_negative.real,y_symmetric_negative.imag] ).T
                 that[l,-m][kind].setfields( wfarr=wfarr )
-                
+
         #
         return that
 
@@ -2981,20 +2993,20 @@ class gwylm:
     #
     def plot_3d_dynamics(this,ax=None,view=None,color='k',verbose=True):
         ''' Plot L,J S on the sphere '''
-        
+
         # Import usefuls
         from matplotlib.pyplot import Rectangle,plot,show
         from numpy.linalg import norm
         if view is None: view=[30,-60]
-        
-        # Determine mask for meaningful values 
+
+        # Determine mask for meaningful values
         if sum(norm(this.dynamics['S'],axis=1)):
-            test_quantity = norm( this.dynamics['S']-this.dynamics['J'], axis=1 ) / norm( this.dynamics['J'], axis=1 ) 
+            test_quantity = norm( this.dynamics['S']-this.dynamics['J'], axis=1 ) / norm( this.dynamics['J'], axis=1 )
             mask = test_quantity > 1e-2
             warning(red('Note')+' that values are masked to hide post-merger noise, but there may be physical data hidden as well. Plot quantities manually if further verification is desired.',verbose=verbose)
         else:
             mask = None
-        
+
         #
         if ax is None:
             ax = this.plot_3d_S(view=view,mask=mask)
@@ -3002,7 +3014,7 @@ class gwylm:
             this.plot_3d_S(ax,view=view,mask=mask)
         this.plot_3d_L(ax,view=view,mask=mask)
         this.plot_3d_J(ax,view=view,mask=mask,color='k')
-        
+
         #
         return ax
 
@@ -4160,7 +4172,7 @@ class gwylm:
             error('The '+bold(blue('transform_domain'))+' keyword must be set by the user to "td" or "fd".')
         if kind is None:
             error('The '+bold(blue('kind'))+' keyword must be set by the user to "strain", "psi4" or "news".')
-            
+
         #
         if 'J-initial' not in this.frame:
             warning('calculating the co-precessing frame in a non-initial J frame is prone to errors. please consider placing your gwylm object in a frame where J is initially along z-hat via gwylmo.__calc_initial_j_frame__()')
@@ -4177,7 +4189,7 @@ class gwylm:
         #
         if not( transform_domain in ('td','fd') ):
             error('transform_domain keyword value must be in ("td","fd") but '+red(bold(str(transform_domain)))+' found.')
-        
+
         #
         if verbose: alert('We will use '+yellow(kind)+' to compute the co-precessing frame.')
         #
@@ -4193,7 +4205,7 @@ class gwylm:
 
         #
         foo = gwylm_radiation_axis_workflow(this,plot=False,save=False,verbose=False,safe_domain_range=safe_domain_range,__format__=__format__,ref_orientation=ref_orientation,kind=kind,domain=transform_domain)
-        
+
         #
         if plot:
             foo.plot()
@@ -4671,7 +4683,7 @@ class gwylm:
             else:
                 start_index = 0
                 end_index = -1
-                
+
 
         # R = lambda X,k: rotate3( X, a[k], b[k], g[k] )
         R = lambda X,k: rotate3( X, alpha[k], beta[k], gamma[k] )
@@ -4782,7 +4794,7 @@ class gwylm:
                     #             for k in range(len(L1_[:, 0]))])
                     # L2 = array([rotate3(L2_[k], a[k], b[k], g[k])
                     #             for k in range(len(L2_[:, 0]))])
-                    
+
             #
             that.dynamics['J'] = J
             that.dynamics['L'] = L
@@ -4798,7 +4810,7 @@ class gwylm:
 
 
         # Rotate system radiated and remnant quantities
-        if not ( 'remnant' in this.__dict__ ) : 
+        if not ( 'remnant' in this.__dict__ ) :
             this.__calc_radiated_quantities__(use_mask=False)
             that.remnant = this.remnant
             that.radiated = this.radiated
@@ -5198,7 +5210,7 @@ class gwylm:
 
             #
             if tortoise:
-                radius = Schwarzschild_tortoise( this.extraction_radius(), this.madm ) 
+                radius = Schwarzschild_tortoise( this.extraction_radius(), this.madm )
             else:
                 radius = this.extraction_radius()
 
@@ -5209,7 +5221,7 @@ class gwylm:
             sco = this.__scentry__
             alert('Retrieving method from handler for loading source dyanmics as this is specific to BAM, GT-MAYA, SXS, etc ...',verbose=verbose)
             handler = sco.loadhandler()
-            
+
             #
             __HAS_DYNAMICS__ = 'learn_source_dynamics' in handler.__dict__
             if __HAS_DYNAMICS__:
@@ -5218,10 +5230,10 @@ class gwylm:
                 dynamics['waveform_times'] = waveform_times[:len(dynamics['dynamics_times'])]
             else:
                 warning('Dynamics will not below loaded becuase there is NO method named "learn_source_dynamics" in the handler.')
-                
+
 
             # Check for consistency between dynamics data and bbh file
-            
+
             if __HAS_DYNAMICS__:
                 # test_quantity = dot(this.L/norm(this.L),dynamics['L'][0]/norm(dynamics['L'][0]))
                 # if test_quantity<=0:
@@ -5234,7 +5246,7 @@ class gwylm:
                 #     this.L1 = dynamics['L1'][0]
                 #     this.L2 = dynamics['L2'][0]
                 #     this.J = this.L+this.S
-                
+
                 # Always soter/output dynamics
                 alert('Done.',verbose=verbose)
                 if output:
@@ -5244,7 +5256,7 @@ class gwylm:
             else:
                 warning('We cannot check the consistency of dynamics and metadata information.')
 
-            
+
 
     #
     def __flip_cross_sign_convention__(this):
