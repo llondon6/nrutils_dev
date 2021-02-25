@@ -275,19 +275,20 @@ class scentry:
             if this.verbose: print '## Working: %s' % cyan(metadata_file_location)
             this.log += ' This entry\'s metadata file is valid.'
 
-            # i.e. learn the meta_data_file
-            this.learn_metadata(); # raise(TypeError,'This line should only be uncommented when debugging.')
-            this.label = sclabel( this )
+            # # i.e. learn the meta_data_file
+            # this.learn_metadata(); 
+            # raise(TypeError,'This line should only be uncommented when debugging.')
+            # this.label = sclabel( this )
 
-            # try:
-            #     this.learn_metadata()
-            #     this.label = sclabel( this )
-            # except:
-            #     emsg = sys.exc_info()[1].message
-            #     this.log += '%80s'%' [FATALERROR] The metadata failed to be read. There may be an external formatting inconsistency. It is being marked as invalid with None. The system says: %s'%emsg
-            #     if this.verbose: warning( 'The following error message will be logged: '+red(emsg),'scentry')
-            #     this.isvalid = None # An external program may use this to do something
-            #     this.label = 'invalid!'
+            try:
+                this.learn_metadata()
+                this.label = sclabel( this )
+            except:
+                emsg = sys.exc_info()[1].message
+                this.log += '%80s'%' [FATALERROR] The metadata failed to be read. There may be an external formatting inconsistency. It is being marked as invalid with None. The system says: %s'%emsg
+                if this.verbose: warning( 'The following error message will be logged: '+red(emsg),'scentry')
+                this.isvalid = None # An external program may use this to do something
+                this.label = 'invalid!'
 
         elif this.isvalid is False:
             if config_obj:
@@ -2596,7 +2597,6 @@ class gwylm:
         return this.lm[index]
     # Allow "in" to look for l,m content
     def __contains__(this,query):
-        print query
         return query in this.__lmlist__
     # Allow class to be iterable as its __lmlist__
     def __iter__(this):
@@ -3139,7 +3139,15 @@ class gwylm:
         if level is None:
             # Use the default value
             level = this.level
-            if verbose: alert('Using the '+cyan('default')+' level of %g' % level)
+            # if level in this.__dict__:
+            #     level = this.level
+            # else:
+            #     if len(this.config.default_par_list):
+            #         this.level = this.config.default_par_list[1]
+            #         level = this.level
+            #     else:
+            #         error('The config object for the current catalog entry is improperly formatted. Please try recompiling the related catalof using sc_build in nrsc.py')
+            # if verbose: alert('Using the '+cyan('default')+' level of %g' % level)
         else:
             # Use the input value
             this.level = level
@@ -4099,15 +4107,16 @@ class gwylm:
 
 
     #
-    def __calc_j_of_t_frame__(this,verbose=None):
+    def __calc_j_of_t_frame__(this,verbose=None,use_mask_and_preserve_length=False):
 
         #
         from numpy.linalg import norm
-        from numpy import arccos,arctan2,array,cos,sin,dot,zeros,ones
+        from numpy import arccos,arctan2,array,cos,sin,dot,zeros,ones,zeros_like
         from scipy.interpolate import InterpolatedUnivariateSpline as IUS
 
         #
-        this.__calc_radiated_quantities__(use_mask=False)
+        use_mask = use_mask_and_preserve_length
+        this.__calc_radiated_quantities__(use_mask=use_mask)
 
         # get time series for radiated quantities
         t = this.remnant['time_used']
@@ -4139,6 +4148,23 @@ class gwylm:
 
         zeta0 = arctan2( L_new.T[1], L_new.T[0] )
         alpha = -( zeta - zeta[0] + zeta0 )
+        
+        #
+        if use_mask_and_preserve_length:
+            _alpha = zeros_like(this.t)
+            _beta  = zeros_like(this.t)
+            _gamma = zeros_like(this.t)
+            tmin,tmax = lim(t)
+            mask = (this.t>=tmin) & (this.t<=tmax)
+            _alpha[mask] = alpha
+            _beta[mask]  = beta
+            _gamma[mask] = gamma
+            alpha, beta, gamma = _alpha, _beta, _gamma
+            # print(sum(mask),len(t))
+            # print(this.t[0])
+            # print(t[0])
+            # print(find(t[0]==this.t[0]))
+            # error('function under modification')
 
         # Bundle rotation angles
         angles = [ alpha, beta, gamma ]
@@ -4147,7 +4173,7 @@ class gwylm:
         that = this.__rotate_frame_at_all_times__(angles,verbose=verbose)
 
         #
-        that.frame = 'J(t)'
+        that.frame = 'j-of-t'
 
         #
         that.__calc_radiated_quantities__(use_mask=False)
@@ -4603,7 +4629,7 @@ class gwylm:
         if not ( transform_domain.lower() in allowed_transform_domains ):
             error('Transform domain must be in %s'%str(allowed_transform_domains))
         else:
-            alert( 'Transforming to the coprecessing frame using %s angles.'%yellow(transform_domain.upper()),verbose=verbose )
+            alert( 'Transforming frame using %s angles.'%yellow(transform_domain.upper()),verbose=verbose )
 
         #
         transform_is_td_but_complex_angles_given = (transform_domain.lower()=='td') and sum( abs(array(euler_alpha_beta_gamma).flatten().imag) ) > 0
@@ -4979,7 +5005,7 @@ class gwylm:
         this.radiated['mask'] = mask
         if verbose: alert('Calculating radiated angular momentum, J.')
         this.radiated['J0'] = (this.S1 + this.S2) + (this.L1 + this.L2)
-        this.radiated['J'] = this.__calc_radiated_angular_momentum__(mask)
+        this.radiated['J'],this.radiated['dJ/dt'] = this.__calc_radiated_angular_momentum__(mask)
         this.radiated['J_sim_start'] = this.Sf - this.radiated['J'][end_index,:]
         if verbose: alert('Calculating radiated linear momentum, P.')
         this.radiated['P'] = this.__calc_radiated_linear_momentum__(mask)
@@ -4988,6 +5014,7 @@ class gwylm:
         if not ( ref_orientation is None ):
             #
             this.radiated['J'][:,1] *= sign(ref_orientation[-1])
+            this.radiated['dJ/dt'][:,1]  *= sign(ref_orientation[-1])
             this.radiated['P'][:,1] *= sign(ref_orientation[-1])
 
         # Store remant Quantities
@@ -5000,6 +5027,7 @@ class gwylm:
 
         # Calculate the internal angular momentum by using either the final or initial angular momentum values
         this.remnant['J'] = -this.radiated['J']
+        this.remnant['dJ/dt'] = -this.radiated['dJ/dt']
 
         # Use the initial J value to set the integration constant
         initial_index = 0 # index location where we expect the simulation data to NATURALLY start. For example, we expect that if the waveform data has been padded upon loading that this padding happens to the right of the data series, and not to the left.
@@ -5095,18 +5123,19 @@ class gwylm:
             dJz += hlm * m * flm.conj()
 
         # Apply overall operations
-        dJx = dJx.imag / ( 32*pi )
-        dJy = dJy.real / ( 32*pi )
-        dJz = dJz.imag / ( 16*pi )
+        dJx = dJx[mask].imag / ( 32*pi )
+        dJy = dJy[mask].real / ( 32*pi )
+        dJz = dJz[mask].imag / ( 16*pi )
 
         # Integrate to get angular momentum
-        Jx = spline_antidiff( this.t[mask],dJx[mask],k=3 )
-        Jy = spline_antidiff( this.t[mask],dJy[mask],k=3 )
-        Jz = spline_antidiff( this.t[mask],dJz[mask],k=3 )
+        Jx = spline_antidiff( this.t[mask],dJx,k=5 )
+        Jy = spline_antidiff( this.t[mask],dJy,k=5 )
+        Jz = spline_antidiff( this.t[mask],dJz,k=5 )
 
         #
-        ans = -vstack([Jx,Jy,Jz]).T
-        return ans
+        ans   = -vstack([Jx,Jy,Jz]).T
+        d_ans = -vstack([dJx,dJy,dJz]).T
+        return ans,d_ans
 
     # Create hybrid multipoles
     def hybridize( this, pn_w_orb_min=None, pn_w_orb_max=None, verbose=True, plot=None, aggressive=1 ):
