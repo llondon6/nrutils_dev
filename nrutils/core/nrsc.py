@@ -2244,7 +2244,7 @@ class gwf:
             that.raw_transformed_fd_wfarr = rotated_wfarr.copy()
             f,fd_p,fd_c = rotated_wfarr.T
             t     = this.t
-            
+
             ## DIAGNOSTIC PLOTTING
             # if (this.l,this.m)==(2,2):
             #     alert('diagnostic plotting for '+red(this.kind)+': ')
@@ -2259,13 +2259,13 @@ class gwf:
             # which must be included. As a result, the code below can be incorrect:
             # td_re = ifft(ifftshift( fd_p )).real * this.df*this.n
             # td_im = ifft(ifftshift( fd_c )).real * this.df*this.n
-            # alert('Working with FD angles ...')
+
             # And the correct code is
             td_re_temp = ifft(ifftshift( fd_p )) * this.df*this.n
             td_im_temp = ifft(ifftshift( fd_c )) * this.df*this.n
             td_y = td_re_temp + 1j*td_im_temp
 
-            # Where the real valued polarizations are polarizations 
+            # Where the real valued polarizations are polarizations
             td_re = td_y.real
             td_im = td_y.imag
 
@@ -4111,7 +4111,7 @@ class gwylm:
 
         #
         from numpy.linalg import norm
-        from numpy import arccos,arctan2,array,cos,sin,dot,zeros,ones,zeros_like
+        from numpy import arccos,arctan2,array,cos,sin,dot,zeros,ones,zeros_like, unwrap
         from scipy.interpolate import InterpolatedUnivariateSpline as IUS
 
         #
@@ -4129,6 +4129,8 @@ class gwylm:
         for k in range ( len(J_norm) ):
             thetaJ[k] = arccos(J[k,2]/J_norm[k])
             phiJ[k]   = arctan2(J[k,1],J[k,0])
+
+        phiJ = unwrap(phiJ)
         #
         phiJ_spl  = IUS(t, phiJ, k=5)
         dp_dt_spl = phiJ_spl.derivative()
