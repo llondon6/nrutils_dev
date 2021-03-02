@@ -4107,7 +4107,7 @@ class gwylm:
 
 
     #
-    def __calc_j_of_t_frame__(this,verbose=None,use_mask_and_preserve_length=False):
+    def __calc_j_of_t_frame__(this,verbose=None,use_mask_and_preserve_length=False,enforce_initial_J_consistency=True):
 
         #
         from numpy.linalg import norm
@@ -4116,7 +4116,7 @@ class gwylm:
 
         #
         use_mask = use_mask_and_preserve_length
-        this.__calc_radiated_quantities__(use_mask=use_mask)
+        this.__calc_radiated_quantities__(use_mask=use_mask,enforce_initial_J_consistency=enforce_initial_J_consistency)
 
         # get time series for radiated quantities
         t = this.remnant['time_used']
