@@ -2851,7 +2851,8 @@ class gwylm:
         #
         if not 'dynamics' in this.__dict__:
             warning('Dynamics must be loaded in order to plot 3D trajectories. We will now load dynamics for you using "this.load_dynamics()"')
-            this.load_dynamics()
+            waveform_times = this.t[ (this.t>this.t[this.startindex]) & (this.t<this[2,2]['psi4'].intrp_t_amp_max) ]
+            this.load_dynamics(waveform_times=waveform_times)
 
         # Collect components
         if 'dynamics' in this.__dict__:
@@ -3861,6 +3862,12 @@ class gwylm:
 
         # Create a dictionary representation of the mutlipoles
         that.__curate__()
+        
+        # Use df input to determine pad length 
+        if df:
+            N = int( 1.0 / ( that.dt * df ) )
+            that.pad( N )
+        
 
         #
         return that
@@ -5698,7 +5705,7 @@ def lvcnr5_to_gwylm(h5dir,lm=None,verbose=True,dt=0.25,lmax=6,clean=True):
     chi1 = array([f.attrs['spin1x'],f.attrs['spin1y'],f.attrs['spin1z']])
     chi2 = array([f.attrs['spin2x'],f.attrs['spin2y'],f.attrs['spin2z']])
     e.X1,e.X2 = chi1,chi2
-    e.S1,e.S2 = chi1*e.m1**2,chi2*e.m1**2
+    e.S1,e.S2 = chi1*e.m1**2,chi2*e.m2**2
 
     e.L = array([f.attrs['LNhatx'],f.attrs['LNhaty'],f.attrs['LNhatz']])
     warning('NOTE that the L saved here (i.e. y.L) is the UNIT direction of L --- the interface may be updated in the future to use a PN L')
