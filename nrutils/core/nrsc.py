@@ -1503,7 +1503,8 @@ class gwf:
         # this.k_amp_max = argmax( this.m * this.dphi * this.amp )
         # this.k_amp_max = argmax( this.amp )
         # print this.l, this.m
-        this.k_amp_max = find_amp_peak_index( this.t, this.amp, plot=False ) # function lives in basics
+        this.k_amp_max = find_amp_peak_index( this.t, this.amp, this.phi, plot=False ) # function lives in basics
+        # print '>> ',this.k_amp_max
         # this.k_amp_max = argmax(this.amp)                           # index location of max ampitude
 
 
@@ -2408,6 +2409,12 @@ class gwylm:
             load=False
             calcnews=False
             calcstrain=False
+            
+        # ensure that __disk_data_kind__ attribute exists
+        if not ( '__disk_data_kind__' in scentry_obj.__dict__ ):
+            scentry_obj.config.__disk_data_kind__ = 'psi4'
+        if not ( scentry_obj.config.__disk_data_kind__ in ('strain','psi4','news') ):
+            raise ValueError('scentry __disk_data_kind__ must be "strain", "psi4" or "news"')
 
 
         # if multipole_dictionary: load = False
@@ -2546,13 +2553,19 @@ class gwylm:
         if lowpass:
             this.lowpass()
 
-        # Calculate news
-        if calcnews and scentry_obj.config:
-            this.calcflm(w22=w22)
-
-        # Calculate strain
+        # # Calculate news
+        # if calcnews and scentry_obj.config:
+            
+        # Calculate derivatives and integrals
         if calcstrain and scentry_obj.config:
-            this.calchlm(w22=w22)
+            if this.config.__disk_data_kind__ == 'psi4':
+                this.calchlm(w22=w22)
+                this.calcflm(w22=w22)
+            elif this.config.__disk_data_kind__ == 'strain':
+                alert('Calculating derivatives of strain',verbose=this.verbose)
+                this.calc_derivatives_of_hlm()
+            else:
+                error('only __disk_data_kind__ of psi4 and strain are currently handled. see gwylm.calc_derivatives_of_hlm for model of how to extend for news')
 
         # Clean the waveforms of junk radiation if desired
         this.__isclean__ = False
@@ -2617,7 +2630,8 @@ class gwylm:
         return gwylm_radiation_axis_workflow(this,kind=kind,plot=plot,save=save,verbose=this.verbose)
 
     # Create a dictionary representation of the mutlipoles
-    def __curate__(this,__kind__='psi4'):
+    def __curate__(this,__kind__=None):
+        if __kind__ is None: __kind__=this.config.__disk_data_kind__
         '''Create a dictionary representation of the mutlipoles'''
         # NOTE that this method should be called every time psi4, strain and/or news is loaded.
         # NOTE that the related methods are: __load__, calchlm and calcflm
@@ -3044,22 +3058,22 @@ class gwylm:
             this.load(lm=lm,dt=dt,extraction_parameter=extraction_parameter,level=level,pad=pad,verbose=verbose)
 
         # Ensuer that all modes are the same length
-        this.__valpsi4multipoles__()
+        this.__val_disk_kind_multipoles__()
 
         # Create a dictionary representation of the mutlipoles
         this.__curate__()
 
     # Validate individual multipole against the l=m=2 multipole: e.g. test lengths are same
-    def __valpsi4multipoles__(this):
+    def __val_disk_kind_multipoles__(this):
         #
         this.__curate__()
         #
-        t22 = this.lm[2,2]['psi4'].t
+        t22 = this.lm[2,2][this.config.__disk_data_kind__].t
         n22 = len(t22)
         #
         for lm in this.lm:
             if lm != (2,2):
-                ylm = this.lm[lm]['psi4']
+                ylm = this.lm[lm][this.config.__disk_data_kind__]
                 if len(ylm.t) != n22:
                     #
                     if True: #this.verbose:
@@ -3255,7 +3269,7 @@ class gwylm:
                             xf = this.xf,
                             label = this.label,
                             ref_scentry = this.__scentry__,
-                            kind='$rM\psi_{%i%i}$'%(l,m) )
+                            kind='$rM%s_{%i%i}$'%(kind2texlabel(this.config.__disk_data_kind__),l,m) )
 
             #
             y_ = mkgwf(wfarr)
@@ -3295,7 +3309,15 @@ class gwylm:
 
             # use array data to construct gwf object with multipolar fields
             if not output:
-                this.ylm.append( y_ )
+                if this.config.__disk_data_kind__ == 'psi4':
+                    this.ylm.append( y_ )
+                elif this.config.__disk_data_kind__ == 'news':
+                    this.flm.append( y_ )
+                elif this.config.__disk_data_kind__ == 'strain':
+                    this.hlm.append( y_ )
+                else:
+                    print this.config.__disk_data_kind__
+                    error('unknown __disk_data_kind__ of %s'%this.config.__disk_data_kind__)
                 if this.t is None: this.t = y_.t
             else:
                 return y_
@@ -3567,14 +3589,17 @@ class gwylm:
 
         # Added keyword "nojunk" to handle data with no junk radiation at start of the waveform
 
+        # # Look for the l=m=2 psi4 multipole
+        # if len( this.ylm ):
+        #     y22 = this.lm[2,2]['psi4']
+        # elif len( this.hlm ):
+        #     y22 = this.lm[2,2]['strain']
+        # else:
+        #     # If it doesnt exist in this.ylm, then load it
+        #     y22 = this.load(lm=[2,2],output=True,dt=this.dt)
+
         # Look for the l=m=2 psi4 multipole
-        if len( this.ylm ):
-            y22 = this.lm[2,2]['psi4']
-        elif len( this.hlm ):
-            y22 = this.lm[2,2]['strain']
-        else:
-            # If it doesnt exist in this.ylm, then load it
-            y22 = this.load(lm=[2,2],output=True,dt=this.dt)
+        y22 = this.lm[2,2][this.config.__disk_data_kind__]
 
         #%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&#
         # Characterize the START of the waveform (pre-inspiral)      #
@@ -3756,6 +3781,61 @@ class gwylm:
         # NOTE that this is the end of the calcflm method
 
 
+    #
+    def calc_derivatives_of_hlm(this):
+        
+        #
+        from numpy import array
+        
+        #
+        if this.config.__disk_data_kind__ != 'strain':
+            error('this method must only be called when the data on disc is strain. We have been given %s'%red(this.config.__disk_data_kind__))
+            
+        #
+        this.flm,this.ylm = [],[]
+        for h in this.hlm:
+            
+            #
+            alert('Processing (l,m) = (%i,%i)...'%(h.l,h.m),verbose=this.verbose)
+            
+            #
+            t,p,x = h.wfarr.T 
+            
+            #
+            d1p = spline_diff(t,p,n=1)
+            d2p = spline_diff(t,d1p,n=1)
+            
+            #
+            d1x = spline_diff(t,x,n=1)
+            d2x = spline_diff(t,d1x,n=1)
+            
+            #
+            farr = array([t,d1p,d1x]).T
+            yarr = array([t,d2p,d2x]).T
+            
+            def mkgwf(wfarr_,kind):
+                return gwf( wfarr_,
+                            l=h.l,
+                            m=h.m,
+                            extraction_parameter=h.extraction_parameter,
+                            dt=h.dt,
+                            verbose=h.verbose,
+                            mf = h.mf,
+                            m1 = h.m1, m2 = h.m2,
+                            xf = h.xf,
+                            label = this.label,
+                            ref_scentry = this.__scentry__,
+                            kind='$rM%s_{%i%i}$'%(kind2texlabel(kind),h.l,h.m) )
+            #
+            this.flm.append(mkgwf(farr,'news'))
+            this.ylm.append(mkgwf(yarr,'psi4'))
+            
+        # Create a dictionary representation of the mutlipoles
+        this.__curate__()
+
+        # NOTE that this is the end of the calc_derivatives_of_hlm method
+
+
     #--------------------------------------------------------------------------------#
     # Get a gwylm object that only contains ringdown
     #--------------------------------------------------------------------------------#
@@ -3779,13 +3859,13 @@ class gwylm:
         if this.verbose or verbose:
             alert('Time will be listed relative to the peak of %s.'%cyan('strain' if use_peak_strain else 'luminosity'))
 
-        # Use the l=m=2 multipole to estimate the peak location
-        if use_peak_strain:
-            # Only calculate strain if its not there already
-            if (not this.hlm) : this.calchlm()
-        else:
-            # Redundancy checking (see above for strain) is handled within calcflm
-            this.calcflm()
+        # # Use the l=m=2 multipole to estimate the peak location
+        # if use_peak_strain:
+        #     # Only calculate strain if its not there already
+        #     if (not this.hlm) : this.calchlm()
+        # else:
+        #     # Redundancy checking (see above for strain) is handled within calcflm
+        #     this.calcflm()
 
         # Retrieve the l=m=2 component
         ref_gwf = this.lm[2,2][  'strain' if use_peak_strain else 'news'  ]
@@ -5547,6 +5627,7 @@ class gwfcharstart:
 
 
         # 1. Find the pre-peak portion of the waveform.
+        print y.k_amp_max,y.l,y.m
         val_mask = arange( y.k_amp_max )
         # 2. Find the peak locations of the plus part. NOTE that smooth() is defined in positive.maths
         pks,pk_mask = findpeaks( smooth( y.cross[ val_mask ], 20 ).answer if __smooth__ else y.cross[ val_mask ] )
@@ -5574,7 +5655,7 @@ class gwfcharstart:
             safedex = min( len(pk_mask)-1, start_map+shift )
             index_width = min( [ 1+pk_mask[safedex]-pk_mask[start_map], 0.5*(1+y.k_amp_max-pk_mask[ start_map ]) ] )
             # 6. Estimate where the waveform begins to turn on. This is approximately where the junk radiation ends. Note that this area will be very depressed upon windowing, so is can be
-            (_,j_id) = find_amp_peak_index( y.t, y.amp, return_jid=True )
+            (_,j_id) = find_amp_peak_index( y.t, y.amp, y.phi, return_jid=True )
             # NOTE that the line above is more robust for precessing cases than the line below. There are cases when the optimal emission axis crosses z=0 which causes problems for the line below
             # j_id = pk_mask[ start_map ]
 

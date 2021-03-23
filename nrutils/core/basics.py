@@ -848,6 +848,21 @@ def isgwylm( obj ):
     else:
         return False
 
+
+#
+def kind2texlabel(kind):
+    '''
+    Convert __disc_data_kind__ to latex for internal labeling of plots. See methods in gwylm class
+    '''
+    if kind=='psi4':
+        return '\psi'
+    elif kind=='strain':
+        return 'h'
+    elif kind=='news':
+        return 'f'
+    else:
+        error('unknown __disc_data_kind__ of %s'%red(kind))
+
 #00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%#
 ''' Low level functions for rotating waveforms '''
 # https://arxiv.org/pdf/1304.3176.pdf
@@ -1703,7 +1718,7 @@ def rotate_wfarrs_at_all_times( l,                          # the l of the new m
 
 
 # Careful function to find peak index for BBH waveform cases
-def find_amp_peak_index( t, amp, plot = False, return_jid=False ):
+def find_amp_peak_index( t, amp, phi, plot = False, return_jid=False ):
 
     '''
     Careful function to find peak index for BBH waveform cases
@@ -1783,13 +1798,35 @@ def find_amp_peak_index( t, amp, plot = False, return_jid=False ):
         pre[half_way:] *= 0
         dt = t[1]-t[0]
         jid = argmax( pre ) + int(100/dt)
+        
+        #
+        if k_amp_max==0:
+            
+            warning('the data input may not peak near merger. we will use the second derivative of the phase to estimate the location of merger in the timeseries')
+        
+            mask = amp>(1e-2*max(amp))
+            d2phi = abs(spline_diff(t[mask],phi[mask],n=2))
+            
+            k_amp_max = argmax(d2phi)
+            ans = k_amp_max
+            jid=0
 
         # Return answer
         ans = k_amp_max
         if return_jid: ans = (k_amp_max,jid)
         return ans
     else:
-        warning('the data input here may be flat and zero')
-        ans = 0
+        
+        # print sum(amp),sum(phi),sum(amp)<1e-6
+        if sum(phi)<1e-6:
+            ans = 0
+            if return_jid: ans = (k_amp_max,0)
+            warning('the data appears to be ZERO; please make sure you understand why')
+            return ans
+        
+        warning('the data input here may be flat.')
+        
+        k_amp_max = 0
+        jid=0
         if return_jid: ans = (0,0)
         return ans
