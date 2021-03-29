@@ -400,7 +400,7 @@ def recompose_wfarrs( wfarr_dict, theta, phi ):
                 error( 'invalid multipole eigenvalue found: %s'%[v] )
         # key values must be ndarray
         if not isinstance(wfarr_dict[k],ndarray):
-            print wfarr_dict[k].__class__
+            alert(wfarr_dict[k].__class__)
             error('key values must be ndarray')
 
     # Number of samples
@@ -604,7 +604,7 @@ def alphamax(_gwylmo,dphi,plt=False,verbose=False,n=13):
         plot( dpsis, aspl, label=dpsi )
         plot( dpsis[argmax(aspl)], aspl[argmax(aspl)], 'or', mfc='none' )
         xlabel(r'$\psi$')
-    if verbose: print dpsi_opt,action([dphi,dpsi_opt])
+    if verbose: alert(dpsi_opt,action([dphi,dpsi_opt]))
     return [ dpsi_opt, action([dphi,dpsi_opt])    ]
 
 def betamax(_gwylmo,n=10,plt=False,opt=True,verbose=False):
@@ -651,10 +651,10 @@ def betamax(_gwylmo,n=10,plt=False,opt=True,verbose=False):
         xlabel(r'$\phi$')
         title(val_max)
 
-    if verbose:
-        print 'dphi_opt = ' + str(dphi_opt)
-        print 'dpsi_opt = ' + str(dpsi_opt)
-        print 'val_max = ' + str(val_max)
+    # if verbose:
+    #     print 'dphi_opt = ' + str(dphi_opt)
+    #     print 'dpsi_opt = ' + str(dpsi_opt)
+    #     print 'val_max = ' + str(val_max)
 
     return dphi_opt,dpsi_opt
 
@@ -672,7 +672,7 @@ def betamax2(_gwylmo,n=10,plt=False,opt=True,verbose=False):
         dphi_action = lambda _dphi: action( [_dphi,dpsi] )
         dphi = minimize( dphi_action, dphi, bounds=[(0,2*pi)] ).x[0]
         done = k>n
-        print '>> ',dphi,dpsi,action([dphi,dpsi])
+        alert(dphi,dpsi,action([dphi,dpsi]))
         k+=1
 
     return dphi,dpsi
@@ -1828,5 +1828,6 @@ def find_amp_peak_index( t, amp, phi, plot = False, return_jid=False ):
         
         k_amp_max = 0
         jid=0
+        ans = k_amp_max
         if return_jid: ans = (0,0)
         return ans

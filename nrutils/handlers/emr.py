@@ -65,12 +65,13 @@ def learn_metadata( metadata_file_location ):
     '''
 
     # Masses
-    x.m1 = 1-1e-5
-    x.m2 = 1e-5
+    x.m1 = 1.0-1e-4
+    x.m2 = 1e-4
+    x.__mu__ = 1.0 # NOTE that this value is only a placeholder
 
     #
-    P1 = array( [ 1,1,0 ] )
-    P2 = array( [ 1,1,0 ] )
+    P1 = array( [ -1,1,0 ] )
+    P2 = array( [ 1,-1,0 ] )
 
     #
     S1 = array( [ 0,0,y.a ] )
@@ -114,8 +115,8 @@ def learn_metadata( metadata_file_location ):
     
     # Store related final mass and spin data
     x.mf = 1.0
-    x.Sf = array([y.a])
-    x.Xf = array([0,0,])
+    x.Sf = array([0,0,y.a])
+    x.Xf = array([0,0,y.a])
     x.xf = sign(x.Sf[-1])*norm(x.Sf)/(x.mf*x.mf)
 
     # Store relaxed (after-junk) fields

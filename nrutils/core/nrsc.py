@@ -52,7 +52,7 @@ class __gconfig__:
             config_file_location = join(user_settings_path,basename(config_path))
             user_config_files.append(config_file_location)
             if not isfile(config_file_location):
-                if verbose: print '>> copying "%s" to "%s" to make up for missing config'%(blue(config_path),blue(config_file_location))
+                alert('>> copying "%s" to "%s" to make up for missing config'%(blue(config_path),blue(config_file_location)),verbose=verbose)
                 cp( config_path, config_file_location )
 
         # Create a smart object representation of each config
@@ -272,7 +272,7 @@ class scentry:
         this.raw_metadata = None
         if this.isvalid is True:
             #
-            if this.verbose: print '## Working: %s' % cyan(metadata_file_location)
+            alert('## Working: %s' % cyan(metadata_file_location),verbose=verbose)
             this.log += ' This entry\'s metadata file is valid.'
 
             # # i.e. learn the meta_data_file
@@ -292,7 +292,7 @@ class scentry:
 
         elif this.isvalid is False:
             if config_obj:
-                if this.verbose: print '## The following is '+red('invalid')+': %s' % cyan(metadata_file_location)
+                alert('## The following is '+red('invalid')+': %s' % cyan(metadata_file_location),verbose=verbose)
                 this.log += ' This entry\'s metadta file is invalid.'
 
     # Method to load handler module
@@ -576,7 +576,8 @@ def simdir2scentry( catalog_dir, verbose = False ):
             if entry.isvalid:
                 catalog.append( entry )
             else:
-                if verbose: print entry.log
+                # if verbose: print entry.log
+                alert(entry.log)
                 del entry
 
         # Break the for-loop if a valid scentry has been built
@@ -907,7 +908,7 @@ def scsearch( catalog = None,           # Manually input list of scentry objects
         catalog = []
         if verbose==2: alert('Loading catalog information from:')
         for db in dblist:
-            if verbose==2: print '>> %s' % cyan(db)
+            if verbose==2: alert(cyan(db))
             with open( db , 'rb') as dbf:
                 catalog = catalog + pickle.load( dbf )
 
@@ -1092,14 +1093,14 @@ def scsearch( catalog = None,           # Manually input list of scentry objects
     #
     if verbose:
         if len(catalog)>0:
-            print '## Found %s%s simulations:' % ( bold(str(len(catalog))), output_descriptor )
+            alert('## Found %s%s simulations:' % ( bold(str(len(catalog))), output_descriptor ))
             for k,entry in enumerate(catalog):
                 # tag this entry with its inferred simname
                 simname = entry.raw_metadata.source_dir[-1].split('/')[-1] if entry.raw_metadata.source_dir[-1][-1]!='/' else entry.raw_metadata.source_dir[-1].split('/')[-2]
-                print '[%04i][%s] %s: %s\t(%s)' % ( k+1, green(entry.config.config_file_location.split('/')[-1].split('.')[0]), cyan(entry.setname), entry.label, cyan(simname ) )
+                alert('[%04i][%s] %s: %s\t(%s)' % ( k+1, green(entry.config.config_file_location.split('/')[-1].split('.')[0]), cyan(entry.setname), entry.label, cyan(simname ) ))
         else:
             warning('!! Found %s simulations.' % str(len(catalog)))
-        print ''
+        alert('')
 
     #
     return catalog
@@ -1143,25 +1144,25 @@ def scunique( catalog = None, tol = 1e-3, verbose = False ):
             for ind,k in enumerate(subset):
                 tested_map[ subdex[ind] ] = False
                 if k is subset[maxdex]:
-                    if verbose: print '>> Keeping: [%i] %s:%s' % (catalog.index(k),k.setname,k.label)
+                    if verbose: alert('>> Keeping: [%i] %s:%s' % (catalog.index(k),k.setname,k.label))
                 else:
                     umap[ subdex[ind] ] = False
-                    if verbose: print '## Removing:[%i] %s:%s' % (catalog.index(k),k.setname,k.label)
+                    if verbose: alert('## Removing:[%i] %s:%s' % (catalog.index(k),k.setname,k.label))
 
         else:
 
-            if verbose: print magenta('[%i] Skipping %s:%s. It has already been checked.' % (d,entry.setname,entry.label) )
+            if verbose: alert(magenta('[%i] Skipping %s:%s. It has already been checked.' % (d,entry.setname,entry.label) ))
 
     # Create the unique catalog using umap
     unique_catalog = list( array(catalog)[ umap ] )
 
     # Let the people know.
     if verbose:
-        print green('Note that %i physically degenerate simulations were removed.' % (len(catalog)-len(unique_catalog)) )
-        print green( 'Now %i physically unique entries remain:' % len(unique_catalog) )
+        alert(green('Note that %i physically degenerate simulations were removed.' % (len(catalog)-len(unique_catalog)) ))
+        alert(green( 'Now %i physically unique entries remain:' % len(unique_catalog) ))
         for k,entry in enumerate(unique_catalog):
-            print green( '>> [%i] %s: %s' % ( k+1, entry.setname, entry.label ) )
-        print ''
+            alert(green( '>> [%i] %s: %s' % ( k+1, entry.setname, entry.label ) ))
+        alert('')
 
     # return the unique subset of runs
     return unique_catalog
@@ -1589,7 +1590,7 @@ class gwf:
 
         # Copy attrributed from friend. If init, then do not check if attribute already exists in this.
         for attr in traits:
-            if verbose: print '\t that.%s --> this.%s (%s)' % (attr,attr,type(friend.__dict__[attr]).__name__)
+            if verbose: alert('\t that.%s --> this.%s (%s)' % (attr,attr,type(friend.__dict__[attr]).__name__))
             setattr( this, attr, friend.__dict__[attr] )
 
         #
@@ -1643,8 +1644,8 @@ class gwf:
         proceed = False
         if NONUNIFORMT and (not INPUTDTNOTGIVENDT):
             msg = '(**) Waveform not uniform in time-step. Interpolation will be applied.'
-            if this.verbose: print magenta(msg)
-            print 'maxdt = '+str(diff(t).max())
+            if this.verbose: alert(magenta(msg))
+            alert('maxdt = '+str(diff(t).max()))
             # proceed = True
         if (NONUNIFORMT and INPUTDTNOTGIVENDT) or proceed:
             # if dt is not defined and not none, assume smallest dt
@@ -1652,7 +1653,7 @@ class gwf:
                 this.dt = diff(lim(t))/len(t)
                 msg = '(**) Warning: No dt given to gwf(). We will assume that the input waveform array is in geometric units, and that dt = %g will more than suffice.' % this.dt
                 if this.verbose:
-                    print magenta(msg)
+                    alert(magenta(msg))
             # Interpolate waveform array
             intrp_t = arange( min(t), max(t), this.dt )
             intrp_R = InterpolatedUnivariateSpline( t, this.wfarr[:,1] )( intrp_t )
@@ -2048,6 +2049,24 @@ class gwf:
         #
         this.setfields( this.wfarr[mask,:] )
 
+    #
+    def crop(this,T1,T2):
+        
+        #
+        mask = (this.t>=T1) & (this.t<=T2) 
+        
+        #
+        wfarr = this.wfarr[mask,:]
+        
+        #
+        that = this.copy()
+        
+        #
+        that.setfields( wfarr )
+        
+        #
+        return that
+
     # If desired, reset the waveform object to its original state (e.g. it's state just afer loading).
     # Note that after this methed is called, the current object will occupy a different address in memory.
     def reset(this): this.setfields( this.__rawgwfarr__ )
@@ -2353,7 +2372,7 @@ class gwylm:
     '''
 
     # Class constructor
-    def __init__( this,scentry_obj, lm=None, lmax=None, dt=0.15, load=None, clean=None, extraction_parameter=None, level=None, w22=None, lowpass=None, calcstrain=None, calcnews=None, enforce_polarization_convention=None, fftfactor=None, pad=None, __M_RELATIVE_SIGN_CONVENTION__=None, initial_j_align=None, load_dynamics=True,use_tortoise_for_dynamics=False,mutipole_dictionary=None, verbose=None, wfarr_dict=None, enforce_m_relative_sign_convention=True ):
+    def __init__( this,scentry_obj, lm=None, lmax=None, dt=0.15, load=None, clean=None, extraction_parameter=None, level=None, w22=None, lowpass=None, calcstrain=None, calcnews=None, enforce_polarization_convention=None, fftfactor=None, pad=None, __M_RELATIVE_SIGN_CONVENTION__=None, initial_j_align=None, load_dynamics=True,use_tortoise_for_dynamics=False,mutipole_dictionary=None, verbose=None, wfarr_dict=None, enforce_m_relative_sign_convention=True,mu=None ):
 
         '''
 
@@ -2383,6 +2402,7 @@ class gwylm:
         initial_j_align = None,           # Toggle for putting wabeform in frame where initial J is z-hat
         load_dynamics = True, # Toggle for loading timeseries for L,S,J from dynamics
         use_tortoise_for_dynamics = False, # Toggle between tortoise coordinate and flat extraction radius for retarded time mapping between dynamics and waveform frames
+        mu=None, # Mass-ratio to apply ONLY if the simulation is an extreme-mass-ratio case. If the simulation is an extreme-mass-ratio case, then this is a required input.
         verbose               = None ):   # be verbose
 
         OUTPUT
@@ -2409,6 +2429,10 @@ class gwylm:
             load=False
             calcnews=False
             calcstrain=False
+            
+        # ensure that __is_extreme_mass_ratio__ attribute exists (it's False be default)
+        if not ( '__is_extreme_mass_ratio__' in scentry_obj.__dict__ ):
+            scentry_obj.config.__is_extreme_mass_ratio__ = False
             
         # ensure that __disk_data_kind__ attribute exists
         if not ( '__disk_data_kind__' in scentry_obj.__dict__ ):
@@ -2591,6 +2615,12 @@ class gwylm:
         if load_dynamics:
             waveform_times = this.t[ (this.t>this.t[this.startindex]) & (this.t<this[2,2]['psi4'].intrp_t_amp_max) ]
             this.load_dynamics(verbose=verbose,waveform_times=waveform_times)
+            
+        
+        if this.config.__is_extreme_mass_ratio__:
+            mu = 1e-4
+            alert('Scaling multipole moments to default mass-ratio of %s'%red(str(mu)),header=True)
+            this.scale_emr_to_massratio(mu,initialize=True,__apply__=True)
 
 
     # Allow class to be indexed
@@ -2622,6 +2652,58 @@ class gwylm:
     #         raise StopIteration
     #     else:
     #         return this.__lmlist__[k+1]
+
+    #
+    def scale_emr_to_massratio(this,mu,initialize=False,__apply__=False):
+        '''
+        If the current object is an extreme mass-ratio case, copy it, and then scale it to a desired mass-ratio.
+        '''
+        #
+        if not this.config.__is_extreme_mass_ratio__:
+            error('The current object does not contain extreme mass-ratio waveform data as tagged by this.config.__is_extreme_mass_ratio__')
+            
+        #
+        if initialize:
+            this.__mu__ = 1.0
+            
+        #
+        __return__ = not __apply__
+            
+        #
+        if __return__:
+            that = this.copy()
+        else:
+            that = this
+        
+        #
+        mu = min( mu, 1.0/mu )
+        
+        #
+        meta_kinds = ['hlm','ylm','flm']
+        for j in meta_kinds:
+            z = that.__dict__[j]
+            for y in z:
+                wfarr = y.wfarr 
+                wfarr[:,1] *= mu / that.__mu__
+                wfarr[:,2] *= mu / that.__mu__
+                y.setfields( wfarr )
+                
+        #
+        that.__mu__ = mu
+        that.m2 = mu 
+        that.m1 = 1-mu 
+        that.S1 = that.X1 * that.m1**2
+        that.S2 = that.X2 * that.m2**2
+        that.S = that.S1 + that.S2 
+        that.J = that.L + that.S
+        warning('This method does not current handle L correctly as dimensionless versions of L1 and L2 are needed.')
+                
+        #
+        that.__curate__()
+        
+        #
+        if __return__:
+            return that
 
     #
     def get_radiation_axis_info(this,kind='psi4',plot=False,save=False):
@@ -2874,7 +2956,8 @@ class gwylm:
             r1 = linalg.norm( this.dynamics[key] ,axis=1 )
             x1,y1,z1 = [ v/r1 for v in (x1,y1,z1) ]
         else:
-            error('Dynamics not loaded.')
+            warning('Dynamics not loaded. Exiting')
+            return ax
 
         # Initialize mask if needed
         if mask is None:
@@ -3274,39 +3357,6 @@ class gwylm:
             #
             y_ = mkgwf(wfarr)
 
-            # # ---------------------------------------------------- #
-            # # Enforce internal sign convention for Psi4 multipoles
-            # '''
-            # NOTE that the change enforced here is equivalent to changing
-            # the convention used when defining the time domain phase: e^i*phi
-            # or e^-i*phi. NOTE that this convention is independent of the
-            # symmetries of the radiation (e.g. Ylm = -1^l * conj(Yl,-m) ).
-            # '''
-            # # ---------------------------------------------------- #
-
-            # # Try to determine the sign convention used to define phase. Note that this will be determined only once for the current object based on the l=m=2 multipole.
-            # if this.external_sign_convention is None:
-            #     msk_ = y_.amp > 0.0001*amax(y_.amp)
-            #     # msk_ = y_.amp > 0.01*amax(y_.amp)
-            #     if int(scipy_version.split('.')[1])<16:
-            #         # Account for old scipy functionality
-            #         external_sign_convention = sign(this.L[-1]) * sign(m) * mode( sign( y_.dphi[msk_] ) )[0][0]
-            #         initially_msign_matches_wsign = sign(m) == mode( sign( y_.dphi[msk_] ) )[0][0]
-            #     else:
-            #         # Account for modern scipy functionality
-            #         external_sign_convention = sign(this.L[-1]) * sign(m) * mode( sign( y_.dphi[msk_] ) ).mode[0]
-            #         initially_msign_matches_wsign = sign(m) == mode( sign( y_.dphi[msk_] ) ).mode[0]
-            #     if initially_msign_matches_wsign: alert('## initall, m and td freq have same sign.')
-            #     this.external_sign_convention = external_sign_convention
-            #
-            # if this.M_RELATIVE_SIGN_CONVENTION != this.external_sign_convention:
-            #     wfarr[:,2] = -wfarr[:,2]
-            #     y_ = mkgwf(wfarr)
-            #     # Let the people know what is happening.
-            #     msg = yellow('Re-orienting waveform phase')+' to be consistent with internal sign convention for Psi4, where sign(dPhi/dt)=%i*sign(m)*sign(this.L[-1]).' % this.M_RELATIVE_SIGN_CONVENTION + ' Note that the internal sign convention is defined in ... nrutils/core/__init__.py as "M_RELATIVE_SIGN_CONVENTION". This message has appeared becuase the waveform is determioned to obey and sign convention: sign(dPhi/dt)=%i*sign(m)*sign(this.L[-1]). Note the appearance of the initial z angular momentum, this.L[-1].'%(this.external_sign_convention)
-            #     thisfun=inspect.stack()[0][3]
-            #     warning( msg, verbose=this.verbose )
-
             # use array data to construct gwf object with multipolar fields
             if not output:
                 if this.config.__disk_data_kind__ == 'psi4':
@@ -3316,7 +3366,6 @@ class gwylm:
                 elif this.config.__disk_data_kind__ == 'strain':
                     this.hlm.append( y_ )
                 else:
-                    print this.config.__disk_data_kind__
                     error('unknown __disk_data_kind__ of %s'%this.config.__disk_data_kind__)
                 if this.t is None: this.t = y_.t
             else:
@@ -3326,7 +3375,38 @@ class gwylm:
 
             # There has been an error. Let the people know.
             msg = '(!!) Cannot find "%s". Please check that catalog_dir and data_file_name_format in %s are as desired. Also be sure that input l and m are within ranges that are actually present on disk.' % ( red(file_location), magenta(this.config.config_file_location) )
-            raise NameError(msg)
+            if l==m==2:
+                error(msg)
+            else:
+                msg = '(!!) Cannot find "%s". Please check that catalog_dir and data_file_name_format in %s are as desired. Also be sure that input l and m are within ranges that are actually present on disk. To proceed we will create a gwf object with waveform ampltidue set to zero.' % ( red(file_location), magenta(this.config.config_file_location) )
+                warning(msg)
+                if this.config.__disk_data_kind__ == 'psi4':
+                    y_ = [ k for k in this.ylm if k.l==k.m==2][0].copy()
+                elif this.config.__disk_data_kind__ == 'news':
+                    y_ = [ k for k in this.flm if k.l==k.m==2][0].copy()
+                elif this.config.__disk_data_kind__ == 'strain':
+                    y_ = [ k for k in this.hlm if k.l==k.m==2][0].copy()
+                y_.l,y_.m = l,m 
+                y_.kind = '$rM%s_{%i%i}$'%(kind2texlabel(this.config.__disk_data_kind__),l,m) 
+                wfarr = y_.wfarr 
+                wfarr[:,1] *=0
+                wfarr[:,2] *=0
+                y_.setfields(wfarr) 
+                
+                # use array data to construct gwf object with multipolar fields
+                if not output:
+                    if this.config.__disk_data_kind__ == 'psi4':
+                        this.ylm.append( y_ )
+                    elif this.config.__disk_data_kind__ == 'news':
+                        this.flm.append( y_ )
+                    elif this.config.__disk_data_kind__ == 'strain':
+                        this.hlm.append( y_ )
+                    else:
+                        error('unknown __disk_data_kind__ of %s'%this.config.__disk_data_kind__)
+                    
+                else:
+                    return y_
+                
 
     # Plotting function for class: plot plus cross amp phi of waveforms USING the plot function of gwf()
     def plot(this,show=False,fig=None,kind=None,verbose=False,domain=None,tlim=None,flim=None):
@@ -3356,7 +3436,7 @@ class gwylm:
                 # Determine whether to calc strain here. If so, then let the people know.
                 if len(this.hlm) == 0:
                     msg = '(**) You have requested that strain be plotted before having explicitelly called gwylm.calchlm(). I will now call calchlm() for you.'
-                    print magenta(msg)
+                    print( magenta(msg))
                     this.calchlm()
                 # Assign strain to the general placeholder.
                 wflm = this.hlm
@@ -3382,7 +3462,7 @@ class gwylm:
             #
             if show:
                 # Let the people know what is being plotted.
-                if verbose: print cyan('>>')+' Plotting '+darkcyan('%s'%kind)
+                alert(' Plotting '+darkcyan('%s'%kind),verbose=verbose)
                 shw()
 
         else: # Else, if both are desired
@@ -3780,6 +3860,25 @@ class gwylm:
 
         # NOTE that this is the end of the calcflm method
 
+    #
+    def crop(this,T1,T2):
+        
+        #
+        that = this.copy()
+        
+        #     
+        proto_kinds = ['hlm','flm','ylm']   
+        for k in proto_kinds:
+            xlm = that.__dict__[k]
+            for j,x in enumerate(xlm):
+                xlm[j] = x.crop(T1,T2) 
+                
+        #
+        that.__curate__()
+        warning('This is a development function and has not been refined to modify all relevant metadata and properties. As a result, errors may be encountered when using other methods.')
+                
+        #
+        return that
 
     #
     def calc_derivatives_of_hlm(this):
@@ -4442,11 +4541,11 @@ class gwylm:
         # Maximize
         if v == 1:
             dphi,dpsi = betamax(u,plt=plot,opt=True,n=n, verbose=verbose)
-            print dphi,dpsi
+            # print dphi,dpsi
         else:
-            print '** Using test version betamax2'
+            # print '** Using test version betamax2'
             dphi,dpsi = betamax2(u,plt=plot,opt=True,n=n, verbose=verbose)
-            print dphi,dpsi
+            # print dphi,dpsi
         # Rotate self
         ans = this.rotate( dphi=dphi, dpsi=dpsi, verbose=verbose, apply=apply )
 
@@ -4949,7 +5048,7 @@ class gwylm:
                             that.remnant[key][k,:] = R( this.remnant[key][k,:], 0 )
                     else:
                         warning('cannot rotate radiated quantities, length mismatch: len alpha is %i, but times are %i'%(len(alpha),len(this.remnant['time_used'])))
-                        print alpha
+                        # print alpha
 
         for key in this.radiated:
             if isinstance(this.radiated[key],ndarray):
@@ -4970,7 +5069,6 @@ class gwylm:
                             that.old_radiated[key] = R( this.radiated[key], 0 )
                     else:
                         warning('cannot rotate radiated quantities, length mismatch: len alpha is %i, but times are %i'%(len(alpha),len(this.radiated['time_used'])))
-                        print alpha
 
         #
         alert('Note that metadata at the scentry level (i.e. this.__scentry__) have not been rotated, but this.Sf, this.R1 and others have been rotated. This includes radiated and remnant quantities.')
@@ -5023,7 +5121,7 @@ class gwylm:
             # guess_Mf = Mf14067295( this.m1,this.m2,chi1,chi2 )
             guess_Mf,guess_xf = remnant(this.m1,this.m2,this.X1[-1],this.X2[-1])
             guess = (guess_Mf,guess_xf)
-            print guess
+            # print guess
 
         # perform the minization
         Q = minimize( action,guess, bounds=[(1-0.999,1),(-0.999,0.999)] )
@@ -5627,7 +5725,7 @@ class gwfcharstart:
 
 
         # 1. Find the pre-peak portion of the waveform.
-        print y.k_amp_max,y.l,y.m
+        # print y.k_amp_max,y.l,y.m
         val_mask = arange( y.k_amp_max )
         # 2. Find the peak locations of the plus part. NOTE that smooth() is defined in positive.maths
         pks,pk_mask = findpeaks( smooth( y.cross[ val_mask ], 20 ).answer if __smooth__ else y.cross[ val_mask ] )
