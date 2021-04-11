@@ -2274,13 +2274,13 @@ class gwf:
             #     loglog(ff,abs(fd_p+1j*fd_c))
             #     show()
 
-            # the FD rotation introduces a non-trivial phase shift
-            # that results in a complex term in the TD polarizations
-            # which must be included. As a result, the code below can be incorrect:
-            # td_re = ifft(ifftshift( fd_p )).real * this.df*this.n
-            # td_im = ifft(ifftshift( fd_c )).real * this.df*this.n
+            # # the FD rotation introduces a non-trivial phase shift
+            # # that results in a complex term in the TD polarizations
+            # # which must be included. As a result, the code below can be incorrect:
+            # # td_re = ifft(ifftshift( fd_p )).real * this.df*this.n
+            # # td_im = ifft(ifftshift( fd_c )).real * this.df*this.n
 
-            # And the correct code is
+            # NOTE that the commented block above incorrectly assumes that the rotated TD + and x components should be real. Instead, the new + and x should be detefined by the real and imag parts of the complex combination as seen below. 
             td_re_temp = ifft(ifftshift( fd_p )) * this.df*this.n
             td_im_temp = ifft(ifftshift( fd_c )) * this.df*this.n
             td_y = td_re_temp + 1j*td_im_temp
@@ -2616,11 +2616,16 @@ class gwylm:
             waveform_times = this.t[ (this.t>this.t[this.startindex]) & (this.t<this[2,2]['psi4'].intrp_t_amp_max) ]
             this.load_dynamics(verbose=verbose,waveform_times=waveform_times)
             
-        
+        # If an extreme mass ratio case, then scale to a fiducial mass-ratio 
         if this.config.__is_extreme_mass_ratio__:
             mu = 1e-4
             alert('Scaling multipole moments to default mass-ratio of %s'%red(str(mu)),header=True)
             this.scale_emr_to_massratio(mu,initialize=True,__apply__=True)
+            
+        # Define remnant momentum 
+        this.__calc_radiated_quantities__(use_mask=False,enforce_initial_J_consistency=False)
+        this.Pf = this.remnant['P'][-1]
+        this.__scentry__.Pf = this.Pf
 
 
     # Allow class to be indexed
@@ -2946,9 +2951,9 @@ class gwylm:
 
         #
         if not 'dynamics' in this.__dict__:
-            warning('Dynamics must be loaded in order to plot 3D trajectories. We will now load dynamics for you using "this.load_dynamics()"')
-            waveform_times = this.t[ (this.t>this.t[this.startindex]) & (this.t<this[2,2]['psi4'].intrp_t_amp_max) ]
-            this.load_dynamics(waveform_times=waveform_times)
+            error('Dynamics must be loaded in order to plot 3D trajectories. One must generate the gwylm object with load_dynamics=True for correct behavior.')
+            # waveform_times = this.t[ (this.t>this.t[this.startindex]) & (this.t<this[2,2]['psi4'].intrp_t_amp_max) ]
+            # this.load_dynamics(waveform_times=waveform_times)
 
         # Collect components
         if 'dynamics' in this.__dict__:
@@ -4053,20 +4058,24 @@ class gwylm:
 
 
     # pad each mode to a new_length
-    def pad(this,new_length=None, apply=True, extend=True ):
+    def pad(this,new_length=None, apply=True, extend=True,where='right' ):
         # Pad each mode
         ans = this if apply else this.copy()
         treset=True
+        #
+        if (not extend) and (new_length<len(this.t)):
+            error('The given new length of %i is less than the current length %i. This function does not crop.'%(new_length,len(this.t)))
+        #
         for z in this.lm:
             for k in this.lm[z]:
-                ans.lm[z][k].pad( new_length=new_length, apply=apply, extend=extend )
+                ans.lm[z][k].pad( new_length=new_length, apply=True, extend=extend,where=where )
                 if treset:
                     ans.t = ans.lm[z][k].t
                     treset = False
         #
         if not apply:
-            if len(ans.t)!=new_length:
-                error('!!!')
+            if (not extend) and (len(ans.t)!=new_length):
+                error('New length not equal to output length. There is a bug.')
             return ans
 
     # shift the time series
@@ -4156,7 +4165,10 @@ class gwylm:
                     y.setfields( wfarr )
                     this[l,m][kind] = y
 
-
+            #
+            if not ( this[2,2]['psi4'] in this.ylm ):
+                error('Curation error!')
+            
         # for l,m in this.lm:
         #     for kind in this[l,m]:
         #         y = this[l,m][kind]
@@ -4252,6 +4264,45 @@ class gwylm:
 
         #
         that.frame = 'J-initial('+('dyn' if use_dynamics else 'bbh')+')'
+
+        #
+        return that
+
+    #
+    def __calc_final_j_frame__(this,verbose=False):
+        '''
+        Rotate multipoles such that initial L is parallel to z-hat
+        '''
+
+        # Import usefuls
+        from numpy import arccos,arctan2,array,linalg,cos,sin,dot,zeros,ones
+        from scipy.interpolate import InterpolatedUnivariateSpline as IUS
+        
+        #
+        this.__calc_radiated_quantities__(use_mask=False,enforce_initial_J_consistency=False)
+
+        Xf_norm = linalg.norm(this.Xf)
+        thetaXf = arccos(this.Xf[2]/Xf_norm)
+        phiXf   = arctan2(this.Xf[1],this.Xf[0])
+
+        # Define gamma and beta accordingly
+        beta  = -thetaXf
+        gamma = -phiXf
+
+        # Define zeta0 (i.e. -alpha) such that J_initial is along the y-z plane at the initial time step
+        P_new = rotate3 ( this.Pf, 0, beta , gamma )
+        zeta0 = arctan2( P_new.T[1], P_new.T[0] )
+        alpha = -zeta0
+        # print rotate3 ( this.Pf, 0, 0,alpha )/linalg.norm(rotate3 ( this.Pf, alpha, 0,0 ))
+
+        # Bundle rotation angles
+        angles = [ alpha, beta, gamma ]
+
+        # perform rotation
+        that = this.__rotate_frame_at_all_times__(angles,verbose=verbose)
+
+        #
+        that.frame = 'J-Final'
 
         #
         return that
@@ -4904,12 +4955,15 @@ class gwylm:
 
         # R = lambda X,k: rotate3( X, a[k], b[k], g[k] )
         R = lambda X,k: rotate3( X, alpha[k], beta[k], gamma[k] )
-        that.Sf = R( this.Sf, end_index ); that.Xf = R( this.Xf, end_index )
+        that.Sf = R( this.Sf, end_index ); 
+        that.Xf = R( this.Xf, end_index )
+        that.Pf = R( this.Pf, end_index ); 
         # * initial spins
         that.S1 = R( this.S1, start_index ); that.S2 = R( this.S2, start_index )
         that.X1 = R( this.X1, start_index ); that.X2 = R( this.X2, start_index )
         # * initial angular momenta
         that.L1 = R( this.L1, start_index ); that.L2 = R( this.L2, start_index )
+        that.P1 = R( this.P1, start_index ); that.P2 = R( this.P2, start_index )
         # * initial positions / position time series / maybe velocities
         that.R1 = R( this.R1, start_index ); that.R2 = R( this.R2, start_index )
         # * others
@@ -5064,9 +5118,9 @@ class gwylm:
                     elif len(alpha)==1:
                         if len(this.radiated[key].shape)>1:
                             for k in range( that.radiated[key].shape[0] ):
-                                that.old_radiated[key][k,:] = R( this.radiated[key][k,:], 0 )
+                                that.radiated[key][k,:] = R( this.radiated[key][k,:], 0 )
                         else:
-                            that.old_radiated[key] = R( this.radiated[key], 0 )
+                            that.radiated[key] = R( this.radiated[key], 0 )
                     else:
                         warning('cannot rotate radiated quantities, length mismatch: len alpha is %i, but times are %i'%(len(alpha),len(this.radiated['time_used'])))
 
@@ -5195,13 +5249,14 @@ class gwylm:
         this.radiated['J'],this.radiated['dJ/dt'] = this.__calc_radiated_angular_momentum__(mask)
         this.radiated['J_sim_start'] = this.Sf - this.radiated['J'][end_index,:]
         if verbose: alert('Calculating radiated linear momentum, P.')
-        this.radiated['P'] = this.__calc_radiated_linear_momentum__(mask)
+        this.radiated['dP/dt'],this.radiated['P'] = this.__calc_radiated_linear_momentum__(mask)
 
         #
         if not ( ref_orientation is None ):
             #
             this.radiated['J'][:,1] *= sign(ref_orientation[-1])
             this.radiated['dJ/dt'][:,1]  *= sign(ref_orientation[-1])
+            this.radiated['dP/dt'][:,1] *= sign(ref_orientation[-1])
             this.radiated['P'][:,1] *= sign(ref_orientation[-1])
 
         # Store remant Quantities
@@ -5215,6 +5270,7 @@ class gwylm:
         # Calculate the internal angular momentum by using either the final or initial angular momentum values
         this.remnant['J'] = -this.radiated['J']
         this.remnant['dJ/dt'] = -this.radiated['dJ/dt']
+        this.remnant['dP/dt'] = -this.radiated['dP/dt']
 
         # Use the initial J value to set the integration constant
         initial_index = 0 # index location where we expect the simulation data to NATURALLY start. For example, we expect that if the waveform data has been padded upon loading that this padding happens to the right of the data series, and not to the left.
@@ -5226,6 +5282,12 @@ class gwylm:
 
         this.remnant['S'] = this.remnant['J'] # The remnant has no orbital angular momentum. Is this right?
         this.remnant['P'] = -this.radiated['P'] # Assumes zero linear momentum at integration region start
+        
+        # # Define new 
+        # if True: # not ('Pf' in this.__dict__):
+        #     this.Pf = this.remnant['P'][-1]
+        #     alert('Defining new property "this.%s" to hold remnant linear momentum.'%(red('Pf')))
+        
         this.remnant['X'] = vstack([ this.remnant['J'][:,k]/(this.remnant['M']**2) for k in range(3) ]).T
         #
         if verbose: alert('Radiated quantities are stored to "this.radiated", and remnant quantities are stored to "this.remnant". Both are dictionaries.')
@@ -5250,33 +5312,48 @@ class gwylm:
         a = lambda l,m: sqrt( (l-m)*(l+m+1.0) ) / ( l*(l+1) )
         b = lambda l,m: (1.0/(2*l)) * sqrt( ( (l-2)*(l+2)*(l+m)*(l+m-1.0) )/( (2*l-1)*(2*l+1) ) )
         c = lambda l,m: m*2.0 / ( l*(l+1) )
-        d = lambda l,m: (1.0/l) * sqrt( (l-2)*(l+2)*(l-m)*(l+float(m))/( (2*l-1)*(2*l+1) ) )
+        d = lambda l,m: (1.0/l) * sqrt( (l-2.0)*(l+2)*(l-m)*(l+m)/( (2.0*l-1)*(2*l+1) ) )
 
-        # Define shorthand for accessing strain and news
+        # Define shorthand for accessing news
+        this.__curate__()
         f  = lambda l,m: this.lm[l,m]['news'].y   if (l,m) in this.lm else nothing
 
         # Sum over l,m ; NOTE that the overall scale factors will be applied later
         for l,m in this.lm:
             # Eq. 3.14
-            dPp += f(l,m) * ( a(l,m)*f(l,m+1).conj() + b(l,-m)*f(l-1,m+1).conj() - b(l+1,m+1)*f(l+1,m+1).conj() )
+            dPp += f(l,m) * ( a(l,m)*f(l,m+1).conj() \
+                            + b(l,-m)*f(l-1,m+1).conj() \
+                            - b(l+1,m+1)*f(l+1,m+1).conj() )
             # Eq. 3.15
-            dPz += f(l,m) * ( c(l,m)*f(l,m).conj() * d(l,m)*f(l-1,m).conj() + d(l+1,m)*f(l+1,m).conj() )
+            dPz += f(l,m) * ( c(l,m)*f(l,m).conj() \
+                            + d(l,m)*f(l-1,m).conj() \
+                            + d(l+1,m)*f(l+1,m).conj() )
 
         # Apply overall operations
-        dPp =  dPp.imag / ( 8*pi )
-        dPz =  dPz.imag / ( 16*pi )
+        dPp =  dPp / ( 8*pi )
+        dPz  =  dPz / ( 16*pi )
 
         # Unpack in-place linear momentum rate
-        dPx,dPy = dPp.real,dPp.imag
+        dPx = dPp_.real
+        # NOTE that the minus sign here is needed because of nrutils' m_relative_sign_convention (see also calc_coprecessing_angles in basics.py)
+        dPy = -dPp_.imag
 
         # Integrate to get angular momentum
         Px = spline_antidiff( this.t[mask],dPx[mask],k=3 )
         Py = spline_antidiff( this.t[mask],dPy[mask],k=3 )
         Pz = spline_antidiff( this.t[mask],dPz[mask],k=3 )
+        
+        #
+        this_lmax = max([ l for l,m in this.__lmlist__])
+        if this_lmax < 4:
+            warning( 'The current objects max ell value is %s, but we recommend a value of at least %s for accurate determination of radiated linear momentum.'%(red(str(this_lmax)),blue(str(4))) )
 
         #
+        diff_ans = vstack([dPx,dPy,dPz]).T
         ans = vstack([Px,Py,Pz]).T
-        return ans
+        # alert( this.P1+this.P2 )
+        ans = ans - ans[0] - (this.P1+this.P2)
+        return diff_ans,ans
 
     #
     def __calc_radiated_angular_momentum__(this,mask):
@@ -5304,15 +5381,17 @@ class gwylm:
             fmm1 = this.lm[l,m-1]['news'].y if (l,m-1) in this.lm else nothing
             # Eq. 3.22
             dJx += hlm * ( F(l,m)*fmp1.conj() + F(l,-m)*fmm1.conj() )
-            # Eq. 3.23
+            # Eq. 3.23 
             dJy += hlm * ( F(l,m)*fmp1.conj() - F(l,-m)*fmm1.conj() )
             # Eq. 3.24
             dJz += hlm * m * flm.conj()
 
         # Apply overall operations
-        dJx = dJx[mask].imag / ( 32*pi )
-        dJy = dJy[mask].real / ( 32*pi )
-        dJz = dJz[mask].imag / ( 16*pi )
+        # NOTE that Ruiz+ use a strange conevtion where Im(x+i y) = iy. We don't do that here.
+        dJx = -dJx[mask].imag / ( 32*pi )
+        # NOTE that there may be an erroneous minus sign in 3.23 of 0707.4654. This sign happens to be consistent with nrutils' m_relative_sign_convention, and amounds to a trivial negation in sign of the azimuthal angle
+        dJy = -dJy[mask].real / ( 32*pi )
+        dJz = -dJz[mask].imag / ( 16*pi )
 
         # Integrate to get angular momentum
         Jx = spline_antidiff( this.t[mask],dJx,k=5 )
@@ -5320,8 +5399,8 @@ class gwylm:
         Jz = spline_antidiff( this.t[mask],dJz,k=5 )
 
         #
-        ans   = -vstack([Jx,Jy,Jz]).T
-        d_ans = -vstack([dJx,dJy,dJz]).T
+        ans   = vstack([Jx,Jy,Jz]).T
+        d_ans = vstack([dJx,dJy,dJz]).T
         return ans,d_ans
 
     # Create hybrid multipoles

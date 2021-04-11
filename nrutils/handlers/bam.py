@@ -508,7 +508,7 @@ def infer_default_level_and_extraction_parameter( this,     # An scentry object
 
 
 #
-def learn_source_dynamics(scentry_object,dynamics_times,verbose=False):
+def learn_source_dynamics(scentry_object,dynamics_times,verbose=False,return_raw_data=False):
 
     '''
     Based on notebook by Jonathan Thompson, 2019self.
@@ -566,6 +566,10 @@ def learn_source_dynamics(scentry_object,dynamics_times,verbose=False):
     puncture_data_2,_ = smart_load( puncture_data_2_location )
     spin_data_1,_ = smart_load( spin_data_1_location )
     spin_data_2,_ = smart_load( spin_data_2_location )
+
+    #
+    if return_raw_data:
+        return puncture_data_1,puncture_data_2,spin_data_1,spin_data_2
 
     # Extract Puncture Locations
     R1_ = array( [  puncture_data_1[:,0],puncture_data_1[:,1],\

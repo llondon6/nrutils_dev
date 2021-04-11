@@ -1167,7 +1167,9 @@ def calc_coprecessing_angles(multipole_dict,       # Dict of multipoles { ... l,
 
     #################################################
     # Reflect Y according to nrutils conventions    #
-    Y *= -1                         #
+    # NOTE that this step is needed due to the      #
+    # m_relative_sign_convention                    #
+    Y *= -1                         
     #################################################
     if IS_FD:
         alert('The domain values seem evenly split between positive and negative values. Thus, we will interpret the input as corresponding to ' +
