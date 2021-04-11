@@ -2626,6 +2626,7 @@ class gwylm:
         this.__calc_radiated_quantities__(use_mask=False,enforce_initial_J_consistency=False)
         this.Pf = this.remnant['P'][-1]
         this.__scentry__.Pf = this.Pf
+        print this.Pf
 
 
     # Allow class to be indexed
@@ -5334,9 +5335,9 @@ class gwylm:
         dPz  =  dPz / ( 16*pi )
 
         # Unpack in-place linear momentum rate
-        dPx = dPp_.real
+        dPx = dPp.real
         # NOTE that the minus sign here is needed because of nrutils' m_relative_sign_convention (see also calc_coprecessing_angles in basics.py)
-        dPy = -dPp_.imag
+        dPy = -dPp.imag
 
         # Integrate to get angular momentum
         Px = spline_antidiff( this.t[mask],dPx[mask],k=3 )
@@ -5348,12 +5349,25 @@ class gwylm:
         if this_lmax < 4:
             warning( 'The current objects max ell value is %s, but we recommend a value of at least %s for accurate determination of radiated linear momentum.'%(red(str(this_lmax)),blue(str(4))) )
 
-        #
-        diff_ans = vstack([dPx,dPy,dPz]).T
-        ans = vstack([Px,Py,Pz]).T
-        # alert( this.P1+this.P2 )
-        ans = ans - ans[0] - (this.P1+this.P2)
-        return diff_ans,ans
+        # Vectorize momeuntum rate
+        dP = vstack([dPx,dPy,dPz]).T
+        
+        # Vectorize and offset momentum
+        P = vstack([Px,Py,Pz]).T
+        P = P - P[0] - (this.P1+this.P2)
+        
+        # Validate reality of z momentum
+        ImdPz = dPz.imag 
+        test_quantity = sum(abs(ImdPz))
+        if test_quantity>1e-6:
+            error('The z component of the radiated linear momentum has a non-trivial complex valued part of ~%s when it should not. Is there a bug?'%(red(str(test_quantity))))
+        
+        # Now that we have tested the reality of Pz, cast types as reals    
+        P = P.real 
+        dP = dP.real
+        
+        # Return answers
+        return dP,P
 
     #
     def __calc_radiated_angular_momentum__(this,mask):
