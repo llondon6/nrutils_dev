@@ -3973,7 +3973,7 @@ class gwylm:
 
 
     #
-    def __calc_j_of_t_frame__(this,verbose=None):
+    def __calc_j_of_t_frame__(this,initial_j=True,verbose=None):
 
         #
         from numpy.linalg import norm
@@ -3981,7 +3981,7 @@ class gwylm:
         from scipy.interpolate import InterpolatedUnivariateSpline as IUS
 
         #
-        this.__calc_radiated_quantities__(use_mask=False)
+        this.__calc_radiated_quantities__(use_mask=False,enforce_initial_J_consistency=initial_j)
 
         # get time series for radiated quantities
         t = this.remnant['time_used']
@@ -4572,10 +4572,10 @@ class gwylm:
                     fd_J_ = array( [fft(j) for j in J_.T] ).T
                     fd_L_ = array( [fft(l) for l in L_.T] ).T
                     fd_S_ = array( [fft(s) for s in S_.T] ).T
-                    freqs_needed = fftfreq( len(J), times_used[1]-times_used[0] )
+                    freqs_needed = fftfreq( len(J_), times_used[1]-times_used[0] )
                     a = spline( this.f, ifftshift( alpha ) )( freqs_needed )
                     b = spline( this.f, ifftshift( beta  ) )( freqs_needed )
-                    g = spline( this.f, ifftshift( gamm  ) )( freqs_needed )
+                    g = spline( this.f, ifftshift( gamma ) )( freqs_needed )
                     #
                     fd_J = array( [rotate3( fd_J_[k],a[k],b[k],g[k] ) for j in range(len(freqs_needed))] )
                     fd_L = array( [rotate3( fd_L_[k],a[k],b[k],g[k] ) for j in range(len(freqs_needed))] )

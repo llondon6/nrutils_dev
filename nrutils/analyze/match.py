@@ -153,7 +153,7 @@ class match:
         #-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-#
         # Import useful things
         #-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-#
-        from numpy import array,linspace,pi,mean,average,zeros,pi
+        from numpy import array,linspace,pi,mean,average,zeros,pi,ndarray
         if plot:
             from numpy import meshgrid
             import matplotlib.pyplot as pp
@@ -168,7 +168,10 @@ class match:
         #-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-*-#
         # Inclination
         et = 0.01
-        theta_range = linspace(et,pi-et,N_theta) if N_theta > 1 else array([pi/2])
+        if isinstance(N_theta, (list,ndarray)) and len(N_theta)>1:
+            theta_range = array(N_theta)
+        else:
+            theta_range = linspace(et,pi-et,N_theta) if N_theta > 1 else array([pi/2])
         # theta_range = linspace(0,pi,N_theta)
         # Signal polarization
         psi_signal_range = linspace(et,pi-et,N_psi_signal)
@@ -181,6 +184,7 @@ class match:
 
         # initialize lists
         min_match,avg_match,snr_avg_match,max_match = [],[],[],[]
+        min_snr,max_snr,avg_snr = [],[],[]
         quadrupole_min_match = []
         quadrupole_avg_match = []
         quadrupole_snr_avg_match = []
