@@ -123,6 +123,7 @@ class scconfig(smart_object):
             config_path = global_settings.config_path
             stale_config_name = this.config_file_location.split('/')[-1]
             fresh_config_file_location = expanduser( config_path + '/' + stale_config_name )
+            alert(fresh_config_file_location)
             # If the new config path exists, then store it and use it to reconfigure the current object
             if os.path.exists( fresh_config_file_location ):
                 this.config_file_location = fresh_config_file_location
@@ -275,7 +276,8 @@ class scentry:
             this.log += ' This entry\'s metadata file is valid.'
 
             # # i.e. learn the meta_data_file
-            # this.learn_metadata(); # raise(TypeError,'This line should only be uncommented when debugging.')
+            # this.learn_metadata(); 
+            # raise(TypeError,'This line should only be uncommented when debugging.')
             # this.label = sclabel( this )
 
             try:
@@ -874,7 +876,7 @@ def scsearch( catalog = None,           # Manually input list of scentry objects
 
     # Print non None inputs to screen
     thisfun = inspect.stack()[0][3]
-    if verbose is not None:
+    if verbose:
         for k in dir():
             if (eval(k) is not None) and (k != 'thisfun'):
                 # alert('Found %s keyword.' % (textul(k)) )
@@ -1079,7 +1081,7 @@ def scsearch( catalog = None,           # Manually input list of scentry objects
         from numpy import array
         # Let the people know
         if verbose:
-            warning('Applying remant fit to scentry objects. This should be done if the final mass and spin meta data are not trustworth. '+magenta('The fit being used only works for non-precessing systems.'))
+            warning('Applying remant fit to scentry objects. This should be done if the final mass and spin meta data are not trustworthy. '+magenta('The fit being used only works for non-precessing systems.'))
         #
         for e in catalog:
             #e.mf,e.xf = Mf14067295(e.m1,e.m2,e.X1[-1],e.X2[-1]),jf14067295(e.m1,e.m2,e.X1[-1],e.X2[-1])
@@ -1389,6 +1391,13 @@ class gwf:
         else:
             msg = 'unhandled waveform array configuration: input wfarr is %s and this.wfarr is %s'%(wfarr,this.wfarr)
             error(msg,'gwf.setfields')
+
+        #
+        from numpy import ndarray
+        if not isinstance(wfarr,ndarray):
+            error('wfarr (waveform array) must be numpy ndarray object')
+        if len(wfarr.flatten())==0:
+            error('empty waveform array given')
 
         # If given dt, then interpolote waveform array accordingly
         wfarr = straighten_wfarr( wfarr, this.verbose )
@@ -2211,10 +2220,6 @@ class gwf:
         that = this.copy()
 
         #
-        if transform_domain is None:
-            transform_domain = 'td'
-
-        #
         allowed_transform_domains = ('td','fd')
         if not ( transform_domain.lower() in allowed_transform_domains ):
             error('Transform domain must be in %s'%str(allowed_transform_domains))
@@ -2239,9 +2244,31 @@ class gwf:
             that.raw_transformed_fd_wfarr = rotated_wfarr.copy()
             f,fd_p,fd_c = rotated_wfarr.T
             t     = this.t
-            td_re = ifft(ifftshift( fd_p )).real * this.df*this.n
-            td_im = ifft(ifftshift( fd_c )).real * this.df*this.n
-            # td_im *= -1 # NOTE that here we introduce a minus sign. There appears to be a step in rotate_wfarrs_at_all_times which assumes that input multipoles are real?
+
+            ## DIAGNOSTIC PLOTTING
+            # if (this.l,this.m)==(2,2):
+            #     alert('diagnostic plotting for '+red(this.kind)+': ')
+            #     from matplotlib.pyplot import plot,show,loglog,xscale,yscale
+            #     from numpy import sqrt
+            #     ff = abs(f)
+            #     loglog(ff,abs(fd_p+1j*fd_c))
+            #     show()
+
+            # the FD rotation introduces a non-trivial phase shift
+            # that results in a complex term in the TD polarizations
+            # which must be included. As a result, the code below can be incorrect:
+            # td_re = ifft(ifftshift( fd_p )).real * this.df*this.n
+            # td_im = ifft(ifftshift( fd_c )).real * this.df*this.n
+
+            # And the correct code is
+            td_re_temp = ifft(ifftshift( fd_p )) * this.df*this.n
+            td_im_temp = ifft(ifftshift( fd_c )) * this.df*this.n
+            td_y = td_re_temp + 1j*td_im_temp
+
+            # Where the real valued polarizations are polarizations
+            td_re = td_y.real
+            td_im = td_y.imag
+
             rotated_wfarr = array( [t,td_re,td_im], dtype=float ).T
             # NOTE that there can be an overall time shift at this stage
 
@@ -2325,7 +2352,7 @@ class gwylm:
     '''
 
     # Class constructor
-    def __init__( this,scentry_obj, lm=None, lmax=None, dt=0.15, load=None, clean=None, extraction_parameter=None, level=None, w22=None, lowpass=None, calcstrain=None, calcnews=None, enforce_polarization_convention=None, fftfactor=None, pad=None, __M_RELATIVE_SIGN_CONVENTION__=None, initial_j_align=None, load_dynamics=True,mutipole_dictionary=None, verbose=None, wfarr_dict=None, enforce_m_relative_sign_convention=True ):
+    def __init__( this,scentry_obj, lm=None, lmax=None, dt=0.15, load=None, clean=None, extraction_parameter=None, level=None, w22=None, lowpass=None, calcstrain=None, calcnews=None, enforce_polarization_convention=None, fftfactor=None, pad=None, __M_RELATIVE_SIGN_CONVENTION__=None, initial_j_align=None, load_dynamics=True,use_tortoise_for_dynamics=False,mutipole_dictionary=None, verbose=None, wfarr_dict=None, enforce_m_relative_sign_convention=True ):
 
         '''
 
@@ -2354,6 +2381,7 @@ class gwylm:
         __M_RELATIVE_SIGN_CONVENTION__ = None,
         initial_j_align = None,           # Toggle for putting wabeform in frame where initial J is z-hat
         load_dynamics = True, # Toggle for loading timeseries for L,S,J from dynamics
+        use_tortoise_for_dynamics = False, # Toggle between tortoise coordinate and flat extraction radius for retarded time mapping between dynamics and waveform frames
         verbose               = None ):   # be verbose
 
         OUTPUT
@@ -2407,7 +2435,7 @@ class gwylm:
         this.verbose = verbose
 
         #
-        this.frame = 'initial-simulation'
+        this.frame = 'raw-simulation'
 
         # #
         # if fftfactor is None:
@@ -2465,11 +2493,13 @@ class gwylm:
             else:
                 this.level = this.extraction_parameter
 
+        # Store flag for tortoise coordinate
+        this.use_tortoise_for_dynamics = use_tortoise_for_dynamics
         # Store the extraction radius if a map is provided in the handler file
         if 'loadhandler' in scentry_obj.__dict__:
             special_method,handler = 'extraction_map',scentry_obj.loadhandler()
             if special_method in handler.__dict__:
-                this.extraction_radius = handler.__dict__[special_method]( scentry_obj, this.extraction_parameter )
+                this.extraction_radius = handler.__dict__[special_method]( scentry_obj, this.extraction_parameter, verbose=verbose )
             else:
                 this.extraction_radius = None
 
@@ -2547,7 +2577,7 @@ class gwylm:
         # Populate a dictionary which contains the time series for source dynamics
         if load_dynamics:
             waveform_times = this.t[ (this.t>this.t[this.startindex]) & (this.t<this[2,2]['psi4'].intrp_t_amp_max) ]
-            this.load_dynamics(verbose=True,waveform_times=waveform_times)
+            this.load_dynamics(verbose=verbose,waveform_times=waveform_times)
 
 
     # Allow class to be indexed
@@ -2567,7 +2597,6 @@ class gwylm:
         return this.lm[index]
     # Allow "in" to look for l,m content
     def __contains__(this,query):
-        print query
         return query in this.__lmlist__
     # Allow class to be iterable as its __lmlist__
     def __iter__(this):
@@ -2692,10 +2721,10 @@ class gwylm:
 
 
     #
-    def plot_3d_trajectory(this,ax=None,view=None):
+    def plot_3d_trajectory(this,ax=None,view=None,fig_scale=1,show_initials=True,legend_on=False,normalize=True):
 
         #
-        from numpy import sin,cos,linspace,ones_like,array,pi,max,sqrt
+        from numpy import sin,cos,linspace,ones_like,array,pi,max,sqrt,linalg
         from mpl_toolkits.mplot3d import Axes3D
         from matplotlib.pyplot import figure,plot,figaspect,text,axis
 
@@ -2706,20 +2735,26 @@ class gwylm:
         #
         if not 'dynamics' in this.__dict__:
             warning('Dynamics must be loaded in order to plot 3D trajectories. We will now load dynamics for you using "this.load_dynamics()"')
-            this.load_dynamics()
+            #this.load_dynamics()
 
-        # Collect compoenents 1
-        x1,y1,z1 = this.dynamics['R1'].T
-        max_r1 = max(sqrt( x1**2 + y1**2 + z1**2 ))
-        x1,y1,z1 = [ v/max_r1 for v in (x1,y1,z1) ]
+        # Collect compoenents
+        if 'dynamics' in this.__dict__:
 
-        # Collect compoenents 2
-        x2,y2,z2 = this.dynamics['R2'].T
-        max_r2 = max(sqrt( x2**2 + y2**2 + z2**2 ))
-        x2,y2,z2 = [ v/max_r2 for v in (x2,y2,z2) ]
+            # Collect compoenents 1
+            x1,y1,z1 = this.dynamics['R1'].T
+            max_r1 = max(sqrt( x1**2 + y1**2 + z1**2 ))
+
+            # Collect compoenents 2
+            x2,y2,z2 = this.dynamics['R2'].T
+            max_r2 = max(sqrt( x2**2 + y2**2 + z2**2 ))
+
+            # Normalize
+            max_r = max( [max_r1, max_r2] )
+            x2,y2,z2 = [ v/(max_r if normalize else max_r2) for v in (x2,y2,z2) ]
+            x1,y1,z1 = [ v/(max_r if normalize else max_r1) for v in (x1,y1,z1) ]
 
         if ax is None:
-            fig = figure( figsize=4*figaspect(1) )
+            fig = figure( figsize=fig_scale*4*figaspect(1) )
             ax = fig.add_subplot(111,projection='3d')
 
         plot_3d_mesh_sphere( ax, color='k', alpha=0.025, lw=1, axes_alpha=0.1 )
@@ -2741,7 +2776,7 @@ class gwylm:
             masks = []; startdex,enddex = 0,nmask_len
             for k in range(nmasks):
                 masks.append( range( startdex, enddex ) )
-                startdex=enddex
+                startdex=enddex-1 # No gaps
                 enddex = enddex+nmask_len
                 if k+1 == nmasks-1:
                     enddex = len(xx)
@@ -2760,7 +2795,36 @@ class gwylm:
         alpha_plot_trajectory(x1,y1,z1,color=traj1_color,lw=1,label=r'$\vec{R}_1$')
         alpha_plot_trajectory(x2,y2,z2,color=traj2_color,lw=1,label=r'$\vec{R}_2$')
 
-        ax.legend()
+        # Show other initial quantities
+        if show_initials:
+
+            eps = 0.0
+            ts = 10
+            ta = 0.3
+
+            def plotpoint(vec,label,note,marker='o',s=20,color='g',mfc='none',va='bottom',ha='right'):
+                foo = vec/linalg.norm(vec)
+                ax.scatter( foo[0], foo[1], foo[2],  label=label, color=color, marker=marker, s=s, facecolor=mfc )
+                ax.text(foo[0]+eps, foo[1]+eps, foo[2],note,alpha=ta,verticalalignment=va,ha=ha,size=ts)
+
+            foo = this.J
+            plotpoint(foo,r'Initial J (BBH)','J-initial',marker='o',color='g',s=20)
+
+            foo = this.L
+            plotpoint(foo,r'Initial L (BBH)','L-initial',marker='s',color='m',s=20)
+
+            foo = this.dynamics['J'][0]
+            if linalg.norm(foo):
+                plotpoint(foo, r'Initial J (Dynamics)', '',
+                        marker='x', color='g', s=20, mfc=None)
+
+            foo = this.dynamics['L'][0]
+            plotpoint(foo,r'Initial L (Dynamics)','',marker='x',color='m',s=20,mfc=None)
+
+            ax.text(x1[0],y1[0],z1[0],'$R_1$',alpha=ta,ha='right',va='bottom',size=ts)
+            ax.text(x2[0],y2[0],z2[0],'$R_2$',alpha=ta,ha='right',va='bottom',size=ts)
+
+        if legend_on: ax.legend()
         axlim = 0.64*array([-1,1])
         ax.set_xlim(axlim)
         ax.set_ylim(axlim)
@@ -2773,7 +2837,7 @@ class gwylm:
 
 
     #
-    def __plot_3d_quantity__(this,key,ax=None,view=None,color=None):
+    def __plot_3d_quantity__(this,key,ax=None,view=None,color=None,mask=None):
 
         #
         from numpy import sin,cos,linspace,ones_like,array,pi,max,sqrt,linalg
@@ -2787,12 +2851,23 @@ class gwylm:
         #
         if not 'dynamics' in this.__dict__:
             warning('Dynamics must be loaded in order to plot 3D trajectories. We will now load dynamics for you using "this.load_dynamics()"')
-            this.load_dynamics()
+            waveform_times = this.t[ (this.t>this.t[this.startindex]) & (this.t<this[2,2]['psi4'].intrp_t_amp_max) ]
+            this.load_dynamics(waveform_times=waveform_times)
 
         # Collect components
-        x1,y1,z1 = this.dynamics[key].T
-        r1 = linalg.norm( this.dynamics[key] ,axis=1 )
-        x1,y1,z1 = [ v/r1 for v in (x1,y1,z1) ]
+        if 'dynamics' in this.__dict__:
+            x1,y1,z1 = this.dynamics[key].T
+            r1 = linalg.norm( this.dynamics[key] ,axis=1 )
+            x1,y1,z1 = [ v/r1 for v in (x1,y1,z1) ]
+        else:
+            error('Dynamics not loaded.')
+
+        # Initialize mask if needed
+        if mask is None:
+            mask = range(0,len(x1))
+
+        # Apply mask
+        x1,y1,z1 = [ k[mask] for k in (x1,y1,z1) ]
 
         if ax is None:
             fig = figure( figsize=4*figaspect(1) )
@@ -2833,8 +2908,8 @@ class gwylm:
                 plot_single_trajectory(xx[mask],yy[mask],zz[mask],color=color,alpha=alpha,lw=lw,plot_start=plot_start,plot_end=plot_end,label=label if (plot_end or plot_start) else None)
 
 
-
-        alpha_plot_trajectory(x1,y1,z1,color=color,lw=1,label=r'$\vec{%s}$'%key)
+        if 'dynamics' in this.__dict__:
+            alpha_plot_trajectory(x1,y1,z1,color=color,lw=1,label=r'$\vec{%s}$'%key)
 
         ax.legend()
         axlim = 0.64*array([-1,1])
@@ -2847,36 +2922,104 @@ class gwylm:
 
         return ax
 
+    #
+    def __symmetrize__(this,verbose=False):
+
+        #
+        from numpy import array
+
+        #
+        kinds = this[2,2].keys()
+
+        #
+        alert('Symmetrising multipole moments in: %s'%magenta(this.simname),verbose=verbose, header=True)
+
+        #
+        if not ('cp' in this.frame):
+            warning('WE ARE BORG. You have asked us to symmetrise in a frame'+' (%s)'%red(str(this.frame))+' that is not co-precessing. If the system is precessing, or generally not in an L-aligned frame, then using this function will result in nonsense. We are sorry for this unavoidable reality. RESISTANCE IS FUTILE.')
+
+        #
+        select_lm = [ (l,m) for l,m in this.__lmlist__ if m>=0 ]
+
+        #
+        that = this.copy()
+        transform = lambda X,L,M: ((-1)**(L+M)) * X.conj()
+
+        #
+        for kind in kinds:
+
+            #
+            alert('Symmetrising %s'%red(kind),verbose=verbose)
+
+            #
+            for l,m in select_lm:
+
+                #
+                y_positive = this[l,+m][kind].y
+                y_negative = this[l,-m][kind].y
+
+                #
+                y_transformed_negative = transform(y_negative,l,m)
+
+                #
+                y_symmetric_positive = 0.5 * ( y_positive + y_transformed_negative )
+                y_symmetric_negative = transform(y_symmetric_positive,l,m)
+
+                #
+                wfarr = array( [this.t,y_symmetric_positive.real,y_symmetric_positive.imag] ).T
+                that[l,+m][kind].setfields( wfarr=wfarr )
+
+                #
+                wfarr = array( [this.t,y_symmetric_negative.real,y_symmetric_negative.imag] ).T
+                that[l,-m][kind].setfields( wfarr=wfarr )
+
+        #
+        return that
 
     #
-    def plot_3d_S(this,ax=None,view=None,color='#0392ff'):
+    def plot_3d_S(this,ax=None,view=None,color='#0392ff',mask=None):
         '''Plot total spin S on the sphere'''
         #
-        return this.__plot_3d_quantity__('S',ax=ax,view=view,color=color)
+        return this.__plot_3d_quantity__('S',ax=ax,view=view,color=color,mask=mask)
 
     #
-    def plot_3d_L(this,ax=None,view=None,color='#ff1c03'):
+    def plot_3d_L(this,ax=None,view=None,color='#ff1c03',mask=None):
         '''Plot total orbital angular momentum L on the sphere'''
         #
-        return this.__plot_3d_quantity__('L',ax=ax,view=view,color=color)
+        return this.__plot_3d_quantity__('L',ax=ax,view=view,color=color,mask=mask)
 
     #
-    def plot_3d_J(this,ax=None,view=None,color='k'):
+    def plot_3d_J(this,ax=None,view=None,color='k',mask=None):
         '''Plot total angular momentum J on the sphere'''
         #
-        return this.__plot_3d_quantity__('J',ax=ax,view=view,color=color)
+        return this.__plot_3d_quantity__('J',ax=ax,view=view,color=color,mask=mask)
 
     #
-    def plot_3d_dynamics(this,ax=None,view=None,color='k'):
+    def plot_3d_dynamics(this,ax=None,view=None,color='k',verbose=True):
         ''' Plot L,J S on the sphere '''
-        from matplotlib.pyplot import Rectangle
+
+        # Import usefuls
+        from matplotlib.pyplot import Rectangle,plot,show
+        from numpy.linalg import norm
         if view is None: view=[30,-60]
-        if ax is None:
-            ax = this.plot_3d_S(view=view)
+
+        # Determine mask for meaningful values
+        if sum(norm(this.dynamics['S'],axis=1)):
+            test_quantity = norm( this.dynamics['S']-this.dynamics['J'], axis=1 ) / norm( this.dynamics['J'], axis=1 )
+            mask = test_quantity > 1e-2
+            warning(red('Note')+' that values are masked to hide post-merger noise, but there may be physical data hidden as well. Plot quantities manually if further verification is desired.',verbose=verbose)
         else:
-            this.plot_3d_S(ax,view=view)
-        this.plot_3d_L(ax,view=view)
-        this.plot_3d_J(ax,view=view,color='k')
+            mask = None
+
+        #
+        if ax is None:
+            ax = this.plot_3d_S(view=view,mask=mask)
+        else:
+            this.plot_3d_S(ax,view=view,mask=mask)
+        this.plot_3d_L(ax,view=view,mask=mask)
+        this.plot_3d_J(ax,view=view,mask=mask,color='k')
+
+        #
         return ax
 
     # Wrapper for core load function. NOTE that the extraction parameter input is independent of the usage in the class constructor.
@@ -2934,13 +3077,13 @@ class gwylm:
     def extraction_radius(this):
         ''' Return the current object's extraction radius'''
         return this.__r__()
-    def __r__(this,extraction_parameter=None):
+    def __r__(this,extraction_parameter=None,r_for_scaling=False,verbose=False):
         #
         if extraction_parameter!=None:
-            # return the exctraction radius for a specific extraction parameter
-            return this.__scentry__.loadhandler().extraction_map(this,extraction_parameter)
+            # return the exctraction radius for a specific extraction parameter.
+            return this.__scentry__.loadhandler().extraction_map(this,extraction_parameter,verbose=verbose)
         else:
-            # return the extractoin radius of the current object
+            # return the extraction radius of the current object
             return this.extraction_map_dict['radius_map'][this.extraction_parameter]
 
     # load the waveform data
@@ -2997,7 +3140,15 @@ class gwylm:
         if level is None:
             # Use the default value
             level = this.level
-            if verbose: alert('Using the '+cyan('default')+' level of %g' % level)
+            # if level in this.__dict__:
+            #     level = this.level
+            # else:
+            #     if len(this.config.default_par_list):
+            #         this.level = this.config.default_par_list[1]
+            #         level = this.level
+            #     else:
+            #         error('The config object for the current catalog entry is improperly formatted. Please try recompiling the related catalof using sc_build in nrsc.py')
+            # if verbose: alert('Using the '+cyan('default')+' level of %g' % level)
         else:
             # Use the input value
             this.level = level
@@ -3039,7 +3190,7 @@ class gwylm:
             # Handle extraction radius scaling
             if not this.config.is_rscaled:
                 # If the data is not in the format r*Psi4, then multiply by r (units M) to make it so
-                extraction_radius = this.__r__(extraction_parameter)
+                extraction_radius = this.__r__(extraction_parameter,r_for_scaling=True)
                 wfarr[:,1:3] *= extraction_radius
 
             # Fix nans, nonmonotinicities and jumps in time series waveform array
@@ -3711,6 +3862,12 @@ class gwylm:
 
         # Create a dictionary representation of the mutlipoles
         that.__curate__()
+        
+        # Use df input to determine pad length 
+        if df:
+            N = int( 1.0 / ( that.dt * df ) )
+            that.pad( N )
+        
 
         #
         return that
@@ -3808,7 +3965,7 @@ class gwylm:
 
         if this.M_RELATIVE_SIGN_CONVENTION != this.external_sign_convention:
             # Let the people know what is happening.
-            msg = yellow('[Verify stage] Re-orienting waveform phase')+' to be consistent with internal sign convention for Psi4, where sign(dPhi/dt)=%i*sign(m)*sign(this.L[-1]).' % this.M_RELATIVE_SIGN_CONVENTION + ' Note that the internal sign convention is defined in ... nrutils/core/__init__.py as "M_RELATIVE_SIGN_CONVENTION". This message has appeared becuase the waveform is determined to obey and sign convention: sign(dPhi/dt)=%i*sign(m)*sign(this.L[-1]). Note the appearance of the initial z angular momentum, this.L[-1].'%(this.external_sign_convention)
+            msg = yellow('[Verify stage] Re-orienting waveform phase')+' to be consistent with internal sign convention for Psi4, where sign(dPhi/dt)=%i*sign(m)*sign(this.L[-1]).' % this.M_RELATIVE_SIGN_CONVENTION + ' Note that the internal sign convention is defined in ... nrutils/core/__init__.py as "M_RELATIVE_SIGN_CONVENTION". This message has appeared becuase the waveform is determined to obey a sign convention: sign(dPhi/dt)=%i*sign(m)*sign(this.L[-1]). Note the appearance of the initial z angular momentum, this.L[-1].'%(this.external_sign_convention)
             thisfun=inspect.stack()[0][3]
             warning( msg, verbose=this.verbose )
             #
@@ -3884,25 +4041,7 @@ class gwylm:
         return ans
 
     #
-    def getframe(this,frame_type,verbose=None,domain=None):
-
-        #
-        if domain is None: domain = 'time'
-
-        #
-        if not (domain in ('t','time')):
-            error('this method only handles time domain frames for the time being')
-
-        #
-        valid_frames = ('coprecessing','cp','jt','jinit')
-
-        #
-        if not (frame_type in valid_frames):
-            error( 'invalid/unknown frame type given' )
-
-
-    #
-    def __calc_initial_j_frame__(this,verbose=False):
+    def __calc_initial_j_frame__(this,use_dynamics=False,verbose=False):
         '''
         Rotate multipoles such that initial J is parallel to z-hat
         '''
@@ -3911,9 +4050,10 @@ class gwylm:
         from numpy import arccos,arctan2,array,linalg,cos,sin,dot,zeros,ones
         from scipy.interpolate import InterpolatedUnivariateSpline as IUS
 
+        J = this.J.copy()
         J_norm = linalg.norm(this.J)
-        thetaJ = arccos(this.J[2]/J_norm)
-        phiJ   = arctan2(this.J[1],this.J[0])
+        thetaJ = arccos(J[2]/J_norm)
+        phiJ   = arctan2(J[1],J[0])
 
         # Define gamma and beta accordingly
         beta  = -thetaJ
@@ -3921,6 +4061,7 @@ class gwylm:
 
         # Define zeta0 (i.e. -alpha) such that L is along the y-z plane at the initial time step
         L_new = rotate3 ( this.L1 + this.L2, 0, beta , gamma )
+
         zeta0 = arctan2( L_new.T[1], L_new.T[0] )
         alpha = -zeta0
 
@@ -3931,7 +4072,7 @@ class gwylm:
         that = this.__rotate_frame_at_all_times__(angles,verbose=verbose)
 
         #
-        that.frame = 'J-initial'
+        that.frame = 'J-initial('+('dyn' if use_dynamics else 'bbh')+')'
 
         #
         return that
@@ -3973,15 +4114,16 @@ class gwylm:
 
 
     #
-    def __calc_j_of_t_frame__(this,initial_j=True,verbose=None):
+    def __calc_j_of_t_frame__(this,verbose=None,use_mask_and_preserve_length=False,enforce_initial_J_consistency=True):
 
         #
         from numpy.linalg import norm
-        from numpy import arccos,arctan2,array,cos,sin,dot,zeros,ones
+        from numpy import arccos,arctan2,array,cos,sin,dot,zeros,ones,zeros_like, unwrap
         from scipy.interpolate import InterpolatedUnivariateSpline as IUS
 
         #
-        this.__calc_radiated_quantities__(use_mask=False,enforce_initial_J_consistency=initial_j)
+        use_mask = use_mask_and_preserve_length
+        this.__calc_radiated_quantities__(use_mask=use_mask,enforce_initial_J_consistency=enforce_initial_J_consistency)
 
         # get time series for radiated quantities
         t = this.remnant['time_used']
@@ -3994,6 +4136,8 @@ class gwylm:
         for k in range ( len(J_norm) ):
             thetaJ[k] = arccos(J[k,2]/J_norm[k])
             phiJ[k]   = arctan2(J[k,1],J[k,0])
+
+        phiJ = unwrap(phiJ)
         #
         phiJ_spl  = IUS(t, phiJ, k=5)
         dp_dt_spl = phiJ_spl.derivative()
@@ -4010,8 +4154,26 @@ class gwylm:
         gamma = -phiJ
         # Define alpha such that initial L is aling x
         L_new = rotate3 ( this.L1 + this.L2, 0, beta[0], gamma[0] )
+
         zeta0 = arctan2( L_new.T[1], L_new.T[0] )
         alpha = -( zeta - zeta[0] + zeta0 )
+        
+        #
+        if use_mask_and_preserve_length:
+            _alpha = zeros_like(this.t)
+            _beta  = zeros_like(this.t)
+            _gamma = zeros_like(this.t)
+            tmin,tmax = lim(t)
+            mask = (this.t>=tmin) & (this.t<=tmax)
+            _alpha[mask] = alpha
+            _beta[mask]  = beta
+            _gamma[mask] = gamma
+            alpha, beta, gamma = _alpha, _beta, _gamma
+            # print(sum(mask),len(t))
+            # print(this.t[0])
+            # print(t[0])
+            # print(find(t[0]==this.t[0]))
+            # error('function under modification')
 
         # Bundle rotation angles
         angles = [ alpha, beta, gamma ]
@@ -4020,7 +4182,7 @@ class gwylm:
         that = this.__rotate_frame_at_all_times__(angles,verbose=verbose)
 
         #
-        that.frame = 'J(t)'
+        that.frame = 'j-of-t'
 
         #
         that.__calc_radiated_quantities__(use_mask=False)
@@ -4031,7 +4193,7 @@ class gwylm:
 
 
     # output corotating waveform
-    def __calc_coprecessing_frame__(this,safe_domain_range=None,verbose=None,transform_domain=None,__format__=None,ref_orientation=None):
+    def __calc_coprecessing_frame__(this,safe_domain_range=None,verbose=None,transform_domain=None,__format__=None,ref_orientation=None,kind=None,plot=False):
 
         '''
         Output gwylm object in coprecessing frame, where the optimal emission axis is always along z
@@ -4045,12 +4207,29 @@ class gwylm:
 
         #
         if transform_domain is None:
-            transform_domain = 'td'
+            error('The '+bold(blue('transform_domain'))+' keyword must be set by the user to "td" or "fd".')
+        if kind is None:
+            error('The '+bold(blue('kind'))+' keyword must be set by the user to "strain", "psi4" or "news".')
+
+        #
+        if 'J-initial' not in this.frame:
+            warning('calculating the co-precessing frame in a non-initial J frame is prone to errors. please consider placing your gwylm object in a frame where J is initially along z-hat via gwylmo.__calc_initial_j_frame__()')
 
         #
         if ref_orientation is None:
             ref_orientation = this.L
 
+        #
+        if not (kind in ('psi4', 'strain', 'news')):
+            error('The kind keyword input must be in ("psi4","strain","news"), but ' +
+                  red(str(kind))+' found.')
+
+        #
+        if not( transform_domain in ('td','fd') ):
+            error('transform_domain keyword value must be in ("td","fd") but '+red(bold(str(transform_domain)))+' found.')
+
+        #
+        if verbose: alert('We will use '+yellow(kind)+' to compute the co-precessing frame.')
         #
         allowed_transform_domains = ('td','fd')
         if not ( transform_domain.lower() in allowed_transform_domains ):
@@ -4060,10 +4239,14 @@ class gwylm:
 
         #
         if safe_domain_range is None:
-            safe_domain_range=[0.009,0.3]
+            safe_domain_range=[0.009,0.1]
 
         #
-        foo = gwylm_radiation_axis_workflow(this,plot=False,save=False,verbose=verbose,safe_domain_range=safe_domain_range,__format__=__format__,ref_orientation=ref_orientation)
+        foo = gwylm_radiation_axis_workflow(this,plot=False,save=False,verbose=False,safe_domain_range=safe_domain_range,__format__=__format__,ref_orientation=ref_orientation,kind=kind,domain=transform_domain)
+
+        #
+        if plot:
+            foo.plot()
 
         #
         if verbose: alert('Storing radiation axis information to this.radiation_axis_info')
@@ -4077,6 +4260,9 @@ class gwylm:
         #
         that = this.__rotate_frame_at_all_times__( [-gamma,-beta,-alpha], transform_domain=transform_domain )
         that.previous_radiation_axis_info = foo
+
+        #
+        that.frame = transform_domain.lower()+'-cp-'+kind
 
         #
         return that
@@ -4452,7 +4638,12 @@ class gwylm:
         if not ( transform_domain.lower() in allowed_transform_domains ):
             error('Transform domain must be in %s'%str(allowed_transform_domains))
         else:
-            alert( 'Transforming to the coprecessing frame using %s angles.'%yellow(transform_domain.upper()),verbose=verbose )
+            alert( 'Transforming frame using %s angles.'%yellow(transform_domain.upper()),verbose=verbose )
+
+        #
+        transform_is_td_but_complex_angles_given = (transform_domain.lower()=='td') and sum( abs(array(euler_alpha_beta_gamma).flatten().imag) ) > 0
+        if transform_is_td_but_complex_angles_given:
+            error('Transform domain is TD but complex angles have been input.')
 
 
         # Perform roations for all kinds
@@ -4524,13 +4715,17 @@ class gwylm:
             warning('Note that metadata vectors for initial data will be rotated according to positive frequency angles.')
             end_index = find(that.f >= that.lm[2,2]['psi4'].dt/4)[0]
         else:
-            start_index = 0
-            end_index = -1
+            if angles_are_arrays:
+                start_index = this.startindex+1
+                end_index = this.endindex+1
+            else:
+                start_index = 0
+                end_index = -1
 
-        # print start_index,end_index
+
+        # R = lambda X,k: rotate3( X, a[k], b[k], g[k] )
         R = lambda X,k: rotate3( X, alpha[k], beta[k], gamma[k] )
         that.Sf = R( this.Sf, end_index ); that.Xf = R( this.Xf, end_index )
-
         # * initial spins
         that.S1 = R( this.S1, start_index ); that.S2 = R( this.S2, start_index )
         that.X1 = R( this.X1, start_index ); that.X2 = R( this.X2, start_index )
@@ -4539,7 +4734,7 @@ class gwylm:
         # * initial positions / position time series / maybe velocities
         that.R1 = R( this.R1, start_index ); that.R2 = R( this.R2, start_index )
         # * others
-        that.S = R( this.S, start_index ); that.J = R( this.J, start_index );
+        that.S = R( this.S, start_index ); that.J = R( this.J, start_index )
         that.L = R( this.L, start_index )
 
         # If source dynamics time series is stored, then rotate that too
@@ -4551,48 +4746,112 @@ class gwylm:
             J_ = this.dynamics['J'].copy()
             L_ = this.dynamics['L'].copy()
             S_ = this.dynamics['S'].copy()
+
+            L1_ = this.dynamics['L1'].copy()
+            L2_ = this.dynamics['L2'].copy()
+            R1_ = this.dynamics['R1'].copy()
+            R2_ = this.dynamics['R2'].copy()
+            S1_ = this.dynamics['S1'].copy()
+            S2_ = this.dynamics['S2'].copy()
+
             if not angles_are_arrays:
                 #
                 # print J.shape, len(J.T), alpha
-                J = array([rotate3( j, alpha[0],beta[0],gamma[0]) for j in J_])
-                L = array([rotate3( l, alpha[0],beta[0],gamma[0]) for l in L_])
-                S = array([rotate3( s, alpha[0],beta[0],gamma[0]) for s in S_])
+                J = array([rotate3(j, alpha[0], beta[0], gamma[0])
+                           for j in J_])
+                L = array([rotate3(l, alpha[0], beta[0], gamma[0])
+                           for l in L_])
+                S = array([rotate3(s, alpha[0], beta[0], gamma[0])
+                           for s in S_])
+
+                L1 = array([rotate3(j, alpha[0], beta[0], gamma[0])
+                            for j in L1_])
+                L2 = array([rotate3(l, alpha[0], beta[0], gamma[0])
+                            for l in L2_])
+                S1 = array([rotate3(s, alpha[0], beta[0], gamma[0])
+                            for s in S1_])
+                S2 = array([rotate3(s, alpha[0], beta[0], gamma[0])
+                            for s in S2_])
+                R1 = array([rotate3(s, alpha[0], beta[0], gamma[0])
+                            for s in R1_])
+                R2 = array([rotate3(s, alpha[0], beta[0], gamma[0])
+                            for s in R2_])
             else:
                 #
-                if transform_domain=='td':
-                    a = spline( this.t, alpha )( times_used )
-                    b = spline( this.t, beta  )( times_used )
-                    g = spline( this.t, gamma )( times_used )
-                    J = array( [rotate3( J_[k],a[k],b[k],g[k] ) for j in range(len(J_[:,0]))] )
-                    L = array( [rotate3( L_[k],a[k],b[k],g[k] ) for j in range(len(L_[:,0]))] )
-                    S = array( [rotate3( S_[k],a[k],b[k],g[k] ) for j in range(len(S_[:,0]))] )
+                if transform_domain == 'td':
+                    a = spline(this.t, alpha)(times_used)
+                    b = spline(this.t, beta)(times_used)
+                    g = spline(this.t, gamma)(times_used)
+                    J = array([rotate3(J_[k], a[k], b[k], g[k])
+                               for k in range(len(J_[:, 0]))])
+                    L = array([rotate3(L_[k], a[k], b[k], g[k])
+                               for k in range(len(L_[:, 0]))])
+                    S = array([rotate3(S_[k], a[k], b[k], g[k])
+                               for k in range(len(S_[:, 0]))])
+
+                    R1 = array([rotate3(R1_[k], a[k], b[k], g[k])
+                                for k in range(len(R1_[:, 0]))])
+                    R2 = array([rotate3(R2_[k], a[k], b[k], g[k])
+                                for k in range(len(R2_[:, 0]))])
+                    S1 = array([rotate3(S1_[k], a[k], b[k], g[k])
+                                for k in range(len(S1_[:, 0]))])
+                    S2 = array([rotate3(S2_[k], a[k], b[k], g[k])
+                                for k in range(len(S2_[:, 0]))])
+                    L1 = array([rotate3(L1_[k], a[k], b[k], g[k])
+                                for k in range(len(L1_[:, 0]))])
+                    L2 = array([rotate3(L2_[k], a[k], b[k], g[k])
+                                for k in range(len(L2_[:, 0]))])
                 else:
-                    #error('this path (rotating time domain dynamics with FD angles) must be avoided for now')
-                    from scipy.fftpack import fft,ifftshift,ifft,fftfreq
-                    fd_J_ = array( [fft(j) for j in J_.T] ).T
-                    fd_L_ = array( [fft(l) for l in L_.T] ).T
-                    fd_S_ = array( [fft(s) for s in S_.T] ).T
-                    freqs_needed = fftfreq( len(J_), times_used[1]-times_used[0] )
-                    a = spline( this.f, ifftshift( alpha ) )( freqs_needed )
-                    b = spline( this.f, ifftshift( beta  ) )( freqs_needed )
-                    g = spline( this.f, ifftshift( gamma ) )( freqs_needed )
                     #
-                    fd_J = array( [rotate3( fd_J_[k],a[k],b[k],g[k] ) for j in range(len(freqs_needed))] )
-                    fd_L = array( [rotate3( fd_L_[k],a[k],b[k],g[k] ) for j in range(len(freqs_needed))] )
-                    fd_S = array( [rotate3( fd_S_[k],a[k],b[k],g[k] ) for j in range(len(freqs_needed))] )
-                    #
-                    J = array( [ifft(j) for j in fd_J.T] ).T
-                    L = array( [ifft(l) for l in fd_L.T] ).T
-                    S = array( [ifft(s) for s in fd_S.T] ).T
+                    warning('Dynamics rotations will '+bold(red('not'))+' be performed as FD angles given. There may be a way to determine the relevant TD angles')
+                    J,L,S,L1,L2,S1,S2,R1,R2 = J_,L_,S_,L1_,L2_,S1_,S2_,R1_,R2_
+
+                    # from numpy import pi
+                    # f = this[2,2]['psi4'].dphi/(2*pi)
+                    # _alpha = spline( this.f )
+
+                    # a = spline(this.t, _alpha)(times_used)
+                    # b = spline(this.t, _beta)(times_used)
+                    # g = spline(this.t, _gamma)(times_used)
+                    # J = array([rotate3(J_[k], a[k], b[k], g[k])
+                    #            for k in range(len(J_[:, 0]))])
+                    # L = array([rotate3(L_[k], a[k], b[k], g[k])
+                    #            for k in range(len(L_[:, 0]))])
+                    # S = array([rotate3(S_[k], a[k], b[k], g[k])
+                    #            for k in range(len(S_[:, 0]))])
+
+                    # R1 = array([rotate3(R1_[k], a[k], b[k], g[k])
+                    #             for k in range(len(R1_[:, 0]))])
+                    # R2 = array([rotate3(R2_[k], a[k], b[k], g[k])
+                    #             for k in range(len(R2_[:, 0]))])
+                    # S1 = array([rotate3(S1_[k], a[k], b[k], g[k])
+                    #             for k in range(len(S1_[:, 0]))])
+                    # S2 = array([rotate3(S2_[k], a[k], b[k], g[k])
+                    #             for k in range(len(S2_[:, 0]))])
+                    # L1 = array([rotate3(L1_[k], a[k], b[k], g[k])
+                    #             for k in range(len(L1_[:, 0]))])
+                    # L2 = array([rotate3(L2_[k], a[k], b[k], g[k])
+                    #             for k in range(len(L2_[:, 0]))])
+
             #
             that.dynamics['J'] = J
             that.dynamics['L'] = L
             that.dynamics['S'] = S
 
+            that.dynamics['L1'] = L1
+            that.dynamics['L2'] = L2
+            that.dynamics['S1'] = S1
+            that.dynamics['S2'] = S2
+            that.dynamics['R1'] = R1
+            that.dynamics['R2'] = R2
+
 
 
         # Rotate system radiated and remnant quantities
-        if not ( 'remnant' in this.__dict__ ) : this.__calc_radiated_quantities__(use_mask=False)
+        if not ( 'remnant' in this.__dict__ ) :
+            this.__calc_radiated_quantities__(use_mask=False)
+            that.remnant = this.remnant
+            that.radiated = this.radiated
         that.old_remnant = copy.deepcopy(this.remnant)
         that.old_radiated = copy.deepcopy(this.radiated)
 
@@ -4604,10 +4863,10 @@ class gwylm:
                 if this.remnant[key].shape[-1] == 3:
                     if len(alpha) == len(this.remnant['time_used']):
                         for k in range(len(alpha)):
-                            that.old_remnant[key][k,:] = R( this.remnant[key][k,:], k )
+                            that.remnant[key][k,:] = R( this.remnant[key][k,:], k )
                     elif len(alpha)==1:
-                        for k in range( that.old_remnant[key].shape[0] ):
-                            that.old_remnant[key][k,:] = R( this.remnant[key][k,:], 0 )
+                        for k in range( that.remnant[key].shape[0] ):
+                            that.remnant[key][k,:] = R( this.remnant[key][k,:], 0 )
                     else:
                         warning('cannot rotate radiated quantities, length mismatch: len alpha is %i, but times are %i'%(len(alpha),len(this.remnant['time_used'])))
                         print alpha
@@ -4619,13 +4878,13 @@ class gwylm:
                     if len(alpha) == len(this.radiated['time_used']):
                         if len(this.radiated[key].shape)>1:
                             for k in range(len(alpha)):
-                                that.old_radiated[key][k,:] = R( this.radiated[key][k,:], k )
+                                that.radiated[key][k,:] = R( this.radiated[key][k,:], k )
                         else:
                             if key=='J0':
-                                that.old_radiated[key] = R( this.radiated[key], 0 )
+                                that.radiated[key] = R( this.radiated[key], 0 )
                     elif len(alpha)==1:
                         if len(this.radiated[key].shape)>1:
-                            for k in range( that.old_radiated[key].shape[0] ):
+                            for k in range( that.radiated[key].shape[0] ):
                                 that.old_radiated[key][k,:] = R( this.radiated[key][k,:], 0 )
                         else:
                             that.old_radiated[key] = R( this.radiated[key], 0 )
@@ -4716,7 +4975,8 @@ class gwylm:
                                      use_mask = True,   # Toggle for chopping of noisey data. NOTE use_mask = False is useful if you need radiated quantities of the same length as the original waveforms
                                      ref_orientation = None,
                                      enforce_initial_J_consistency=True,
-                                     verbose=False):    # Toggle for letting the people know
+                                     verbose=False     # Toggle for letting the people know
+                                     ):
 
         ''' Reference: https://arxiv.org/pdf/0707.4654.pdf '''
 
@@ -4754,7 +5014,7 @@ class gwylm:
         this.radiated['mask'] = mask
         if verbose: alert('Calculating radiated angular momentum, J.')
         this.radiated['J0'] = (this.S1 + this.S2) + (this.L1 + this.L2)
-        this.radiated['J'] = this.__calc_radiated_angular_momentum__(mask)
+        this.radiated['J'],this.radiated['dJ/dt'] = this.__calc_radiated_angular_momentum__(mask)
         this.radiated['J_sim_start'] = this.Sf - this.radiated['J'][end_index,:]
         if verbose: alert('Calculating radiated linear momentum, P.')
         this.radiated['P'] = this.__calc_radiated_linear_momentum__(mask)
@@ -4763,6 +5023,7 @@ class gwylm:
         if not ( ref_orientation is None ):
             #
             this.radiated['J'][:,1] *= sign(ref_orientation[-1])
+            this.radiated['dJ/dt'][:,1]  *= sign(ref_orientation[-1])
             this.radiated['P'][:,1] *= sign(ref_orientation[-1])
 
         # Store remant Quantities
@@ -4775,6 +5036,7 @@ class gwylm:
 
         # Calculate the internal angular momentum by using either the final or initial angular momentum values
         this.remnant['J'] = -this.radiated['J']
+        this.remnant['dJ/dt'] = -this.radiated['dJ/dt']
 
         # Use the initial J value to set the integration constant
         initial_index = 0 # index location where we expect the simulation data to NATURALLY start. For example, we expect that if the waveform data has been padded upon loading that this padding happens to the right of the data series, and not to the left.
@@ -4870,18 +5132,19 @@ class gwylm:
             dJz += hlm * m * flm.conj()
 
         # Apply overall operations
-        dJx = dJx.imag / ( 32*pi )
-        dJy = dJy.real / ( 32*pi )
-        dJz = dJz.imag / ( 16*pi )
+        dJx = dJx[mask].imag / ( 32*pi )
+        dJy = dJy[mask].real / ( 32*pi )
+        dJz = dJz[mask].imag / ( 16*pi )
 
         # Integrate to get angular momentum
-        Jx = spline_antidiff( this.t[mask],dJx[mask],k=3 )
-        Jy = spline_antidiff( this.t[mask],dJy[mask],k=3 )
-        Jz = spline_antidiff( this.t[mask],dJz[mask],k=3 )
+        Jx = spline_antidiff( this.t[mask],dJx,k=5 )
+        Jy = spline_antidiff( this.t[mask],dJy,k=5 )
+        Jz = spline_antidiff( this.t[mask],dJz,k=5 )
 
         #
-        ans = -vstack([Jx,Jy,Jz]).T
-        return ans
+        ans   = -vstack([Jx,Jy,Jz]).T
+        d_ans = -vstack([dJx,dJy,dJz]).T
+        return ans,d_ans
 
     # Create hybrid multipoles
     def hybridize( this, pn_w_orb_min=None, pn_w_orb_max=None, verbose=True, plot=None, aggressive=1 ):
@@ -4960,19 +5223,22 @@ class gwylm:
         this.__lowpassfiltered__ = True
 
     # Load interpolated dynamics from the run directory
-    def load_dynamics(this,waveform_times=None,verbose=False,output=False):
+    def load_dynamics(this,waveform_times=None,verbose=False,output=False,tortoise=False,force_loading=False):
         '''
         Load interpolated dynamics from the run directory
         '''
+        #
+        from positive.physics import Schwarzschild_tortoise
 
-        if 'dynamics' in this.__dict__:
+        #
+        if ('dynamics' in this.__dict__) and (not force_loading):
             warning('Dynamics have already been loaded for %s. We will not re-load.'%this.simname)
             if output:
                 return this.dynamics
         else:
 
             # Import usefuls
-            from numpy import dot
+            from numpy import dot, log
             from numpy.linalg import norm
 
             #
@@ -4982,36 +5248,56 @@ class gwylm:
             alert('Calculating dynamics times by adjusting input waveform_times by extraction radius',verbose=verbose)
             if waveform_times is None:
                 error('The waveform times over which we want dynamics must be input')
-            dynamics_times = waveform_times - this.extraction_radius()
+
+            #
+            if tortoise:
+                radius = Schwarzschild_tortoise( this.extraction_radius(), this.madm )
+            else:
+                radius = this.extraction_radius()
+
+            # NOTE This is the retarded time used to connect the dynamics frame to the waveform frame.
+            dynamics_times = waveform_times - radius
 
             #
             sco = this.__scentry__
             alert('Retrieving method from handler for loading source dyanmics as this is specific to BAM, GT-MAYA, SXS, etc ...',verbose=verbose)
             handler = sco.loadhandler()
-            alert('Loading/Learning dynamics ...',verbose=verbose)
 
             #
-            dynamics = handler.learn_source_dynamics( sco, dynamics_times,verbose= verbose )
-            dynamics['waveform_times'] = waveform_times[:len(dynamics['dynamics_times'])]
+            __HAS_DYNAMICS__ = 'learn_source_dynamics' in handler.__dict__
+            if __HAS_DYNAMICS__:
+                alert('Loading/Learning dynamics ...',verbose=verbose)
+                dynamics = handler.learn_source_dynamics( sco, dynamics_times,verbose= verbose )
+                dynamics['waveform_times'] = waveform_times[:len(dynamics['dynamics_times'])]
+            else:
+                warning('Dynamics will not below loaded becuase there is NO method named "learn_source_dynamics" in the handler.')
+
 
             # Check for consistency between dynamics data and bbh file
-            test_quantity = dot(this.L/norm(this.L),dynamics['L'][0]/norm(dynamics['L'][0]))
-            if test_quantity<=0:
-                print('bbh: ',this.L)
-                print('dyn: ',dynamics['L'][0])
-                print('\n')
-                warning(red('There is an apparent discrepancy between the BBH L and the dynamics L. Either or both could be incorrect. For now, we will assume the dynamics data are correcect, and so use this in place of the BBH L when appropriate.'))
-                print('\n')
-                this.L = dynamics['L'][0]
-                this.L1 = dynamics['L1'][0]
-                this.L2 = dynamics['L2'][0]
-                this.J = this.L+this.S
 
-            alert('Done.',verbose=verbose)
-            if output:
-                return dynamics
+            if __HAS_DYNAMICS__:
+                # test_quantity = dot(this.L/norm(this.L),dynamics['L'][0]/norm(dynamics['L'][0]))
+                # if test_quantity<=0:
+                #     print('bbh: ',this.L)
+                #     print('dyn: ',dynamics['L'][0])
+                #     print('\n')
+                #     warning(red('There is an apparent discrepancy between the BBH L and the dynamics L. Either or both could be incorrect. For now, we will assume the dynamics data are correcect, and so use this in place of the BBH L when appropriate.'))
+                #     print('\n')
+                #     this.L = dynamics['L'][0]
+                #     this.L1 = dynamics['L1'][0]
+                #     this.L2 = dynamics['L2'][0]
+                #     this.J = this.L+this.S
+
+                # Always soter/output dynamics
+                alert('Done.',verbose=verbose)
+                if output:
+                    return dynamics
+                else:
+                    this.dynamics = dynamics
             else:
-                this.dynamics = dynamics
+                warning('We cannot check the consistency of dynamics and metadata information.')
+
+
 
     #
     def __flip_cross_sign_convention__(this):
@@ -5419,7 +5705,7 @@ def lvcnr5_to_gwylm(h5dir,lm=None,verbose=True,dt=0.25,lmax=6,clean=True):
     chi1 = array([f.attrs['spin1x'],f.attrs['spin1y'],f.attrs['spin1z']])
     chi2 = array([f.attrs['spin2x'],f.attrs['spin2y'],f.attrs['spin2z']])
     e.X1,e.X2 = chi1,chi2
-    e.S1,e.S2 = chi1*e.m1**2,chi2*e.m1**2
+    e.S1,e.S2 = chi1*e.m1**2,chi2*e.m2**2
 
     e.L = array([f.attrs['LNhatx'],f.attrs['LNhaty'],f.attrs['LNhatz']])
     warning('NOTE that the L saved here (i.e. y.L) is the UNIT direction of L --- the interface may be updated in the future to use a PN L')

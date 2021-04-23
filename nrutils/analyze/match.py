@@ -189,6 +189,7 @@ class match:
         quadrupole_avg_match = []
         quadrupole_snr_avg_match = []
         quadrupole_max_match = []
+        min_snr, max_snr, avg_snr = [], [], []
         #
         samples = {'theta':[],'phi_signal':[],'psi_signal':[],'match':[],'optsnr':[]}
         quadrupole_samples = {'theta':[],'phi_signal':[],'psi_signal':[],'match':[],'optsnr':[]}

@@ -123,16 +123,18 @@ def learn_metadata( metadata_file_location ):
     #-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~#
 
     # NOTE that some bbh files may not have after_junkradiation_spin data (i.e. empty). In these cases we will take the initial spin data
-    S1 = array( [ y.after_junkradiation_spin1x, y.after_junkradiation_spin1y, y.after_junkradiation_spin1z ] )
-    S2 = array( [ y.after_junkradiation_spin2x, y.after_junkradiation_spin2y, y.after_junkradiation_spin2z ] )
+    x.has_valid_relaxed_intial_parameters = False
+    if ( 'after_junkradiation_spin1x' in y.__dict__ ):
+        S1 = array( [ y.after_junkradiation_spin1x, y.after_junkradiation_spin1y, y.after_junkradiation_spin1z ] )
+        S2 = array( [ y.after_junkradiation_spin2x, y.after_junkradiation_spin2y, y.after_junkradiation_spin2z ] )
 
-    #%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%#
-    # NOTE that sometimes the afterjunk spins may not be stored correctely or at all in the bbh files. Therefore an additional validation step is needed here.
-    # -- NOTE the lines below need to be fixed --
-    S1bool = S1.astype(list).astype(bool)
-    S2bool = S2.astype(list).astype(bool)
-    x.has_valid_relaxed_intial_parameters = S1bool.all() and S2bool.all()
-    #%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%#
+        #%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%#
+        # NOTE that sometimes the afterjunk spins may not be stored correctely or at all in the bbh files. Therefore an additional validation step is needed here.
+        # -- NOTE the lines below need to be fixed --
+        S1bool = S1.astype(list).astype(bool)
+        S2bool = S2.astype(list).astype(bool)
+        x.has_valid_relaxed_intial_parameters = S1bool.all() and S2bool.all()
+        #%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%@%%#
 
     # If the data is to be stored using afterjunk parameters:
     if x.has_valid_relaxed_intial_parameters:
@@ -429,11 +431,13 @@ def learn_metadata_legacy( metadata_file_location ):
     #
     return standard_metadata, raw_metadata
 
+
 # There are instances when having the extraction radius rather than the extraction paramer is useful.
 # Here we define a function which maps between extraction_parameter and extraction radius -- IF such
 # a map can be constructed.
 def extraction_map( this,                   # this may be an nrsc object or an gwylm object (it must have a raw_metadata attribute )
-                    extraction_parameter ): # The extraction parameter that will be converted to radius
+                    extraction_parameter,   # The extraction parameter that will be converted to radius
+                    verbose=False):         # verbosity
     '''Given an extraction parameter, return an extraction radius'''
 
     # NOTE that while some BAM runs have extraction radius information stored in the bbh file in various ways, this does not appear to the case for all simulations. The invariants_modes_r field appears to be more reliable.
@@ -448,9 +452,11 @@ def extraction_map( this,                   # this may be an nrsc object or an g
     # print this.raw_metadata.invariants_modes_r
     # print '>> map = ',_map_
     # raise
+
     extraction_radius = _map_[ extraction_parameter-1 ]
 
     return extraction_radius
+
 
 # Estimate a good extraction radius and level for an input scentry object from the BAM catalog
 def infer_default_level_and_extraction_parameter( this,     # An scentry object
@@ -469,6 +475,7 @@ def infer_default_level_and_extraction_parameter( this,     # An scentry object
 
     # Find all l=m=2 waveforms
     search_string = ( this.simdir() + '/Psi4ModeDecomp/*l2.m2*.gz' ).replace('//','/')
+    alert(search_string)
     file_list = glob( search_string )
 
     # For all results
@@ -481,7 +488,7 @@ def infer_default_level_and_extraction_parameter( this,     # An scentry object
         parts = f.split('.') # e.g. "psi3col.r6.l6.l2.m2.gz".split('.')
         exr_,lev_ = int(parts[1][-1]),int(parts[2][-1])
         # Also get related extraction radius (M)
-        rad_ = extraction_map( this, exr_ )
+        rad_ = extraction_map( this, exr_, verbose=verbose )
         # Append lists
         exr.append(exr_);lev.append(lev_);rad.append(rad_)
 
@@ -521,6 +528,8 @@ def learn_source_dynamics(scentry_object,dynamics_times,verbose=False):
     from glob import glob as ls
     from nrutils.core.basics import straighten_wfarr
     from numpy import array, cross, linalg
+    from numpy import max as npmax
+    from numpy.linalg import norm
     from os.path import join
 
     # ---------------------------------- #
@@ -610,9 +619,10 @@ def learn_source_dynamics(scentry_object,dynamics_times,verbose=False):
     #
     abs_dr = linalg.norm( (R2_-R1_).T, axis=1 )
     r0 = 3.1
+    premerger_t_max = R1_times[ find(abs_dr < r0)[0] ]
+    internal_t_max = max(dynamics_times)
     # from matplotlib.pyplot import plot,show,axvline,axhline
     # plot( R1_times, abs_dr )
-    internal_t_max = R1_times[ find(abs_dr < r0)[0] ]
     # axhline( r0, color='k' )
     # axvline( internal_t_max, color='k' )
     # print internal_t_max, max(dynamics_times)
@@ -627,9 +637,9 @@ def learn_source_dynamics(scentry_object,dynamics_times,verbose=False):
     dynamics_times = dynamics_times[ dynamics_times < max(lim(L_times)[-1],lim(S1_times)[-1]) ]
     #
     msk = mask( S1_times )
-    S1 = mass1**2 * array(  [ spline(S1_times[msk],s[msk])(dynamics_times) for s in S1_ ]  ).T
+    S1 = array(  [ spline(S1_times[msk],s[msk])(dynamics_times) for s in S1_ ]  ).T
     msk = mask( S2_times )
-    S2 = mass2**2 * array(  [ spline(S2_times[msk],s[msk])(dynamics_times) for s in S2_ ]  ).T
+    S2 = array(  [ spline(S2_times[msk],s[msk])(dynamics_times) for s in S2_ ]  ).T
     #
     msk = mask( L1_times )
     L1 = array(  [ spline(L1_times[msk],l[msk])(dynamics_times) for l in L1_ ]  ).T
@@ -649,21 +659,40 @@ def learn_source_dynamics(scentry_object,dynamics_times,verbose=False):
     # Save everything in a standard dictionary
     # HERE we swap 1,2 labels to be consistent with nrutls' internal convention
     foo = {}
-    # ORBITAL MOMENTA
-    foo['L2'] = L1
-    foo['L1'] = L2
-    foo['L'] = L
-    # SPIN MOMENTA
-    foo['S2'] = S1
-    foo['S1'] = S2
-    foo['S'] = S
-    # TOTAL MOMENTA
-    foo['J'] = J
-    # TRAJECTORIES
-    foo['R2'] = R1
-    foo['R1'] = R2
+    if not (mass2/mass1 < 1.1 and npmax([norm(S1[0]/mass1**2),norm(S2[0]/mass2**2)])>0.70):
+        # ORBITAL MOMENTA
+        foo['L2'] = L1
+        foo['L1'] = L2
+        foo['L'] = L
+        # SPIN MOMENTA
+        foo['S2'] = S1
+        foo['S1'] = S2
+        foo['S'] = S
+        # TOTAL MOMENTA
+        foo['J'] = J
+        # TRAJECTORIES
+        foo['R2'] = R1
+        foo['R1'] = R2
+    else:
+        # ORBITAL MOMENTA
+        foo['L1'] = L1
+        foo['L2'] = L2
+        foo['L'] = L
+        # SPIN MOMENTA
+        foo['S1'] = S1
+        foo['S2'] = S2
+        foo['S'] = S
+        # TOTAL MOMENTA
+        foo['J'] = J
+        # TRAJECTORIES
+        foo['R1'] = R1
+        foo['R2'] = R2
+
     # DYNAMICS TIMES USED
     foo['dynamics_times'] = dynamics_times
+    
+    #
+    foo['premerger_t_max'] = premerger_t_max
 
     # Let's go! :D
     ans = foo

@@ -10,7 +10,7 @@ class gwylm_radiation_axis_workflow:
     '''
 
     #
-    def __init__( this, gwylmo, kind=None, plot=False, outdir=None, save=False, safe_domain_range=None, verbose=True,__format__=None, ref_orientation=None ):
+    def __init__( this, gwylmo, kind=None, plot=False, outdir=None, save=False, safe_domain_range=None, verbose=True,__format__=None, ref_orientation=None, domain='both' ):
 
         #
         from os.path import expanduser
@@ -20,15 +20,31 @@ class gwylm_radiation_axis_workflow:
         alert('Calculating Radiated Quantities','gwylm_radiation_axis_workflow',verbose=verbose)
         gwylmo.__calc_radiated_quantities__(use_mask=False)
 
+        #
+        allowed_domains = ('time', 'td', 'freq', 'fd', 'both')
+        if not( domain in allowed_domains ):
+            error('domain keyword value must be in '+str(allowed_domains)+' but '+red(bold(str(domain)))+' found.')
+
         # Store reference to input gwylmo
         this.gwylmo = gwylmo
+
+        # warn if not in J related frame
+        if not ( 'j' in str(gwylmo.frame).lower() ):
+            warning('This function works best if the gwylm object input is in a J-aligned frame, but %s frame found' %
+                    bold(red(gwylmo.frame)))
 
         # NOTE that relevant information will be stored within the current object
         this.radiation_axis = {}
         rax = this.radiation_axis
 
         #
-        if kind is None: kind = 'psi4'
+        if kind is None: 
+            kind = 'psi4'
+            warning('No "kind" keyword input. We will proceed using kind='+red('psi4')+' to calculate the system\'s radiation axis.'+bold(red(' To turn off this warning, manually set the kind keyword to "psi4", "strain" or "news".')) )
+
+        #
+        if not ( kind in ('psi4','strain','news') ):
+            error('The kind keyword input must be in ("psi4","strain","news"), but '+red(str(kind))+' found.')
 
         #
         this.save = save
@@ -38,51 +54,52 @@ class gwylm_radiation_axis_workflow:
         if save:
             outdir = expanduser( outdir ); this.outdir = outdir
             mkdir( this.outdir, verbose=verbose )
+            
+        #
+        this.process_td = domain.lower() in ('time', 'both', 't', 'td')
+        this.process_fd = domain.lower() in ('freq', 'both', 'f', 'fd')
 
         # Calculate radiation axes in time and frequency domain
-        alert('Calculating TD Radiation Axis Series','gwylm_radiation_axis_workflow',verbose=verbose)
-        td_alpha,td_beta,td_gamma,td_x,td_y,td_z,td_domain = this.calc_radiation_axis( domain = 'time', kind = kind, safe_domain_range=None, __format__=__format__  )
-        alert('Calculating FD Radiation Axis Series','gwylm_radiation_axis_workflow',verbose=verbose)
-        fd_alpha,fd_beta,fd_gamma,fd_x,fd_y,fd_z,fd_domain = this.calc_radiation_axis( domain = 'freq', kind = kind, safe_domain_range=safe_domain_range, __format__=__format__  )
+        if this.process_td:
+            
+            alert('Calculating TD Radiation Axis Series','gwylm_radiation_axis_workflow',verbose=verbose)
+            td_alpha,td_beta,td_gamma,td_x,td_y,td_z,td_domain = this.calc_radiation_axis( domain = 'time', kind = kind, safe_domain_range=None, __format__=__format__  )
+            
+            # Store time domain data
+            rax['td_alpha'], rax['td_beta'], rax['td_gamma'] = td_alpha, td_beta, td_gamma
+            rax['td_x'], rax['td_y'], rax['td_z'] = td_x, td_y, td_z
+            rax['td_domain'] = td_domain
 
-        # # Mask away Nans
-        # mask = array([not isnan(v) for v in fd_beta+fd_alpha+fd_gamma])
-        # print len(fd_beta)-sum(mask)
-        # fd_alpha = fd_alpha[mask]
-        # fd_beta  = fd_beta[mask]
-        # fd_gamma = fd_gamma[mask]
-        # fd_domain=fd_domain[mask]
-        # fd_x = fd_x[mask]
-        # fd_y = fd_y[mask]
-        # fd_z = fd_z[mask]
-
-        # Store time domain data
-        rax['td_alpha'],rax['td_beta'],rax['td_gamma'] = td_alpha,td_beta,td_gamma
-        rax['td_x'],rax['td_y'],rax['td_z'] = td_x,td_y,td_z
-        rax['td_domain'] = td_domain
-
-        # Store freq domain data
-        rax['fd_alpha'],rax['fd_beta'],rax['fd_gamma'] = fd_alpha,fd_beta,fd_gamma
-        rax['fd_x'],rax['fd_y'],rax['fd_z'] = fd_x,fd_y,fd_z
-        rax['fd_domain'] = fd_domain
+        if this.process_fd:
+            
+            alert('Calculating FD Radiation Axis Series','gwylm_radiation_axis_workflow',verbose=verbose)
+            fd_alpha,fd_beta,fd_gamma,fd_x,fd_y,fd_z,fd_domain = this.calc_radiation_axis( domain = 'freq', kind = kind, safe_domain_range=safe_domain_range, __format__=__format__  )
+            
+            # Store freq domain data
+            rax['fd_alpha'], rax['fd_beta'], rax['fd_gamma'] = fd_alpha, fd_beta, fd_gamma
+            rax['fd_x'], rax['fd_y'], rax['fd_z'] = fd_x, fd_y, fd_z
+            rax['fd_domain'] = fd_domain
 
         # Define plotting function to be called either internally or externally
         def internal_plotting_function():
 
             #
-            alert('Plotting TD Radiation Axis Series','gwylm_radiation_axis_workflow',verbose=verbose)
-            this.plot_radiation_axis_3panel( domain='time' )
-            alert('Plotting FD Radiation Axis Series','gwylm_radiation_axis_workflow',verbose=verbose)
-            this.plot_radiation_axis_3panel( domain='freq' )
+            if this.process_td:
+                alert('Plotting TD Radiation Axis Series','gwylm_radiation_axis_workflow',verbose=verbose)
+                this.plot_radiation_axis_3panel( domain='time' )
+            
+            if this.process_fd:
+                alert('Plotting FD Radiation Axis Series','gwylm_radiation_axis_workflow',verbose=verbose)
+                this.plot_radiation_axis_3panel( domain='freq' )
 
             #
             view = None
-            this.plot_radiation_axis_on_sphere( domain='time', view=view )
-            this.plot_radiation_axis_on_sphere( domain='freq', view=view )
+            if this.process_td: this.plot_radiation_axis_on_sphere( domain='time', view=view )
+            if this.process_fd: this.plot_radiation_axis_on_sphere( domain='freq', view=view )
             #
             view = (90,270)
-            this.plot_radiation_axis_on_sphere( domain='time', view=view )
-            this.plot_radiation_axis_on_sphere( domain='freq', view=view )
+            if this.process_td: this.plot_radiation_axis_on_sphere(domain='time', view=view)
+            if this.process_fd: this.plot_radiation_axis_on_sphere( domain='freq', view=view )
 
         # Store internal plotting funtion to this object
         this.plot = internal_plotting_function
@@ -114,9 +131,10 @@ class gwylm_radiation_axis_workflow:
         domain_vals = gwylmo.lm[2,2][kind].t if domain in ('t','time') else gwylmo.lm[2,2][kind].f
 
         #
-        domain_min = domain_vals[gwylmo.preinspiral.right_index] if domain in ('t','time') else gwylmo.wstart_pn/(2*pi)
-        domain_max = domain_vals[gwylmo.postringdown.left_index] if domain in ('t','time') else gwylmo.lm[2,2][kind].dt/pi
-        safe_domain_range = [domain_min,domain_max]
+        if safe_domain_range is None:
+            domain_min = domain_vals[gwylmo.preinspiral.right_index] if domain in ('t','time') else gwylmo.wstart_pn/(2*pi)
+            domain_max = domain_vals[gwylmo.postringdown.left_index] if domain in ('t','time') else gwylmo.lm[2,2][kind].dt/pi
+            safe_domain_range = [domain_min,domain_max]
 
         # Calculate corotating angles using low-level function
         alpha,beta,gamma,x,y,z = calc_coprecessing_angles( mp, domain_vals, ref_orientation=gwylmo.L if ref_orientation is None else ref_orientation, return_xyz='all', safe_domain_range = safe_domain_range )
@@ -256,10 +274,12 @@ class gwylm_radiation_axis_workflow:
         if ax is None:
             fig = figure( figsize=4*figaspect(1) )
             ax = fig.add_subplot(111, projection='3d')
-            ax.view_init(view[0],view[1])#
-            plot_3d_mesh_sphere( ax, color='k', alpha=0.05, lw=1 )
         else:
             fig = gcf()
+        
+        #
+        ax.view_init(view[0],view[1])#
+        plot_3d_mesh_sphere( ax, color='k', alpha=0.05, lw=1 )
 
         #
         color = rgb(3)
@@ -322,11 +342,11 @@ class gwylm_radiation_axis_workflow:
 
         axis('off')
 
-
+        this.gwylmo.plot_3d_L(ax=ax)
 
         #
-        legend( loc=1, frameon=True )
-        title(('Time Domain: ' if tag=='td' else 'Frequency Domain: ' ) + this.gwylmo.simname, loc='right', alpha=0.5, fontsize=16)
+        legend( loc=3, frameon=True )
+        title(('Time Domain\n' if tag=='td' else 'Frequency Domain\n' ) + this.gwylmo.simname, loc='left', alpha=0.5, fontsize=12)
 
         #
         if this.save:
