@@ -518,6 +518,13 @@ def straighten_wfarr( wfarr, verbose=False ):
     # Import useful things
     from numpy import arange,sum,array,diff,isfinite,hstack,allclose,median
     thisfun = 'straighten_wfarr'
+    
+    #
+    rw,cl = wfarr.shape 
+    if rw == 0:
+        error('input waveform array has zero rows')
+    if cl == 0:
+        error('input waveform array has zero columns')
 
     # check whether t is monotonically increasing
     isincreasing = allclose( wfarr[:,0], sorted(wfarr[:,0]), 1e-6 )
@@ -1804,7 +1811,7 @@ def find_amp_peak_index( t, amp, phi, plot = False, return_jid=False ):
         #
         if k_amp_max==0:
             
-            warning('the data input may not peak near merger. we will use the second derivative of the phase to estimate the location of merger in the timeseries')
+            #warning('the data input may not peak near merger. we will use the second derivative of the phase to estimate the location of merger in the timeseries')
         
             mask = amp>(1e-2*max(amp))
             d2phi = abs(spline_diff(t[mask],phi[mask],n=2))
