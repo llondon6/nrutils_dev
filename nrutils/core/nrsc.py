@@ -2110,7 +2110,7 @@ class gwf:
         ans = this.copy() if not apply else this
         if new_length is not None:
             # Create the new wfarr
-            wfarr = pad_wfarr( this.wfarr, new_length,where=where,extend=extend )
+            wfarr = pad_wfarr( this.wfarr, new_length,where=where,extend=extend, __nowarn__=extend )
             # Confer to the current object
             ans.setfields(wfarr)
 
@@ -3306,7 +3306,7 @@ class gwylm:
                 default_pad = 2 + mod(len(wfarr[:,0]),2) + 1
                 if this.verbose: alert('Imposing a default padding of %i to the data.'%default_pad)
                 # NOTE that the optional "where" input below has important implications for many algorithms used for processing. In short, padding to the right only ensures that the original "start" of the waveform data series is unchanged.
-                wfarr = pad_wfarr(wfarr,default_pad,where='right',verbose=this.verbose)
+                wfarr = pad_wfarr(wfarr,default_pad,where='right',verbose=this.verbose, __nowarn__=True)
 
             # Pad the waveform array
             if (this.fftfactor != 0) and (this.fftfactor is not None):
@@ -3321,7 +3321,7 @@ class gwylm:
                     #
                     if this.verbose: alert( 'Padding wfarr. The old data length was %i, and the new one is %i'%(old_data_length,fftlen) )
                     # NOTE that this padding function only works with time domain data
-                    wfarr = pad_wfarr(wfarr,fftlen,where='right',verbose=this.verbose,)
+                    wfarr = pad_wfarr(wfarr,fftlen,where='right',verbose=this.verbose, __nowarn__=True)
                 else:
                     error('fftfactor must be int corresponding to additional powers of 2 to which the data will be padded symetrically')
             else:

@@ -149,7 +149,7 @@ def intrp_wfarr(wfarr,delta=None,domain=None,verbose = False):
 
 
 # Fucntion to pad wfarr with zeros. NOTE that this should only be applied to a time domain waveform that already begins and ends with zeros.
-def pad_wfarr(wfarr,new_length,where=None,verbose=None,extend=True):
+def pad_wfarr(wfarr,new_length,where=None,verbose=None,extend=True,__nowarn__=False):
 
     #
     from numpy import hstack,zeros,arange,pad,unwrap,angle,cos,sin
@@ -171,7 +171,7 @@ def pad_wfarr(wfarr,new_length,where=None,verbose=None,extend=True):
     # Warn the user if extend is false
     if not extend:
         msg = 'You have disabled the extend option. As a result the input padding length will be interpreted as the desired total length of the new waveform array. This course is discouraged in favor of e.g. using the fftlength option when taking fouorier transforms, OR simply inputting the desired pad amount.'
-        warning(msg)
+        warning(msg, verbose=not __nowarn__)
 
     #
     if where is None:
