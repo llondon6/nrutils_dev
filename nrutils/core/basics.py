@@ -171,7 +171,7 @@ def pad_wfarr(wfarr,new_length,where=None,verbose=None,extend=True,__nowarn__=Fa
     # Warn the user if extend is false
     if not extend:
         msg = 'You have disabled the extend option. As a result the input padding length will be interpreted as the desired total length of the new waveform array. This course is discouraged in favor of e.g. using the fftlength option when taking fouorier transforms, OR simply inputting the desired pad amount.'
-        warning(msg, verbose=not __nowarn__)
+        warning(msg, verbose=(not __nowarn__) and verbose)
 
     #
     if where is None:
@@ -536,28 +536,28 @@ def straighten_wfarr( wfarr, verbose=False ):
         map_ = arange( len(wfarr[:,0]) )
         map_ = sorted( map_, key = lambda x: wfarr[x,0] )
         wfarr = wfarr[ map_, : ]
-        if allclose( wfarr[:,0], sorted(wfarr[:,0]), 1e-6 ) and verbose: warning(red('The waveform time series is now monotonic.'))
+        # if allclose( wfarr[:,0], sorted(wfarr[:,0]), 1e-6 ) and verbose: warning(red('The waveform time series is now monotonic.'))
 
     # Remove rows that contain non-finite data
     finite_mask = isfinite( sum( wfarr, 1 ) )
-    if sum(finite_mask)!=len(finite_mask):
-        if verbose: warning('Non-finite values found in waveform array. Corresponding rows will be removed.',thisfun)
+    # if sum(finite_mask)!=len(finite_mask):
+    #     if verbose: warning('Non-finite values found in waveform array. Corresponding rows will be removed.',thisfun)
     wfarr = wfarr[ finite_mask, : ]
 
     # Sort rows by the time series' values
     time = array( wfarr[:,0] )
     space = arange( wfarr.shape[0] )
     chart = sorted( space, key = lambda k: time[k] )
-    if (space != chart).all():
-        if verbose: warning('The waveform array was found to have nonmonotinicities in its time series. The array will now be straightened.',thisfun)
+    # if (space != chart).all():
+    #     if verbose: warning('The waveform array was found to have nonmonotinicities in its time series. The array will now be straightened.',thisfun)
     wfarr = wfarr[ chart, : ]
 
     # Remove rows with duplicate time series values
     time = array( wfarr[:,0] )
     dt = median( diff(time) )
     diff_mask = hstack( [ True, diff(time)/dt>1e-6 ] )
-    if sum(diff_mask)!=len(diff_mask):
-        if verbose: warning('Repeated time values were found in the array. Offending rows will be removed.',thisfun)
+    # if sum(diff_mask)!=len(diff_mask):
+    #     if verbose: warning('Repeated time values were found in the array. Offending rows will be removed.',thisfun)
     wfarr = wfarr[ diff_mask, : ]
 
     # The wfarr should now be straight

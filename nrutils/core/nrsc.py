@@ -2731,7 +2731,9 @@ class gwylm:
         for l,m in this.__lmlist__:
             this.lm[l,m] = {}
         # Seed the dictionary with psi4 gwf objects
+        this.__lmlist__ = []
         for y in this.ylm:
+            this.__lmlist__.append((y.l,y.m))
             this.lm[(y.l,y.m)]['psi4'] = y
         # Seed the dictionary with strain gwf objects
         for h in this.hlm:
@@ -4446,7 +4448,7 @@ class gwylm:
 
 
     # output corotating waveform
-    def __calc_coprecessing_frame__(this,safe_domain_range=None,verbose=None,transform_domain=None,__format__=None,ref_orientation=None,kind=None,plot=False):
+    def __calc_coprecessing_frame__(this,safe_domain_range=None,verbose=None,transform_domain=None,__format__=None,ref_orientation=None,kind=None,plot=False,select_lm_list=None):
 
         '''
         Output gwylm object in coprecessing frame, where the optimal emission axis is always along z
@@ -4493,9 +4495,15 @@ class gwylm:
         #
         if safe_domain_range is None:
             safe_domain_range=[0.009,0.1]
+            
+        #
+        select_this = this
+        if select_lm_list is not None:
+            #
+            select_this = this.selectlm( select_lm_list, verbose=verbose )
 
         #
-        foo = gwylm_radiation_axis_workflow(this,plot=False,save=False,verbose=False,safe_domain_range=safe_domain_range,__format__=__format__,ref_orientation=ref_orientation,kind=kind,domain=transform_domain)
+        foo = gwylm_radiation_axis_workflow(select_this,plot=False,save=False,verbose=False,safe_domain_range=safe_domain_range,__format__=__format__,ref_orientation=ref_orientation,kind=kind,domain=transform_domain)
 
         #
         if plot:
@@ -4594,11 +4602,42 @@ class gwylm:
         else:
             return None
 
-    #
-    def deletelm( this, lm ):
-        # remove an lm node from this object
-        error('method not implemented')
-        return None
+    # Function to remove select multipoles 
+    def deletelm( this, lmlist ):
+        
+        #
+        that = this.copy()
+        
+        #
+        that.ylm = [ y for y in this.ylm if (y.l,y.m) not in lmlist ]
+        that.flm = [ y for y in this.flm if (y.l,y.m) not in lmlist ]
+        that.hlm = [ y for y in this.hlm if (y.l,y.m) not in lmlist ]
+        
+        #
+        that.__curate__()
+        
+        #
+        return that
+
+    # Function to output new oject with select multipoles 
+    def selectlm( this, lmlist, verbose ):
+        
+        #
+        that = this.copy()
+        
+        #
+        #that.__lmlist__ = lmlist
+        that.ylm = [ y for y in this.ylm if (y.l,y.m) in lmlist ]
+        that.flm = [ y for y in this.flm if (y.l,y.m) in lmlist ]
+        that.hlm = [ y for y in this.hlm if (y.l,y.m) in lmlist ]
+        
+        #
+        that.__curate__()
+        # print('Hiyayay!!!')
+        # print( that.lm )
+        
+        #
+        return that
 
     # Find the polarization and orbital phase shifts that maximize the real part
     # of  gwylm object's (2,2) and (2,1) multipoles at merger (i.e. the sum)
