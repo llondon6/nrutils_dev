@@ -149,7 +149,7 @@ def intrp_wfarr(wfarr,delta=None,domain=None,verbose = False):
 
 
 # Fucntion to pad wfarr with zeros. NOTE that this should only be applied to a time domain waveform that already begins and ends with zeros.
-def pad_wfarr(wfarr,new_length,where=None,verbose=None,extend=True):
+def pad_wfarr(wfarr,new_length,where=None,verbose=None,extend=True,__nowarn__=False):
 
     #
     from numpy import hstack,zeros,arange,pad,unwrap,angle,cos,sin
@@ -171,7 +171,7 @@ def pad_wfarr(wfarr,new_length,where=None,verbose=None,extend=True):
     # Warn the user if extend is false
     if not extend:
         msg = 'You have disabled the extend option. As a result the input padding length will be interpreted as the desired total length of the new waveform array. This course is discouraged in favor of e.g. using the fftlength option when taking fouorier transforms, OR simply inputting the desired pad amount.'
-        warning(msg)
+        warning(msg, verbose=(not __nowarn__) and verbose)
 
     #
     if where is None:
@@ -400,7 +400,7 @@ def recompose_wfarrs( wfarr_dict, theta, phi ):
                 error( 'invalid multipole eigenvalue found: %s'%[v] )
         # key values must be ndarray
         if not isinstance(wfarr_dict[k],ndarray):
-            print wfarr_dict[k].__class__
+            alert(wfarr_dict[k].__class__)
             error('key values must be ndarray')
 
     # Number of samples
@@ -518,6 +518,13 @@ def straighten_wfarr( wfarr, verbose=False ):
     # Import useful things
     from numpy import arange,sum,array,diff,isfinite,hstack,allclose,median
     thisfun = 'straighten_wfarr'
+    
+    #
+    rw,cl = wfarr.shape 
+    if rw == 0:
+        error('input waveform array has zero rows')
+    if cl == 0:
+        error('input waveform array has zero columns')
 
     # check whether t is monotonically increasing
     isincreasing = allclose( wfarr[:,0], sorted(wfarr[:,0]), 1e-6 )
@@ -529,28 +536,28 @@ def straighten_wfarr( wfarr, verbose=False ):
         map_ = arange( len(wfarr[:,0]) )
         map_ = sorted( map_, key = lambda x: wfarr[x,0] )
         wfarr = wfarr[ map_, : ]
-        if allclose( wfarr[:,0], sorted(wfarr[:,0]), 1e-6 ) and verbose: warning(red('The waveform time series is now monotonic.'))
+        # if allclose( wfarr[:,0], sorted(wfarr[:,0]), 1e-6 ) and verbose: warning(red('The waveform time series is now monotonic.'))
 
     # Remove rows that contain non-finite data
     finite_mask = isfinite( sum( wfarr, 1 ) )
-    if sum(finite_mask)!=len(finite_mask):
-        if verbose: warning('Non-finite values found in waveform array. Corresponding rows will be removed.',thisfun)
+    # if sum(finite_mask)!=len(finite_mask):
+    #     if verbose: warning('Non-finite values found in waveform array. Corresponding rows will be removed.',thisfun)
     wfarr = wfarr[ finite_mask, : ]
 
     # Sort rows by the time series' values
     time = array( wfarr[:,0] )
     space = arange( wfarr.shape[0] )
     chart = sorted( space, key = lambda k: time[k] )
-    if (space != chart).all():
-        if verbose: warning('The waveform array was found to have nonmonotinicities in its time series. The array will now be straightened.',thisfun)
+    # if (space != chart).all():
+    #     if verbose: warning('The waveform array was found to have nonmonotinicities in its time series. The array will now be straightened.',thisfun)
     wfarr = wfarr[ chart, : ]
 
     # Remove rows with duplicate time series values
     time = array( wfarr[:,0] )
     dt = median( diff(time) )
     diff_mask = hstack( [ True, diff(time)/dt>1e-6 ] )
-    if sum(diff_mask)!=len(diff_mask):
-        if verbose: warning('Repeated time values were found in the array. Offending rows will be removed.',thisfun)
+    # if sum(diff_mask)!=len(diff_mask):
+    #     if verbose: warning('Repeated time values were found in the array. Offending rows will be removed.',thisfun)
     wfarr = wfarr[ diff_mask, : ]
 
     # The wfarr should now be straight
@@ -604,7 +611,7 @@ def alphamax(_gwylmo,dphi,plt=False,verbose=False,n=13):
         plot( dpsis, aspl, label=dpsi )
         plot( dpsis[argmax(aspl)], aspl[argmax(aspl)], 'or', mfc='none' )
         xlabel(r'$\psi$')
-    if verbose: print dpsi_opt,action([dphi,dpsi_opt])
+    if verbose: alert(dpsi_opt,action([dphi,dpsi_opt]))
     return [ dpsi_opt, action([dphi,dpsi_opt])    ]
 
 def betamax(_gwylmo,n=10,plt=False,opt=True,verbose=False):
@@ -651,10 +658,10 @@ def betamax(_gwylmo,n=10,plt=False,opt=True,verbose=False):
         xlabel(r'$\phi$')
         title(val_max)
 
-    if verbose:
-        print 'dphi_opt = ' + str(dphi_opt)
-        print 'dpsi_opt = ' + str(dpsi_opt)
-        print 'val_max = ' + str(val_max)
+    # if verbose:
+    #     print 'dphi_opt = ' + str(dphi_opt)
+    #     print 'dpsi_opt = ' + str(dpsi_opt)
+    #     print 'val_max = ' + str(val_max)
 
     return dphi_opt,dpsi_opt
 
@@ -672,7 +679,7 @@ def betamax2(_gwylmo,n=10,plt=False,opt=True,verbose=False):
         dphi_action = lambda _dphi: action( [_dphi,dpsi] )
         dphi = minimize( dphi_action, dphi, bounds=[(0,2*pi)] ).x[0]
         done = k>n
-        print '>> ',dphi,dpsi,action([dphi,dpsi])
+        alert(dphi,dpsi,action([dphi,dpsi]))
         k+=1
 
     return dphi,dpsi
@@ -847,6 +854,21 @@ def isgwylm( obj ):
         return obj.__class__.__name__=='gwylm'
     else:
         return False
+
+
+#
+def kind2texlabel(kind):
+    '''
+    Convert __disc_data_kind__ to latex for internal labeling of plots. See methods in gwylm class
+    '''
+    if kind=='psi4':
+        return '\psi'
+    elif kind=='strain':
+        return 'h'
+    elif kind=='news':
+        return 'f'
+    else:
+        error('unknown __disc_data_kind__ of %s'%red(kind))
 
 #00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%00%%#
 ''' Low level functions for rotating waveforms '''
@@ -1152,7 +1174,9 @@ def calc_coprecessing_angles(multipole_dict,       # Dict of multipoles { ... l,
 
     #################################################
     # Reflect Y according to nrutils conventions    #
-    Y *= -1                         #
+    # NOTE that this step is needed due to the      #
+    # m_relative_sign_convention                    #
+    Y *= -1                         
     #################################################
     if IS_FD:
         alert('The domain values seem evenly split between positive and negative values. Thus, we will interpret the input as corresponding to ' +
@@ -1703,7 +1727,7 @@ def rotate_wfarrs_at_all_times( l,                          # the l of the new m
 
 
 # Careful function to find peak index for BBH waveform cases
-def find_amp_peak_index( t, amp, plot = False, return_jid=False ):
+def find_amp_peak_index( t, amp, phi, plot = False, return_jid=False ):
 
     '''
     Careful function to find peak index for BBH waveform cases
@@ -1783,13 +1807,36 @@ def find_amp_peak_index( t, amp, plot = False, return_jid=False ):
         pre[half_way:] *= 0
         dt = t[1]-t[0]
         jid = argmax( pre ) + int(100/dt)
+        
+        #
+        if k_amp_max==0:
+            
+            #warning('the data input may not peak near merger. we will use the second derivative of the phase to estimate the location of merger in the timeseries')
+        
+            mask = amp>(1e-2*max(amp))
+            d2phi = abs(spline_diff(t[mask],phi[mask],n=2))
+            
+            k_amp_max = argmax(d2phi)
+            ans = k_amp_max
+            jid=0
 
         # Return answer
         ans = k_amp_max
         if return_jid: ans = (k_amp_max,jid)
         return ans
     else:
-        warning('the data input here may be flat and zero')
-        ans = 0
+        
+        # print sum(amp),sum(phi),sum(amp)<1e-6
+        if sum(phi)<1e-6:
+            ans = 0
+            if return_jid: ans = (k_amp_max,0)
+            warning('the data appears to be ZERO; please make sure you understand why')
+            return ans
+        
+        warning('the data input here may be flat.')
+        
+        k_amp_max = 0
+        jid=0
+        ans = k_amp_max
         if return_jid: ans = (0,0)
         return ans
