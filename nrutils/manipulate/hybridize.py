@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 # Import usefuls
 from positive import *
 from nrutils.core.nrsc import gwylm
@@ -188,7 +190,7 @@ class make_pnnr_hybrid(gwylm):
         # Store optimals
         alert('Storing optimal params to this.optimal_hybrid_params',verbose=this.verbose)
         this.optimal_hybrid_params = { 't0':t0, 'dt':dt, 'k0':k0, 'phi0_22':phi0_22, 'mask':mask, 'T1':T1, 'T2':T2, 'hybrid_cycles':N }
-        if this.verbose: print this.optimal_hybrid_params
+        if this.verbose: print( this.optimal_hybrid_params)
 
 
     # Create an instance of the PN class
@@ -215,7 +217,7 @@ class make_pnnr_hybrid(gwylm):
         this.lmlist = sorted( list(set( this.gwylmo.lm.keys() ).intersection( pno.pn_gwylmo.lm.keys() )) )
         if this.verbose:
             alert('Hybrid waveforms will be constructed for the following multipoles:')
-            print this.lmlist
+            print( this.lmlist)
 
         #
         return None

@@ -35,7 +35,7 @@ from plotting import *
 # # Import all python files within this folder
 from __future__ import print_function
 from os.path import dirname, basename, isdir, realpath
-from commands import getstatusoutput as bash
+# from commands import getstatusoutput as bash
 
 #
 import os
@@ -44,21 +44,21 @@ if not (  os.environ.get("koala_verbose",'') == '' or os.environ.get("koala_verb
     verbose = False
 
 
-# Search recurssively within the config's sim_dir for files matching the config's metadata_id
-this_file = realpath(__file__)
-if verbose: print( "The highest level init for nrutils is located at: %s" % this_file)
-if this_file[-1] == 'c': this_file = this_file[:-1]
-cmd = 'find %s -maxdepth 2 -name "__init__.py"' % dirname(this_file)
-status, output = bash(cmd)
+# # Search recurssively within the config's sim_dir for files matching the config's metadata_id
+# this_file = realpath(__file__)
+# if verbose: print( "The highest level init for nrutils is located at: %s" % this_file)
+# if this_file[-1] == 'c': this_file = this_file[:-1]
+# cmd = 'find %s -maxdepth 2 -name "__init__.py"' % dirname(this_file)
+# status, output = bash(cmd)
 
-# make a list of all packages within the directory which contains this file
-dir_list = output.split(chr(10))
-internal_packages = [ basename(dirname(p)) for p in dir_list if not (p == this_file) ]
+# # make a list of all packages within the directory which contains this file
+# dir_list = output.split(chr(10))
+# internal_packages = [ basename(dirname(p)) for p in dir_list if not (p == this_file) ]
 
-# Throw error is internal_packages is empty
-if len(internal_packages) == 0:
-    msg = '(!!) Unable to automatically find internal packages. Please report this bug to the developers. (https://github.com/llondon6/nrutils_dev/tree/master/nrutils)'
-    raise ValueError(msg)
+# # Throw error is internal_packages is empty
+# if len(internal_packages) == 0:
+#     msg = '(!!) Unable to automatically find internal packages. Please report this bug to the developers. (https://github.com/llondon6/nrutils_dev/tree/master/nrutils)'
+#     raise ValueError(msg)
 
 # Store package settings (useful directories etc) to a settings field
 # NOTE that the __pathsfile__ variable is no longer used in favor of automatic directory assignments based in install location
@@ -69,11 +69,22 @@ if len(internal_packages) == 0:
 __installpath__ = dirname(realpath(__file__))
 
 #
+internal_packages = [
+    'analyze',
+    'core',
+    'formula',
+    'generate',
+    'manipulate'
+]
+
+
+#
 __all__ = internal_packages
 
 
-# Import all modules from each package
-if verbose: print( '\n>> Initiating nrutils ...')
+# # Import all modules from each package
+# if verbose: print( '\n>> Initiating nrutils ...')
+
 
 # Let the people know
 if verbose:
@@ -91,18 +102,18 @@ if verbose: print( '>> Please note style conventions:\
 if verbose: print( '%s:\n' % __name__)
 for p in internal_packages:
     if verbose: print( '  .%s: ' % p)
-    exec r'import %s' % p
+    exec( r'import nrutils.%s' % p)
     # exec 'from %s import *' % p
 
 # Import select modules for high level access
-from manipulate import nr2h5
-from core.units import *
-from core.nrsc import scsearch, scbuild, sc_add, gwylm, gwf, lswfa, scentry, screconf, simdir2scentry, __gconfig__, lvcnr5_to_gwylm
+from nrutils.manipulate import nr2h5
+from .core.units import *
+from .core.nrsc import scsearch, scbuild, sc_add, gwylm, gwf, lswfa, scentry, screconf, simdir2scentry, __gconfig__, lvcnr5_to_gwylm
 from nrutils.formula import *
 
 #
 if verbose: print( '')
 # Cleanup
-del cmd, bash, p, dir_list, status, output, this_file, basename, dirname, isdir, realpath
+# del cmd, bash, p, dir_list, status, output, this_file, basename, dirname, isdir, realpath
 
 

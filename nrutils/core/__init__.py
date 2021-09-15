@@ -10,8 +10,8 @@ modules = [ basename(f)[:-3] for f in glob.glob(dirname(__file__)+"/*.py") if no
 # if verbose: print ''
 
 #
-if verbose: print '      .basics*'
-from basics import smart_object
+# if verbose: print( '      .basics*')
+from nrutils.core.basics import smart_object
 
 # # Make definitions in the pathsfile avaliable to this package. Note that these will be treated as global settings for the nrutils package.
 # settings = smart_object( __pathsfile__ )
@@ -34,5 +34,5 @@ M_RELATIVE_SIGN_CONVENTION = 1 # 1: Psi4 multipoles of are forced to have time d
 
 # Dynamically import all modules within this folder (namespace preserving)
 for module in modules:
-    if verbose: print '      .%s' % module
-    exec 'import %s' % module
+    # if verbose: print( '      .%s' % module)
+    exec( 'import nrutils.core.%s' % module)

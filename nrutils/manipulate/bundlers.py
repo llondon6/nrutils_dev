@@ -1,3 +1,5 @@
+from __future__ import print_function
+
 '''
 module for routines that bundle many wavforms into a single obejct for output
 '''
@@ -31,7 +33,7 @@ def nr2h5( nr_strain_data, nr_meta_data, output_path=None, verbose=False ):
     #
     def alert(msg,base):
         if verbose:
-            print "*(%s)>> %s" % (base,msg)
+            print( "*(%s)>> %s" % (base,msg))
 
 
     # -------- Define useful things for unit scaling -------- #
@@ -132,7 +134,7 @@ def nr2h5( nr_strain_data, nr_meta_data, output_path=None, verbose=False ):
     # Define attributes
     alert('Seeding metadata from input:',this_module )
     for key in nr_meta_data:
-        if verbose: print "\t\t %s = %s" % (key,nr_meta_data[ key ])
+        if verbose: print( "\t\t %s = %s" % (key,nr_meta_data[ key ]))
         h5f.attrs[ key ] = nr_meta_data[ key ]
 
     # Define functoin to create spline and store temporary h5 file
@@ -149,7 +151,7 @@ def nr2h5( nr_strain_data, nr_meta_data, output_path=None, verbose=False ):
     alert('Storing NR multipoles to h5 file. Tempoary h5 files will be created and deleted on the fly.',this_module )
     for lm in nr_strain_data:
 
-        if verbose: print ' ... (l,m)=(%s,%s)' % lm
+        if verbose: print( ' ... (l,m)=(%s,%s)' % lm)
 
         # Unpack multipole indeces
         l = lm[0]; m = lm[1]

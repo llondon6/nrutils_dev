@@ -609,7 +609,7 @@ def scbuild(keyword=None,save=True):
     # Look for config files
     cpath_list = glob.glob( global_settings.config_path+'*.ini' )
 
-    # If a keyword is give, filter against found config files
+    # If a keyword is given, filter against found config files
     if isinstance(keyword,(str,unicode)):
         msg = 'Filtering ini files for \"%s\"'%cyan(keyword)
         alert(msg,'scbuild')
@@ -910,8 +910,9 @@ def scsearch( catalog = None,           # Manually input list of scentry objects
         if verbose==2: alert('Loading catalog information from:')
         for db in dblist:
             if verbose==2: alert(cyan(db))
-            with open( db , 'rb') as dbf:
-                catalog = catalog + pickle.load( dbf )
+            catalog = catalog + pickle.load( open( db, "rb" ), encoding='latin1' )
+            # with open( db , 'rb') as dbf:
+            #     catalog = catalog + pickle.load( dbf, encoding='latin1' )
 
     # Determine whether remnant properties are already stored
     if validate_remnant is True:
@@ -2622,7 +2623,7 @@ class gwylm:
             
         # If an extreme mass ratio case, then scale to a fiducial mass-ratio 
         if this.config.__is_extreme_mass_ratio__:
-            mu = 1e-4
+            mu = 1.0/1e-4
             alert('Scaling multipole moments to default mass-ratio of %s'%red(str(mu)),header=True)
             this.scale_emr_to_massratio(mu,initialize=True,__apply__=True)
             
@@ -2726,21 +2727,36 @@ class gwylm:
         '''Create a dictionary representation of the mutlipoles'''
         # NOTE that this method should be called every time psi4, strain and/or news is loaded.
         # NOTE that the related methods are: __load__, calchlm and calcflm
+        
+        # Create unique list of lm values
+        this.__lmlist__ = []
+        for y in this.ylm:
+            this.__lmlist__.append((y.l,y.m))
+        for f in this.flm:
+            this.__lmlist__.append((f.l,f.m))
+        for h in this.hlm:
+            this.__lmlist__.append((h.l,h.m))
+        this.__lmlist__ = list( set(this.__lmlist__) )
+        
         # Initiate the dictionary
         this.lm = {}
         for l,m in this.__lmlist__:
             this.lm[l,m] = {}
+            
         # Seed the dictionary with psi4 gwf objects
         this.__lmlist__ = []
         for y in this.ylm:
             this.__lmlist__.append((y.l,y.m))
             this.lm[(y.l,y.m)]['psi4'] = y
+            
         # Seed the dictionary with strain gwf objects
         for h in this.hlm:
             this.lm[(h.l,h.m)]['strain'] = h
+            
         # Seed the dictionary with strain gwf objects
         for f in this.flm:
             this.lm[(f.l,f.m)]['news'] = f
+            
         #
         this.t = this[2,2][__kind__].t
         this.f = this[2,2][__kind__].f

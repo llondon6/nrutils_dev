@@ -10,7 +10,7 @@ modules = [ basename(f)[:-3] for f in glob.glob(dirname(__file__)+"/*.py") if no
 # if verbose: print ''
 
 #
-from pn import *
+from nrutils.generate.pn import *
 
 # # Make definitions in the pathsfile avaliable to this package. Note that these will be treated as global settings for the nrutils package.
 # settings = smart_object( __pathsfile__ )

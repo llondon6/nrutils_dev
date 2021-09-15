@@ -9,8 +9,8 @@ modules = [ basename(f)[:-3] for f in glob.glob(dirname(__file__)+"/*.py") if no
 
 # Dynamically import all modules within this folder (namespace preserving)
 for module in modules:
-    if verbose: print yellow('    nrutils.formula:')+' Found formula module "%s"' % green(module)
-    exec 'import %s' % module
+    # if verbose: print yellow('    nrutils.formula:')+' Found formula module "%s"' % green(module)
+    exec( 'import nrutils.formula.%s' % module)
 
 # Cleanup
-del dirname, basename, isdir, modules, module, f, glob, yellow
+del dirname, basename, isdir, modules, module, glob
