@@ -234,7 +234,7 @@ class scconfig(smart_object):
                     if this.__dict__[attr][-1] != '/':
                         this.__dict__[attr] += '/'
                 elif isinstance(this.__dict__[attr],(list,tuple)):
-                    for k in range(len(this.__dict__[attr])):
+                    for k in list(range(len(this.__dict__[attr]))):
                         if this.__dict__[attr][k] != '/':
                             this.__dict__[attr][k] += '/'
         # Make sure that user symbols (~) are expanded
@@ -894,6 +894,12 @@ def scsearch( catalog = None,           # Manually input list of scentry objects
     from numpy.linalg import norm
     from numpy import allclose,dot
     import pickle, glob
+    
+    # Detect python version
+    import sys
+    PYTHON3 = True
+    if sys.version_info[0] < 3:
+        PYTHON3 = False
 
     # absolute tolerance for num comparisons
     tol = 1e-6
@@ -910,9 +916,10 @@ def scsearch( catalog = None,           # Manually input list of scentry objects
         if verbose==2: alert('Loading catalog information from:')
         for db in dblist:
             if verbose==2: alert(cyan(db))
-            catalog = catalog + pickle.load( open( db, "rb" ), encoding='latin1' )
-            # with open( db , 'rb') as dbf:
-            #     catalog = catalog + pickle.load( dbf, encoding='latin1' )
+            if PYTHON3:
+                catalog = catalog + pickle.load( open( db, "rb" ), encoding='latin1' )
+            else:
+                catalog = catalog + pickle.load( open( db, "rb" ) )
 
     # Determine whether remnant properties are already stored
     if validate_remnant is True:
@@ -1190,7 +1197,7 @@ def sclabel( entry,             # scentry object
 
         #
         common_tag_set = set(tag_list[0])
-        for k in range(2,len(tag_list)):
+        for k in list(range(2,len(tag_list))):
             common_tag_set &= set(tag_list[k])
 
         #
@@ -1210,7 +1217,7 @@ def sclabel( entry,             # scentry object
 
         # concat tags together to make label
         label = ''
-        for k in range(len(tag)):
+        for k in list(range(len(tag))):
             label += sign(k)*'-' + tag[k]
 
         #
@@ -1276,7 +1283,7 @@ def sclabel( entry,             # scentry object
 
         # concat tags together to make label
         label = ''
-        for k in range(len(tag)):
+        for k in list(range(len(tag))):
             label += sign(k)*'-' + tag[k]
 
         #
@@ -2804,9 +2811,9 @@ class gwylm:
         # If if an lmax value is given.
         if lmax is not None:
             # Then load all multipoles within lmax
-            for l in range(2,lmax+1):
+            for l in list(range(2,lmax+1)):
                 #
-                for m in range(-l,l+1):
+                for m in list(range(-l,l+1)):
                     #
                     this.__lmlist__.append( (l,m) )
         else: # Else, load the given lis of lm values
@@ -2897,8 +2904,8 @@ class gwylm:
 
             nmask_len = int(float(len(xx))/nmasks)
             masks = []; startdex,enddex = 0,nmask_len
-            for k in range(nmasks):
-                masks.append( range( startdex, enddex ) )
+            for k in list(range(nmasks)):
+                masks.append( list(range( startdex, enddex )) )
                 startdex=enddex-1 # No gaps
                 enddex = enddex+nmask_len
                 if k+1 == nmasks-1:
@@ -2988,7 +2995,7 @@ class gwylm:
 
         # Initialize mask if needed
         if mask is None:
-            mask = range(0,len(x1))
+            mask = list(range(0,len(x1)))
 
         # Apply mask
         x1,y1,z1 = [ k[mask] for k in (x1,y1,z1) ]
@@ -3015,8 +3022,8 @@ class gwylm:
 
             nmask_len = int(float(len(xx))/nmasks)
             masks = []; startdex,enddex = 0,nmask_len
-            for k in range(nmasks):
-                masks.append( range( startdex, enddex ) )
+            for k in list(range(nmasks)):
+                masks.append( list(range( startdex, enddex )) )
                 startdex=enddex
                 enddex = enddex+nmask_len
                 if k+1 == nmasks-1:
@@ -3059,8 +3066,8 @@ class gwylm:
         alert('Symmetrising multipole moments in: %s'%magenta(this.simname),verbose=verbose, header=True)
 
         #
-        if not ('cp' in this.frame):
-            warning('WE ARE BORG. You have asked us to symmetrise in a frame'+' (%s)'%red(str(this.frame))+' that is not co-precessing. If the system is precessing, or generally not in an L-aligned frame, then using this function will result in nonsense. We are sorry for this unavoidable reality. RESISTANCE IS FUTILE.')
+        # if not ('cp' in this.frame):
+        #     warning('WE ARE BORG. You have asked us to symmetrise in a frame'+' (%s)'%red(str(this.frame))+' that is not co-precessing. If the system is precessing, or generally not in an L-aligned frame, then using this function will result in nonsense. We are sorry for this unavoidable reality. RESISTANCE IS FUTILE.')
 
         #
         select_lm = [ (l,m) for l,m in this.__lmlist__ if m>=0 ]
@@ -4608,7 +4615,7 @@ class gwylm:
             R1_ = dot( M, R1_ )
             R2_ = dot( M, R2_ )
             #
-            for k in range(len(R1_)):
+            for k in list(range(len(R1_))):
                 ans.R1[k] = R1_[k]
                 ans.R2[k] = R2_[k]
         #
@@ -4874,7 +4881,7 @@ class gwylm:
         #--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--%%--#
         # The code below normalizes the match for the entire sky average
         proceedfun = lambda ll,mm: True if lm is None else ((ll,mm) in lm)
-        for k in range(N):
+        for k in list(range(N)):
             if kind=='psi4':
                 l,m = zref.ylm[k].l,zref.ylm[k].m
             else:
@@ -4883,7 +4890,7 @@ class gwylm:
             if proceed:
                 u,v = zref.lm[l,m][kind].y, that.lm[l,m][kind].y
                 U += prod(u,u); V += prod(v,v)
-        for k in range(N):
+        for k in list(range(N)):
             if kind=='psi4':
                 l,m = zref.ylm[k].l,zref.ylm[k].m
             else:
@@ -5094,24 +5101,24 @@ class gwylm:
                     b = spline(this.t, beta)(times_used)
                     g = spline(this.t, gamma)(times_used)
                     J = array([rotate3(J_[k], a[k], b[k], g[k])
-                               for k in range(len(J_[:, 0]))])
+                               for k in list(range(len(J_[:, 0])))])
                     L = array([rotate3(L_[k], a[k], b[k], g[k])
-                               for k in range(len(L_[:, 0]))])
+                               for k in list(range(len(L_[:, 0])))])
                     S = array([rotate3(S_[k], a[k], b[k], g[k])
-                               for k in range(len(S_[:, 0]))])
+                               for k in list(range(len(S_[:, 0])))])
 
                     R1 = array([rotate3(R1_[k], a[k], b[k], g[k])
-                                for k in range(len(R1_[:, 0]))])
+                                for k in list(range(len(R1_[:, 0])))])
                     R2 = array([rotate3(R2_[k], a[k], b[k], g[k])
-                                for k in range(len(R2_[:, 0]))])
+                                for k in list(range(len(R2_[:, 0])))])
                     S1 = array([rotate3(S1_[k], a[k], b[k], g[k])
-                                for k in range(len(S1_[:, 0]))])
+                                for k in list(range(len(S1_[:, 0])))])
                     S2 = array([rotate3(S2_[k], a[k], b[k], g[k])
                                 for k in range(len(S2_[:, 0]))])
                     L1 = array([rotate3(L1_[k], a[k], b[k], g[k])
-                                for k in range(len(L1_[:, 0]))])
+                                for k in list(range(len(L1_[:, 0])))])
                     L2 = array([rotate3(L2_[k], a[k], b[k], g[k])
-                                for k in range(len(L2_[:, 0]))])
+                                for k in list(range(len(L2_[:, 0])))])
                 else:
                     #
                     warning('Dynamics rotations will '+bold(red('not'))+' be performed as FD angles given. There may be a way to determine the relevant TD angles')
@@ -5173,10 +5180,10 @@ class gwylm:
                 # print key, len(this.remnant[key].shape)
                 if this.remnant[key].shape[-1] == 3:
                     if len(alpha) == len(this.remnant['time_used']):
-                        for k in range(len(alpha)):
+                        for k in list(range(len(alpha))):
                             that.remnant[key][k,:] = R( this.remnant[key][k,:], k )
                     elif len(alpha)==1:
-                        for k in range( that.remnant[key].shape[0] ):
+                        for k in list(range( that.remnant[key].shape[0] )):
                             that.remnant[key][k,:] = R( this.remnant[key][k,:], 0 )
                     else:
                         warning('cannot rotate radiated quantities, length mismatch: len alpha is %i, but times are %i'%(len(alpha),len(this.remnant['time_used'])))
@@ -5188,14 +5195,14 @@ class gwylm:
                 if (this.radiated[key].shape[0] > 1) and (this.radiated[key].shape[-1] == 3):
                     if len(alpha) == len(this.radiated['time_used']):
                         if len(this.radiated[key].shape)>1:
-                            for k in range(len(alpha)):
+                            for k in list(range(len(alpha))):
                                 that.radiated[key][k,:] = R( this.radiated[key][k,:], k )
                         else:
                             if key=='J0':
                                 that.radiated[key] = R( this.radiated[key], 0 )
                     elif len(alpha)==1:
                         if len(this.radiated[key].shape)>1:
-                            for k in range( that.radiated[key].shape[0] ):
+                            for k in list(range( that.radiated[key].shape[0] )):
                                 that.radiated[key][k,:] = R( this.radiated[key][k,:], 0 )
                         else:
                             that.radiated[key] = R( this.radiated[key], 0 )
@@ -5383,7 +5390,7 @@ class gwylm:
         #     this.Pf = remnant['P'][-1]
         #     alert('Defining new property "this.%s" to hold remnant linear momentum.'%(red('Pf')))
         
-        remnant['X'] = vstack([ remnant['J'][:,k]/(remnant['M']**2) for k in range(3) ]).T
+        remnant['X'] = vstack([ remnant['J'][:,k]/(remnant['M']**2) for k in list(range(3)) ]).T
         
         #
         if apply:
@@ -5878,8 +5885,9 @@ class gwfcharend:
             warning(msg,'gwfcharend')
         # Define the start and end of the region to be windowed
         this.left_index = ylm.k_amp_max + knots[-1]
-        this.right_index = ylm.k_amp_max + knots[-1]+(len(tt)-knots[-1])*6/10
+        this.right_index = ylm.k_amp_max + knots[-1]+int((len(tt)-knots[-1])*6.0/10)
         # Calculate the window and store to the current object
+        # alert( [ this.right_index, this.left_index ] )
         this.window_state = [ this.right_index, this.left_index ]
         this.window = maketaper( ylm.t, this.window_state )
 
@@ -6131,7 +6139,7 @@ def lvcnr5_to_gwylm(h5dir,lm=None,verbose=True,dt=0.25,lmax=6,clean=True):
     done = False
 
     # Generate l,m values based on lmax
-    if lmlist is None: lmlist = [ (l,m)  for l in range(2,lmax+1) for m in range(-l,l+1) ]
+    if lmlist is None: lmlist = [ (l,m)  for l in list(range(2,lmax+1)) for m in list(range(-l,l+1)) ]
 
     #
     for l,m in lmlist:
