@@ -1333,6 +1333,10 @@ class gwf:
         if kind is None:
             kind = r'$y$'
         this.kind = kind
+        
+        #
+        if (mf is None) or (xf is None):
+            error('both final mass and spin must be input')
 
         # Optional field to be set externally if needed
         source_location = None
@@ -1367,6 +1371,9 @@ class gwf:
 
         #
         this.ref_scentry = ref_scentry
+        
+        # Give this gwf object a qnm_object. NOTE that this may be used for naive feature detection eg of junk radiation. See setfields for more information.
+        this.qnmo = qnmobj( mf, xf*mf, l,m,0,p=1,use_nr_convention=True,verbose=False,calc_slm=False,calc_rlm=False )
 
         this.setfields(wfarr=wfarr,dt=dt,k_amp_max=k_amp_max)
 
@@ -1466,7 +1473,19 @@ class gwf:
         # Validate time step. Interpolate for constant time steo if needed.
         this.__validatet__()
         # Determine formatting of wfarr
-        t = this.wfarr[:,0]; A = this.wfarr[:,1]; B = this.wfarr[:,2];
+        t = this.wfarr[:,0]; A = this.wfarr[:,1]; B = this.wfarr[:,2]
+        
+        # Define ringdown frequencies 
+        this.qnm_cw = this.qnmo.CW 
+        this.qnm_cf = this.qnm_cw / (2*pi)
+        # The real part
+        this.qnm_wring = this.qnmo.CW.real
+        this.qnm_fring = this.qnm_wring / (2*pi)
+        # The imag part
+        this.qnm_wdamp = this.qnmo.CW.imag
+        this.qnm_fdamp = this.qnm_wdamp / (2*pi)
+        # The time needed for one e-fold 
+        this.qnm_damp_time = 1.0 / this.qnm_fdamp
 
         # if all elements of A are greater than zero
         if (A>0).all() :
@@ -1520,9 +1539,28 @@ class gwf:
             # 
             if min(this.amp) == max(this.amp):
                 # IF the data are constant 
+                # ---
                 this.k_amp_max = 0
             else:
                 # IF data are not constant
+                # ---
+                
+                # NOTE that here we ASSUME that we are given an inspiral-merger-ringdown waveform
+                
+                # Here we assume that 
+                # * any supposed junk radiation both presents and damps away on the ringdown time scale (I've always been skeptical of this argument, but it's a useful heuristic)
+                # * the waveform is long enough for this timescale to not iclude the peak radiation
+                mask = this.t > ( this.t[0] + this.qnm_damp_time )
+                # 
+                if sum(mask) == 0: warning(red('This waveform may be too short -- it is shorter than its expected ringdown dampping time.'))
+                #
+                k_phi = argmax( this.d2phi[mask] )
+                k_amp = argmax( this.amp  [mask] )
+                #
+                if abs(this.t[k_phi]-this.t[k_amp])>this.qnm_damp_time:
+                    this.k_amp_max = k_phi
+                else:
+                    this.k_amp_max = k_amp
                 
                 # # --> 
                 # k_phi = argmax( this.d2phi )
@@ -1535,12 +1573,14 @@ class gwf:
                 # this.k_amp_max = argmax( this.amp )
                 # print this.l, this.m
             
-                this.k_amp_max = find_amp_peak_index( this.t, this.amp, this.phi, plot=False ) # function lives in basics
+                # this.k_amp_max = find_amp_peak_index( this.t, this.amp, this.phi, plot=False ) # function lives in basics
             
                 # print '>> ',this.k_amp_max
                 # this.k_amp_max = argmax(this.amp)                           # index location of max ampitude
             
         else:
+            
+            # This pathway is particularly useful for ringdown waveforms whose amp max is at 0, but whose amp morphology is inconsistent with the assumtions made above
             this.k_amp_max = k_amp_max
 
 
@@ -2114,7 +2154,9 @@ class gwf:
         return copy(this)
 
     # RETURN a clone the current waveform object. NOTE that the copy package may also be used here
-    def clone(this): return gwf(this.wfarr).meet(this)
+    def clone(this): 
+        that = this.copy()
+        return that
 
     # Interpolate the current object
     def interpolate(this,dt=None,domain=None):
@@ -2708,7 +2750,8 @@ class gwylm:
         '''
         #
         if not this.config.__is_extreme_mass_ratio__:
-            error('The current object does not contain extreme mass-ratio waveform data as tagged by this.config.__is_extreme_mass_ratio__')
+            warning('The current object does not contain extreme mass-ratio waveform data as tagged by this.config.__is_extreme_mass_ratio__. Therefore this method will not perform any scaling.')
+            return this
             
         #
         if initialize:
@@ -3927,7 +3970,7 @@ class gwylm:
                 wfarr = array( [ t, l_plus, l_cross ] ).T
 
                 # Add the news multipole to this object's list of multipoles
-                flm.append( gwf( wfarr, l=y.l, m=y.m, kind='$r\dot{h}_{%i%i}$'%(y.l,y.m) ) )
+                flm.append( gwf( wfarr, l=y.l, m=y.m, kind='$r\dot{h}_{%i%i}$'%(y.l,y.m), mf=this.mf, xf=this.xf ) )
 
             else:
 
@@ -5998,8 +6041,11 @@ class gwfcharstart:
             # 5. Determine the with of waveform turn on in indeces based on the results above. NOTE that the width is bound below by half the difference betwen the wf start and the wf peak locations.
             safedex = min( len(pk_mask)-1, start_map+shift )
             index_width = min( [ 1+pk_mask[safedex]-pk_mask[start_map], 0.5*(1+y.k_amp_max-pk_mask[ start_map ]) ] )
+            
             # 6. Estimate where the waveform begins to turn on. This is approximately where the junk radiation ends. Note that this area will be very depressed upon windowing, so is can be
-            (_,j_id) = find_amp_peak_index( y.t, y.amp, y.phi, return_jid=True )
+            j_id = int( 1.5*y.qnm_damp_time / y.dt )
+            #(_,j_id) = find_amp_peak_index( y.t, y.amp, y.phi, return_jid=True )
+            
             # NOTE that the line above is more robust for precessing cases than the line below. There are cases when the optimal emission axis crosses z=0 which causes problems for the line below
             # j_id = pk_mask[ start_map ]
 
