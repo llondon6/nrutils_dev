@@ -1040,17 +1040,18 @@ def scsearch( catalog = None,           # Manually input list of scentry objects
         keyword = [ k.lower() for k in keyword ]
 
         # Handle two cases
+        get_catalog_name = lambda entry: entry.config.config_file_location.split('/')[-1].split('.')[0]
         if allkeys:
             # Treat different keys with AND
             for key in keyword:
-                test = lambda k: key in k.metadata_file_location.lower()
+                test = lambda k: (key in k.metadata_file_location.lower()) or (key in get_catalog_name(k))
                 catalog = filter( test, catalog )
         else:
             # Treat different keys with OR
             temp_catalogs = [ catalog for w in keyword ]
             new_catalog = []
             for j,key in enumerate(keyword):
-                test = lambda k: key in k.metadata_file_location.lower()
+                test = lambda k: (key in k.metadata_file_location.lower()) or (key in get_catalog_name(k))
                 new_catalog += filter( test, temp_catalogs[j] )
             catalog = list(set(new_catalog))
 
@@ -1322,6 +1323,7 @@ class gwf:
                   label                 = None, # Optional label input (see gwylm)
                   preinspiral           = None, # Holder for information about the raw waveform's turn-on
                   postringdown          = None, # Holder for information about the raw waveform's turn-off
+                  k_amp_max = None,
                   verbose = False ):    # Verbosity toggle
 
         #
@@ -1366,7 +1368,7 @@ class gwf:
         #
         this.ref_scentry = ref_scentry
 
-        this.setfields(wfarr=wfarr,dt=dt)
+        this.setfields(wfarr=wfarr,dt=dt,k_amp_max=k_amp_max)
 
         # If desired, Copy fields from related gwf object.
         if type(friend).__name__ == 'gwf' :
@@ -1385,10 +1387,11 @@ class gwf:
         this.__lowpassfiltered__ = False
 
     # set fields of standard wf object
-    def setfields(this,         # The current object
-                  wfarr=None,   # The waveform array to apply to the current object
-                  setfd=True,   # Option to toggle freq domain calculations
-                  dt=None):     # The time spacing to apply to the current object
+    def setfields(this,           # The current object
+                  wfarr=None,     # The waveform array to apply to the current object
+                  setfd=True,     # Option to toggle freq domain calculations
+                  k_amp_max=None, # Index of peak amplitude
+                  dt=None):       # The time spacing to apply to the current object
 
         # Alert the use if improper input is given
         if (wfarr is None) and (this.wfarr is None):
@@ -1503,24 +1506,47 @@ class gwf:
         # phi_[0:k] = phi_[k]
         this.phi = phi_
 
-        this.dphi   = intrp_diff( this.t, this.phi )                # Derivative of phase, last point interpolated to preserve length
+        this.dphi   = intrp_diff( this.t, this.phi )  
+        this.d2phi  = intrp_diff( this.t, smooth(this.phi,width=max(20,int(len(this.t)/80))).answer )                # Derivative of phase, last point interpolated to preserve length
         # this.dphi   = diff( this.phi )/this.dt                # Derivative of phase, last point interpolated to preserve length
 
 
-        # Only use the smooth part of the amplitude to determine the peak location. This is needed whenthe junk radiation has a higher amplitude than the physical peak.
-        #mask = smoothest_part( this.amp )
-        #this.k_amp_max = argmax( this.amp[mask[0]:] ) + mask[0]
-        # this.k_amp_max = argmax( this.m * this.dphi * this.amp )
-        # this.k_amp_max = argmax( this.amp )
-        # print this.l, this.m
-        this.k_amp_max = find_amp_peak_index( this.t, this.amp, this.phi, plot=False ) # function lives in basics
-        # print '>> ',this.k_amp_max
-        # this.k_amp_max = argmax(this.amp)                           # index location of max ampitude
+        # It is surprisingly complicated to find the peak location >.<
+        # * For some cases leading junk radiation is larger than the real peak
+        # * For extreme-mass-ratio cases there may be no peak 
+        # * Some data will be zero, and therefore also not have a peak
+        if k_amp_max is None:
+            
+            # 
+            if min(this.amp) == max(this.amp):
+                # IF the data are constant 
+                this.k_amp_max = 0
+            else:
+                # IF data are not constant
+                
+                # # --> 
+                # k_phi = argmax( this.d2phi )
+                # k_amp = argmax( this.amp )
+            
+                # mask = smoothest_part( this.amp )
+                # this.k_amp_max = argmax( this.amp[mask[0]:] ) + mask[0]
+                
+                # this.k_amp_max = argmax( this.m * this.dphi * this.amp )
+                # this.k_amp_max = argmax( this.amp )
+                # print this.l, this.m
+            
+                this.k_amp_max = find_amp_peak_index( this.t, this.amp, this.phi, plot=False ) # function lives in basics
+            
+                # print '>> ',this.k_amp_max
+                # this.k_amp_max = argmax(this.amp)                           # index location of max ampitude
+            
+        else:
+            this.k_amp_max = k_amp_max
 
 
         # Estimate true time location of peak amplitude
         try:
-            # NOTE that teh k_amp_ax above is used to help intrp_t_amp_max
+            # NOTE that teh k_amp_max above is used to help intrp_t_amp_max
             this.intrp_t_amp_max = intrp_argmax(clean_amp,domain=this.t,ref_index=this.k_amp_max) # Interpolated time coordinate of max
         except:
             this.intrp_t_amp_max = this.t[this.k_amp_max]
@@ -2439,15 +2465,16 @@ class gwylm:
             calcnews=False
             calcstrain=False
             
-        # ensure that __is_extreme_mass_ratio__ attribute exists (it's False be default)
-        if not ( '__is_extreme_mass_ratio__' in scentry_obj.__dict__ ):
-            scentry_obj.config.__is_extreme_mass_ratio__ = False
-            
-        # ensure that __disk_data_kind__ attribute exists
-        if not ( '__disk_data_kind__' in scentry_obj.__dict__ ):
-            scentry_obj.config.__disk_data_kind__ = 'psi4'
-        if not ( scentry_obj.config.__disk_data_kind__ in ('strain','psi4','news') ):
-            raise ValueError('scentry __disk_data_kind__ must be "strain", "psi4" or "news"')
+        if scentry_obj.config:
+            # ensure that __is_extreme_mass_ratio__ attribute exists (it's False be default)
+            if not ( '__is_extreme_mass_ratio__' in scentry_obj.__dict__ ):
+                scentry_obj.config.__is_extreme_mass_ratio__ = False
+                
+            # ensure that __disk_data_kind__ attribute exists
+            if not ( '__disk_data_kind__' in scentry_obj.__dict__ ):
+                scentry_obj.config.__disk_data_kind__ = 'psi4'
+            if not ( scentry_obj.config.__disk_data_kind__ in ('strain','psi4','news') ):
+                raise ValueError('scentry __disk_data_kind__ must be "strain", "psi4" or "news"')
 
 
         # if multipole_dictionary: load = False
@@ -2605,8 +2632,9 @@ class gwylm:
 
         # Clean the waveforms of junk radiation if desired
         this.__isclean__ = False
-        if clean:
-            this.clean()
+        if scentry_obj.config:
+            if clean:
+                this.clean()
 
         # Set some boolean tags
         this.__isringdownonly__ = False # will switch to True if, ringdown is cropped. See gwylm.ringdown().
@@ -2624,20 +2652,23 @@ class gwylm:
                 this.__enforce_m_relative_phase_orientation__()
 
         # Populate a dictionary which contains the time series for source dynamics
-        if load_dynamics:
-            waveform_times = this.t[ (this.t>this.t[this.startindex]) & (this.t<this[2,2]['psi4'].intrp_t_amp_max) ]
-            this.load_dynamics(verbose=verbose,waveform_times=waveform_times)
+        if scentry_obj.config:
+            if load_dynamics:
+                waveform_times = this.t[ (this.t>this.t[this.startindex]) & (this.t<this[2,2]['psi4'].intrp_t_amp_max) ]
+                this.load_dynamics(verbose=verbose,waveform_times=waveform_times)
             
         # If an extreme mass ratio case, then scale to a fiducial mass-ratio 
-        if this.config.__is_extreme_mass_ratio__:
-            mu = 1.0/1e-4
-            alert('Scaling multipole moments to default mass-ratio of %s'%red(str(mu)),header=True)
-            this.scale_emr_to_massratio(mu,initialize=True,__apply__=True)
+        if scentry_obj.config:
+            if this.config.__is_extreme_mass_ratio__:
+                mu = 1.0/1e-4
+                alert('Scaling multipole moments to default mass-ratio of %s'%red(str(mu)),header=True)
+                this.scale_emr_to_massratio(mu,initialize=True,__apply__=True)
             
         # Define remnant momentum 
-        this.__calc_radiated_quantities__(use_mask=False,enforce_initial_J_consistency=False)
-        this.Pf = this.remnant['P'][-1]
-        this.__scentry__.Pf = this.Pf
+        if scentry_obj.config:
+            this.__calc_radiated_quantities__(use_mask=False,enforce_initial_J_consistency=False)
+            this.Pf = this.remnant['P'][-1]
+            this.__scentry__.Pf = this.Pf
 
 
     # Allow class to be indexed
@@ -3997,7 +4028,7 @@ class gwylm:
                  verbose = None):
 
         #
-        from numpy import linspace,array,where,argmax,sum
+        from numpy import linspace,array,where,argmax,sum,argmin
         from scipy.interpolate import InterpolatedUnivariateSpline as spline
 
         # Make sure that the l=m=2 multipole exists
@@ -4072,6 +4103,12 @@ class gwylm:
         that.__isringdownonly__ = True
         that.T0 = T0
         that.T1 = T1
+        
+        #
+        if T0>=0:
+            k_amp_max = 0
+        else:
+            k_amp_max = argmin( abs(t-peak_time) )
 
         #
         def __ringdown__(wlm):
@@ -4084,7 +4121,7 @@ class gwylm:
                 # Create waveform array
                 wfarr = array( [t-peak_time,plus,cross] ).T
                 # Create gwf object
-                xlm.append(  gwf(wfarr,l=y.l,m=y.m,mf=this.mf,xf=this.xf,kind=y.kind,label=this.label,m1=this.m1,m2=this.m2,ref_scentry = this.__scentry__)  )
+                xlm.append(  gwf(wfarr,l=y.l,m=y.m,mf=this.mf,xf=this.xf,kind=y.kind,label=this.label,m1=this.m1,m2=this.m2,ref_scentry = this.__scentry__,k_amp_max=k_amp_max)  )
             #
             return xlm
         #

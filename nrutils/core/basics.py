@@ -1737,7 +1737,7 @@ def find_amp_peak_index( t, amp, phi, plot = False, return_jid=False ):
     '''
 
     #
-    from numpy import log,argmax,linspace
+    from numpy import log,argmax,linspace,array
     if plot:
         from matplotlib.pyplot import plot,yscale,xscale,axvline,show,figure,xlim
 
@@ -1790,8 +1790,10 @@ def find_amp_peak_index( t, amp, phi, plot = False, return_jid=False ):
     #     xlim( t[k_amp_max]-200,t[k_amp_max]+200 )
     #     show()
 
+    # amp_ = smooth( amp.copy(), width=20 ).answer
     amp_ = amp.copy()
-    mask = amp_ > 1e-4*max(amp_)
+    # print(amp_[0],amp_[1])
+    mask = (amp_ > 1e-4*max(amp_)) # & ( array(list(range(len(amp)))) > 9 )
     if sum(mask):
         a = find(mask)[0]
         b = find(mask)[-1]
@@ -1813,7 +1815,7 @@ def find_amp_peak_index( t, amp, phi, plot = False, return_jid=False ):
         #
         if k_amp_max==0:
             
-            #warning('the data input may not peak near merger. we will use the second derivative of the phase to estimate the location of merger in the timeseries')
+            # warning('the data input may not peak near merger. we will use the second derivative of the phase to estimate the location of merger in the timeseries')
         
             mask = amp>(1e-2*max(amp))
             d2phi = abs(spline_diff(t[mask],phi[mask],n=2))
@@ -1821,6 +1823,17 @@ def find_amp_peak_index( t, amp, phi, plot = False, return_jid=False ):
             k_amp_max = argmax(d2phi)
             ans = k_amp_max
             jid=0
+            
+            # from matplotlib.pyplot import plot,axvline,show,xlim,ylim,xlabel,ylabel,yscale,figure
+            # figure()
+            # plot(t,amp)
+            # plot(t[mask],amp[mask],lw=4)
+            # yscale('log')
+            # figure()
+            # plot( t[mask], d2phi  )
+            # plot( t[mask], smooth(d2phi).answer  )
+            # show()
+            # error()
 
         # Return answer
         ans = k_amp_max

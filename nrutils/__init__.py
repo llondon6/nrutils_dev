@@ -108,7 +108,7 @@ for p in internal_packages:
 # Import select modules for high level access
 from nrutils.manipulate import nr2h5
 from .core.units import *
-from .core.nrsc import scsearch, scbuild, sc_add, gwylm, gwf, lswfa, scentry, screconf, simdir2scentry, __gconfig__, lvcnr5_to_gwylm
+from .core.nrsc import scsearch, scbuild, sc_add, gwylm, gwf, lswfa, scentry, screconf, simdir2scentry, __gconfig__, lvcnr5_to_gwylm, scconfig
 from nrutils.formula import *
 
 #
