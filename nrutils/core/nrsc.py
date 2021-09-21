@@ -1327,6 +1327,9 @@ class gwf:
                   verbose = False ):    # Verbosity toggle
 
         #
+        from numpy import int64
+        
+        #
         this.dt = dt
 
         # The kind of obejct to be created : e.g. psi4 or strain
@@ -1335,8 +1338,11 @@ class gwf:
         this.kind = kind
         
         #
-        if (mf is None) or (xf is None):
-            error('both final mass and spin must be input')
+        this.__is_a_multipole_moment__ = False
+        if isinstance(l,(int,int64)) or isinstance(m,(int,int64)):
+            this.__is_a_multipole_moment__ = True
+            if (mf is None) or (xf is None):
+                error('since mode indices are give, both final mass and spin must also be input')
 
         # Optional field to be set externally if needed
         source_location = None
@@ -1373,7 +1379,8 @@ class gwf:
         this.ref_scentry = ref_scentry
         
         # Give this gwf object a qnm_object. NOTE that this may be used for naive feature detection eg of junk radiation. See setfields for more information.
-        this.qnmo = qnmobj( mf, xf*mf, l,m,0,p=1,use_nr_convention=True,verbose=False,calc_slm=False,calc_rlm=False )
+        if this.__is_a_multipole_moment__:
+            this.qnmo = qnmobj( mf, xf*mf, l,m,0,p=1,use_nr_convention=True,verbose=False,calc_slm=False,calc_rlm=False )
 
         this.setfields(wfarr=wfarr,dt=dt,k_amp_max=k_amp_max)
 
@@ -1475,17 +1482,19 @@ class gwf:
         # Determine formatting of wfarr
         t = this.wfarr[:,0]; A = this.wfarr[:,1]; B = this.wfarr[:,2]
         
-        # Define ringdown frequencies 
-        this.qnm_cw = this.qnmo.CW 
-        this.qnm_cf = this.qnm_cw / (2*pi)
-        # The real part
-        this.qnm_wring = this.qnmo.CW.real
-        this.qnm_fring = this.qnm_wring / (2*pi)
-        # The imag part
-        this.qnm_wdamp = this.qnmo.CW.imag
-        this.qnm_fdamp = this.qnm_wdamp / (2*pi)
-        # The time needed for one e-fold 
-        this.qnm_damp_time = 1.0 / this.qnm_fdamp
+        # If the instance is a multipole moment, then set ringdown related fields 
+        if this.__is_a_multipole_moment__:
+            # Define ringdown frequencies 
+            this.qnm_cw = this.qnmo.CW 
+            this.qnm_cf = this.qnm_cw / (2*pi)
+            # The real part
+            this.qnm_wring = this.qnmo.CW.real
+            this.qnm_fring = this.qnm_wring / (2*pi)
+            # The imag part
+            this.qnm_wdamp = this.qnmo.CW.imag
+            this.qnm_fdamp = this.qnm_wdamp / (2*pi)
+            # The time needed for one e-fold 
+            this.qnm_damp_time = 1.0 / this.qnm_fdamp
 
         # if all elements of A are greater than zero
         if (A>0).all() :
@@ -1526,7 +1535,7 @@ class gwf:
         this.phi = phi_
 
         this.dphi   = intrp_diff( this.t, this.phi )  
-        this.d2phi  = intrp_diff( this.t, smooth(this.phi,width=max(20,int(len(this.t)/80))).answer )                # Derivative of phase, last point interpolated to preserve length
+        this.d2phi  = intrp_diff( this.t, smooth(this.dphi,width=max(20,int(len(this.t)/80))).answer )                # Derivative of phase, last point interpolated to preserve length
         # this.dphi   = diff( this.phi )/this.dt                # Derivative of phase, last point interpolated to preserve length
 
 
@@ -1541,6 +1550,7 @@ class gwf:
                 # IF the data are constant 
                 # ---
                 this.k_amp_max = 0
+                this.k_phi_max = 0
             else:
                 # IF data are not constant
                 # ---
@@ -1550,17 +1560,24 @@ class gwf:
                 # Here we assume that 
                 # * any supposed junk radiation both presents and damps away on the ringdown time scale (I've always been skeptical of this argument, but it's a useful heuristic)
                 # * the waveform is long enough for this timescale to not iclude the peak radiation
-                mask = this.t > ( this.t[0] + this.qnm_damp_time )
+                #
+                mask = this.t > ( this.t[0] + 2*this.qnm_damp_time )
+                mask = mask & (this.amp>(0.01*max(this.amp)))
+                #
+                #print('@: ',this.t[find(mask)[0]])
                 # 
                 if sum(mask) == 0: warning(red('This waveform may be too short -- it is shorter than its expected ringdown dampping time.'))
                 #
-                k_phi = argmax( this.d2phi[mask] )
-                k_amp = argmax( this.amp  [mask] )
+                k_phi = argmax( abs(this.d2phi[mask]) ) + find(mask)[0]
+                k_amp = argmax(       this.amp[mask]  ) + find(mask)[0]
                 #
-                if abs(this.t[k_phi]-this.t[k_amp])>this.qnm_damp_time:
-                    this.k_amp_max = k_phi
-                else:
-                    this.k_amp_max = k_amp
+                # this.k_amp_max = k_amp
+                this.k_amp_max = k_amp
+                this.k_phi_max = k_phi
+                # if abs(this.t[k_phi]-this.t[k_amp])>this.qnm_damp_time:
+                #     this.k_amp_max = k_phi
+                # else:
+                #     this.k_amp_max = k_amp
                 
                 # # --> 
                 # k_phi = argmax( this.d2phi )
@@ -1582,6 +1599,7 @@ class gwf:
             
             # This pathway is particularly useful for ringdown waveforms whose amp max is at 0, but whose amp morphology is inconsistent with the assumtions made above
             this.k_amp_max = k_amp_max
+            this.k_phi_max = k_amp_max
 
 
         # Estimate true time location of peak amplitude
@@ -1965,7 +1983,7 @@ class gwf:
 
         #
         from matplotlib.pyplot import plot,subplot,figure,tick_params,subplots_adjust,sca
-        from matplotlib.pyplot import grid,setp,tight_layout,margins,xlabel,legend,ylim,xlim
+        from matplotlib.pyplot import grid,setp,tight_layout,margins,xlabel,legend,ylim,xlim,axvline
         from matplotlib.pyplot import show as shw
         from matplotlib.pyplot import ylabel as yl
         from matplotlib.pyplot import title as ttl
@@ -1973,15 +1991,16 @@ class gwf:
 
         #
         if fig is None:
-            fig = figure(figsize = sizescale*array([8,7.2]))
+            fig = figure(figsize = sizescale*array([8,4*7.2/3]))
             fig.set_facecolor("white")
 
         #
         if ax is None:
             ax = []
-            ax.append( subplot(3,1,1) )
-            ax.append( subplot(3,1,2, sharex=ax[0]) )
-            ax.append( subplot(3,1,3, sharex=ax[0]) )
+            ax.append( subplot(4,1,1) )
+            ax.append( subplot(4,1,2, sharex=ax[0]) )
+            ax.append( subplot(4,1,3, sharex=ax[0]) )
+            ax.append( subplot(4,1,4, sharex=ax[0]) )
 
         #
         clr = rgb(3)
@@ -2037,6 +2056,9 @@ class gwf:
 
         kind = this.kind
         yl(kind,fontsize=fs,color=txclr, family=font_family )
+            
+        #
+        axvline( this.t[this.k_amp_max] )
 
         #--~--~--~--~--~--~--~--~--~--~--~--~--~--~--~--#
         # Time domain phase
@@ -2053,18 +2075,37 @@ class gwf:
             mask = (this.t>min(tlim)) & (this.t<max(tlim))
             ylim( lim( this.phi[mask], dilate=0.1 ) )
         yl( r'$\phi = \mathrm{arg}(%s)$' % kind.replace('$','') ,fontsize=fs,color=txclr, family=font_family)
+            
+        #
+        axvline( this.t[this.k_amp_max], ls='--', alpha=0.5, color='k' )
 
         #--~--~--~--~--~--~--~--~--~--~--~--~--~--~--~--#
         # Time domain frequency
         #--~--~--~--~--~--~--~--~--~--~--~--~--~--~--~--#
         sca( ax[2] )
         grid(color=gclr, linestyle='-')
+        setp(ax[2].get_xticklabels(), visible=False)
         # Actual plotting
         plot( this.t, this.dphi, linewidth=lwid, color=sqrt(clr[0]) )
         if ref_gwf:
             plot( that.t, that.dphi, linewidth=that_lwid, color=sqrt(clr[0]), alpha=that_alpha )
         # pylim( this.t, this.dphi, domain=xlim )
         yl(r'$\mathrm{d}{\phi}/\mathrm{d}t$',fontsize=fs,color=txclr, family=font_family)
+            
+        #
+        axvline( this.t[this.k_amp_max], ls='--', alpha=0.5, color='k' )
+
+        #--~--~--~--~--~--~--~--~--~--~--~--~--~--~--~--#
+        # Time domain frequency
+        #--~--~--~--~--~--~--~--~--~--~--~--~--~--~--~--#
+        sca( ax[3] )
+        grid(color=gclr, linestyle='-')
+        # Actual plotting
+        plot( this.t, this.d2phi, linewidth=lwid, color='m' )
+        if ref_gwf:
+            plot( that.t, that.d2phi, linewidth=that_lwid, color='m', alpha=that_alpha )
+        # pylim( this.t, this.dphi, domain=xlim )
+        yl(r'$\mathrm{d}^2{\phi}/\mathrm{d}t^2$',fontsize=fs,color=txclr, family=font_family)
 
         if tlim is not None:
             mask = (this.t>min(tlim)) & (this.t<max(tlim))
@@ -2078,6 +2119,9 @@ class gwf:
         # Set axis lines (e.g. grid lines) below plot lines
         for a in ax:
             a.set_axisbelow(True)
+            
+        #
+        axvline( this.t[this.k_amp_max], ls='--', alpha=0.5, color='k' )
 
         #
         xlabel(r'$t$',fontsize=fs,color=txclr)
@@ -2179,7 +2223,7 @@ class gwf:
         this.setfields(wfarr)
 
     # Pad this waveform object in the time domain with zeros
-    def pad(this,new_length=None,where=None,apply=False,extend=True):
+    def pad(this,new_length=None,where=None,apply=False,extend=True,k_amp_max=None):
         #
         where = 'right' if where is None else where
         # Pad this waveform object to the left and right with zeros
@@ -2188,7 +2232,7 @@ class gwf:
             # Create the new wfarr
             wfarr = pad_wfarr( this.wfarr, new_length,where=where,extend=extend, __nowarn__=extend )
             # Confer to the current object
-            ans.setfields(wfarr)
+            ans.setfields(wfarr,k_amp_max=k_amp_max)
 
         #
         if extend==False:
