@@ -527,7 +527,7 @@ class scentry:
 def simdir2scentry( catalog_dir, verbose = False ):
 
     # Load useful packages
-    from commands import getstatusoutput as bash
+    # from commands import getstatusoutput as bash
     from os.path import realpath, abspath, join, splitext, basename
     from os import pardir,system,popen
     import pickle
@@ -598,7 +598,7 @@ def simdir2scentry( catalog_dir, verbose = False ):
 def scbuild(keyword=None,save=True):
 
     # Load useful packages
-    from commands import getstatusoutput as bash
+    # from commands import getstatusoutput as bash
     from os.path import realpath, abspath, join, splitext, basename
     from os import pardir,system,popen
     import pickle
@@ -610,7 +610,7 @@ def scbuild(keyword=None,save=True):
     cpath_list = glob.glob( global_settings.config_path+'*.ini' )
 
     # If a keyword is given, filter against found config files
-    if isinstance(keyword,(str,unicode)):
+    if isinstance(keyword,str):
         msg = 'Filtering ini files for \"%s\"'%cyan(keyword)
         alert(msg,'scbuild')
         cpath_list = filter( lambda path: keyword in path, cpath_list )
@@ -677,7 +677,7 @@ def scbuild(keyword=None,save=True):
             msg = 'Saving database file to %s'%cyan(db)
             alert(msg,'scbuild')
             with open(db, 'wb') as dbf:
-                pickle.dump( catalog , dbf, pickle.HIGHEST_PROTOCOL )
+                pickle.dump( catalog , dbf, protocol=2 )
 
         # Close the log file
         logfid.close()
@@ -713,7 +713,7 @@ def sc_add( database_name, simulation_dir ):
     import pickle
     import glob
     from nrutils.core.nrsc import scconfig, scentry
-    from commands import getstatusoutput as bash
+    # from commands import getstatusoutput as bash
 
     # Switch to Jonathan's short-hand
     # Targeted database to update and the location of the new simulation files
@@ -1327,7 +1327,7 @@ class gwf:
                   verbose = False ):    # Verbosity toggle
 
         #
-        from numpy import int64
+        from numpy import int64,inf
         
         #
         this.dt = dt
@@ -1342,7 +1342,7 @@ class gwf:
         if isinstance(l,(int,int64)) or isinstance(m,(int,int64)):
             this.__is_a_multipole_moment__ = True
             if (mf is None) or (xf is None):
-                error('since mode indices are give, both final mass and spin must also be input')
+                error('since mode indices are given, both final mass and spin must also be input')
 
         # Optional field to be set externally if needed
         source_location = None
@@ -1351,6 +1351,7 @@ class gwf:
         this.l = l
         this.m = m
         this.extraction_parameter = extraction_parameter
+            
 
         #
         this.verbose = verbose
@@ -1380,7 +1381,10 @@ class gwf:
         
         # Give this gwf object a qnm_object. NOTE that this may be used for naive feature detection eg of junk radiation. See setfields for more information.
         if this.__is_a_multipole_moment__:
-            this.qnmo = qnmobj( mf, xf*mf, l,m,0,p=1,use_nr_convention=True,verbose=False,calc_slm=False,calc_rlm=False )
+            # Prograde QNM
+            this.qnmo_prograde = qnmobj( mf, abs(xf), l,m,0,p=1,use_nr_convention=True,verbose=False,calc_slm=False,calc_rlm=False )
+            # Retrograde QNM
+            this.qnmo_retrograde = qnmobj( mf, abs(xf), l,m,0,p=-1,use_nr_convention=True,verbose=False,calc_slm=False,calc_rlm=False )
 
         this.setfields(wfarr=wfarr,dt=dt,k_amp_max=k_amp_max)
 
@@ -1484,17 +1488,30 @@ class gwf:
         
         # If the instance is a multipole moment, then set ringdown related fields 
         if this.__is_a_multipole_moment__:
+            
             # Define ringdown frequencies 
-            this.qnm_cw = this.qnmo.CW 
-            this.qnm_cf = this.qnm_cw / (2*pi)
+            this.qnm_prograde_cw = this.qnmo_prograde.CW 
+            this.qnm_prograde_cf = this.qnm_prograde_cw / (2*pi)
             # The real part
-            this.qnm_wring = this.qnmo.CW.real
-            this.qnm_fring = this.qnm_wring / (2*pi)
+            this.qnm_prograde_wring = this.qnmo_prograde.CW.real
+            this.qnm_prograde_fring = this.qnm_prograde_wring / (2*pi)
             # The imag part
-            this.qnm_wdamp = this.qnmo.CW.imag
-            this.qnm_fdamp = this.qnm_wdamp / (2*pi)
+            this.qnm_prograde_wdamp = this.qnmo_prograde.CW.imag
+            this.qnm_prograde_fdamp = this.qnm_prograde_wdamp / (2*pi)
             # The time needed for one e-fold 
-            this.qnm_damp_time = 1.0 / this.qnm_fdamp
+            this.qnm_prograde_damp_time = 1.0 / this.qnm_prograde_fdamp
+            
+            # Define ringdown frequencies 
+            this.qnm_retrograde_cw = this.qnmo_retrograde.CW 
+            this.qnm_retrograde_cf = this.qnm_retrograde_cw / (2*pi)
+            # The real part
+            this.qnm_retrograde_wring = this.qnmo_retrograde.CW.real
+            this.qnm_retrograde_fring = this.qnm_retrograde_wring / (2*pi)
+            # The imag part
+            this.qnm_retrograde_wdamp = this.qnmo_retrograde.CW.imag
+            this.qnm_retrograde_fdamp = this.qnm_retrograde_wdamp / (2*pi)
+            # The time needed for one e-fold 
+            this.qnm_retrograde_damp_time = 1.0 / this.qnm_retrograde_fdamp
 
         # if all elements of A are greater than zero
         if (A>0).all() :
@@ -1561,7 +1578,7 @@ class gwf:
                 # * any supposed junk radiation both presents and damps away on the ringdown time scale (I've always been skeptical of this argument, but it's a useful heuristic)
                 # * the waveform is long enough for this timescale to not iclude the peak radiation
                 #
-                mask = this.t > ( this.t[0] + 2*this.qnm_damp_time )
+                mask = this.t > ( this.t[0] + 2*this.qnm_prograde_damp_time )
                 mask = mask & (this.amp>(0.01*max(this.amp)))
                 #
                 #print('@: ',this.t[find(mask)[0]])
@@ -1574,7 +1591,7 @@ class gwf:
                 # this.k_amp_max = k_amp
                 this.k_amp_max = k_amp
                 this.k_phi_max = k_phi
-                # if abs(this.t[k_phi]-this.t[k_amp])>this.qnm_damp_time:
+                # if abs(this.t[k_phi]-this.t[k_amp])>this.qnm_prograde_damp_time:
                 #     this.k_amp_max = k_phi
                 # else:
                 #     this.k_amp_max = k_amp
@@ -2059,6 +2076,8 @@ class gwf:
             
         #
         axvline( this.t[this.k_amp_max] )
+        if 'startindex' in this.__dict__.keys():
+            axvline( this.t[this.startindex] )
 
         #--~--~--~--~--~--~--~--~--~--~--~--~--~--~--~--#
         # Time domain phase
@@ -2078,6 +2097,8 @@ class gwf:
             
         #
         axvline( this.t[this.k_amp_max], ls='--', alpha=0.5, color='k' )
+        if 'startindex' in this.__dict__.keys():
+            axvline( this.t[this.startindex] )
 
         #--~--~--~--~--~--~--~--~--~--~--~--~--~--~--~--#
         # Time domain frequency
@@ -2094,6 +2115,8 @@ class gwf:
             
         #
         axvline( this.t[this.k_amp_max], ls='--', alpha=0.5, color='k' )
+        if 'startindex' in this.__dict__.keys():
+            axvline( this.t[this.startindex] )
 
         #--~--~--~--~--~--~--~--~--~--~--~--~--~--~--~--#
         # Time domain frequency
@@ -2122,6 +2145,8 @@ class gwf:
             
         #
         axvline( this.t[this.k_amp_max], ls='--', alpha=0.5, color='k' )
+        if 'startindex' in this.__dict__.keys():
+            axvline( this.t[this.startindex] )
 
         #
         xlabel(r'$t$',fontsize=fs,color=txclr)
@@ -2446,7 +2471,7 @@ class gwf:
     #
     def __flip_cross_sign_convention__(this):
         #
-        warning('You should not need to use this function. If you are using this functoin, please check your workflow for possible sign convention inconsistencies.')
+        # warning('You should not need to use this function. If you are using this functoin, please check your workflow for possible sign convention inconsistencies.')
         this.wfarr[:,-1] *= -1
         this.setfields()
 
@@ -2531,6 +2556,9 @@ class gwylm:
         Member of gwylm class
 
         '''
+        
+        #
+        from numpy import inf
 
         # NOTE that this method is setup to print the value of each input if verbose is true.
         # NOTE that default input values are handled just below
@@ -2649,6 +2677,11 @@ class gwylm:
             else:
                 this.level = this.extraction_parameter
 
+
+        #
+        if this.config.is_extrapolated:
+            this.extraction_parameter = inf 
+
         # Store flag for tortoise coordinate
         this.use_tortoise_for_dynamics = use_tortoise_for_dynamics
         # Store the extraction radius if a map is provided in the handler file
@@ -2658,6 +2691,10 @@ class gwylm:
                 this.extraction_radius = handler.__dict__[special_method]( scentry_obj, this.extraction_parameter, verbose=verbose )
             else:
                 this.extraction_radius = None
+
+        # 
+        if this.config.is_extrapolated:
+            this.extraction_radius = inf 
 
         # These fields are initiated here for visiility, but they are filled as lists of gwf object in load()
         this.ylm,this.hlm,this.flm = [],[],[] # psi4 (loaded), strain(calculated by default), news(optional non-default)
@@ -2848,7 +2885,11 @@ class gwylm:
 
     # Create a dictionary representation of the mutlipoles
     def __curate__(this,__kind__=None):
-        if __kind__ is None: __kind__=this.config.__disk_data_kind__
+        if __kind__ is None: 
+            if this.config:
+                __kind__=this.config.__disk_data_kind__
+            else:
+                __kind__ = 'psi4'
         '''Create a dictionary representation of the mutlipoles'''
         # NOTE that this method should be called every time psi4, strain and/or news is loaded.
         # NOTE that the related methods are: __load__, calchlm and calcflm
@@ -3172,7 +3213,20 @@ class gwylm:
         return ax
 
     #
-    def __symmetrize__(this,verbose=False):
+    def __symmetrize__(this,verbose=False,zparity=False,__heuristic__=False):
+        
+        '''
+        Symmetrize data according to ideas in https://arxiv.org/pdf/1409.4431.pdf
+        
+        zparity=False -- this triggers antipodal symmetrization
+        
+            The data are symmetrized according to h[l,-m] = conj(h[l,m]) * (-1)**(l+m)
+        
+        zparity=True -- this trigers z-parity symmetrization
+        
+            The data are symmetrized according to h[l,-m] = conj(h[l,m]) * (-1)**l
+        
+        '''
 
         #
         from numpy import array
@@ -3192,7 +3246,12 @@ class gwylm:
 
         #
         that = this.copy()
-        transform = lambda X,L,M: ((-1)**(L+M)) * X.conj()
+        if zparity:
+            transform = lambda X,L,M: ( (-1)**L if not __heuristic__ else (-1)**M ) * X.conj()
+            alert('Using z-parity symmetrization',verbose=verbose)
+        else: # Use the antipodal symmetrization
+            transform = lambda X,L,M: ((-1)**(L+M)) * X.conj()
+            alert('Using antipodal symmetrization',verbose=verbose)
 
         #
         for kind in kinds:
@@ -3844,7 +3903,10 @@ class gwylm:
         #     y22 = this.load(lm=[2,2],output=True,dt=this.dt)
 
         # Look for the l=m=2 psi4 multipole
-        y22 = this.lm[2,2][this.config.__disk_data_kind__]
+        if this.config:
+            y22 = this.lm[2,2][this.config.__disk_data_kind__]
+        else:
+            y22 = this.lm[2,2]['psi4']
 
         #%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&#
         # Characterize the START of the waveform (pre-inspiral)      #
@@ -3913,10 +3975,13 @@ class gwylm:
                 # Apply WINDOW to children
                 for y in this.ylm:
                     y.apply_window( window=window )
+                    y.startindex=this.startindex
                 for h in this.hlm:
                     h.apply_window( window=window )
+                    h.startindex=this.startindex
                 for f in this.flm:
                     f.apply_window( window=window )
+                    f.startindex=this.startindex
 
 
             elif method.lower() == 'crop':
@@ -3934,10 +3999,13 @@ class gwylm:
                 # Apply MASK to children
                 for y in this.ylm:
                     y.apply_mask( mask )
+                    y.startindex=this.startindex
                 for h in this.hlm:
                     h.apply_mask( mask )
+                    h.startindex=this.startindex
                 for f in this.flm:
                     f.apply_mask( mask )
+                    f.startindex=this.startindex
 
                 this.endindex_by_frequency -= ( len(this.t) - len(this.t[ mask ]) )
                 this.t = this.t[ mask ]
@@ -4298,7 +4366,7 @@ class gwylm:
     def __enforce_m_relative_phase_orientation__(this,kind=None):
 
         # Import usefuls
-        from numpy import arange,sign,diff,unwrap,angle,amax,isnan,amin,log,exp,std,median,mod,mean
+        from numpy import arange,sign,diff,unwrap,angle,amax,isnan,amin,log,exp,std,median,mod,mean,pi
         from scipy.stats.mstats import mode
         from scipy.version import version as scipy_version
         thisfun=inspect.stack()[0][3]
@@ -4307,8 +4375,8 @@ class gwylm:
         if kind is None:
             kind = 'psi4'
 
-        # Use the 2,2, multipole just after wstart to determine initial phase direction
-        mask = arange(this.startindex,this.startindex+50)
+        # Use the 2,2, multipole one cycle after wstart to determine INITIAL phase direction
+        mask = arange(this.startindex,this.startindex + int(2*pi/this.wstart/this.dt) )
         dphi = this[2,2][kind].dphi[mask]
         m=2
 
@@ -4767,7 +4835,7 @@ class gwylm:
         return that
 
     # Function to output new oject with select multipoles 
-    def selectlm( this, lmlist, verbose ):
+    def selectlm( this, lmlist, verbose=False ):
         
         #
         that = this.copy()
@@ -5345,6 +5413,8 @@ class gwylm:
                        T1 = None,               # Time relative to peak lum where ringdown ends (if None, gwylm.ringdown sets its value to the end of the waveform approx at noise floor)
                        apply_result = False,    # If true, apply result to input this object
                        guess=None,
+                       nrange=None,
+                       use_peak_strain=False,
                        verbose = False ):       # Let the people know
         '''Estimate Remnant BH mass and spin from gwylm object. This is done by "brute"
         force here (i.e. an actual calculation), but NOTE that values for final mass
@@ -5357,6 +5427,13 @@ class gwylm:
         from scipy.optimize import minimize
         from nrutils import jf14067295,Mf14067295,remnant
         from kerr import qnmfit
+        from numpy import ndarray
+        
+        #
+        if nrange is None:
+            nrange = [0,1]
+        elif not isinstance(nrange,(list,tuple,ndarray)):
+            error('nrange must be iterable of length 2 containing min and max overtone label where min possible is zero')
 
         # Validate first input type
         is_number = isinstance(this,(float,int))
@@ -5366,25 +5443,20 @@ class gwylm:
             error(msg)
 
         # Get the ringdown part starting from 20M after the peak luminosity
-        g = this.ringdown(T0=T0,T1=T1)
+        g = this.ringdown(T0=T0,T1=T1,use_peak_strain=use_peak_strain)
         # Define a work function
         def action( Mfxf ):
-            # NOTE that the first psi4 multipole is referenced below.
-            # There was only one loaded here, s it has to be for l=m=2
-            f = qnmfit(g.lm[2,2]['psi4'],Mfxf=Mfxf,statsfit=not True,greedy=True)
-            # f = qnmfit(g.ylm[0],Mfxf=Mfxf)
+            # NOTE that the dominant psi4 multipole is referenced below. The prange is [-1,1] so that percessing systems are generally handled. Other options setting optimize speed. 
+            f = qnmfit(g.lm[2,2]['psi4'],Mfxf=Mfxf,statsfit=False,greedy=False,prange=[-1,1],nrange=nrange,lmax=2,nodd=False)
             return f.frmse
 
 
         if guess is None:
-            # Use PhenomD fit for guess
+            # Use remant module for guess
             eta = this.m1*this.m2/((this.m1+this.m2)**2)
             chi1, chi2 = this.S1[-1]/(this.m1**2), this.S2[-1]/(this.m2**2)
-            # guess_xf = jf14067295( this.m1,this.m2,chi1,chi2 )
-            # guess_Mf = Mf14067295( this.m1,this.m2,chi1,chi2 )
             guess_Mf,guess_xf = remnant(this.m1,this.m2,this.X1[-1],this.X2[-1])
             guess = (guess_Mf,guess_xf)
-            # print guess
 
         # perform the minization
         Q = minimize( action,guess, bounds=[(1-0.999,1),(-0.999,0.999)] )
@@ -5393,10 +5465,11 @@ class gwylm:
         mf,xf = Q.x
 
         #
-        fo = qnmfit(g.lm[2,2]['psi4'],Mfxf=Q.x,statsfit= not True,greedy=not True)
+        fo = qnmfit(g.lm[2,2]['psi4'],Mfxf=Q.x,statsfit=False,greedy=False,prange=[-1,1],nrange=nrange,lmax=2)
 
         # Apply to the input gwylm object if requested
         if apply_result:
+            if verbose: print('(mf,xf) = ',mf,xf)
             this.mf = mf
             this.xf = xf
             this.Xf = this.Sf / (mf*mf)
@@ -5811,14 +5884,21 @@ class gwylm:
 
     #
     def __flip_cross_sign_convention__(this):
+        
+        #
+        that = this.copy()
+        
         #
         warning('Now multiplying all cross infromation by -1. This function should not need to be called.',verbose=this.verbose)
         kinds = ['ylm','hlm','flm']
         for kind in kinds:
-            for y in this.__dict__[kind]:
+            for y in that.__dict__[kind]:
                 y.__flip_cross_sign_convention__()
         #
-        this.__curate__()
+        that.__curate__()
+        
+        #
+        return that
 
 
 
@@ -6087,8 +6167,11 @@ class gwfcharstart:
             index_width = min( [ 1+pk_mask[safedex]-pk_mask[start_map], 0.5*(1+y.k_amp_max-pk_mask[ start_map ]) ] )
             
             # 6. Estimate where the waveform begins to turn on. This is approximately where the junk radiation ends. Note that this area will be very depressed upon windowing, so is can be
-            j_id = int( 1.5*y.qnm_damp_time / y.dt )
-            #(_,j_id) = find_amp_peak_index( y.t, y.amp, y.phi, return_jid=True )
+            # j_id = int( 1.5*y.qnm_damp_time / y.dt )
+            if sum(y.amp):
+                (_,j_id) = find_amp_peak_index( y.t, y.amp, y.phi, return_jid=True )
+            else:
+                j_id = int( 1.5*y.qnm_damp_time / y.dt )
             
             # NOTE that the line above is more robust for precessing cases than the line below. There are cases when the optimal emission axis crosses z=0 which causes problems for the line below
             # j_id = pk_mask[ start_map ]

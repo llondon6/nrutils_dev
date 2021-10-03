@@ -78,8 +78,8 @@ def learn_metadata( metadata_file_location ):
     S2 = array( [ 0,0,0 ] )
 
     # Read initial locations from the ShiftTracker files
-    R1 = array( [ 0,0,0 ] )
-    R2 = array( [ 12.0,0,0 ] )
+    R1 = array( [ 12.0,0,0 ] )
+    R2 = array( [ 0,0,0 ] )
 
     # Find initial binary separation for convenience
     x.b = norm(R1-R2)

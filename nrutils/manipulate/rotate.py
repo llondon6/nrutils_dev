@@ -10,7 +10,7 @@ class gwylm_radiation_axis_workflow:
     '''
 
     #
-    def __init__( this, gwylmo, kind=None, plot=False, outdir=None, save=False, safe_domain_range=None, verbose=True,__format__=None, ref_orientation=None, domain='both' ):
+    def __init__( this, gwylmo, kind=None, plot=False, outdir=None, save=False, safe_domain_range=None, verbose=True,__format__=None, ref_orientation=None, domain='both', select_lm_list=None ):
 
         #
         from os.path import expanduser
@@ -27,6 +27,9 @@ class gwylm_radiation_axis_workflow:
 
         # Store reference to input gwylmo
         this.gwylmo = gwylmo
+        
+        # Store a list of multipole moments to use for calculation of angles; if None then all multipole moments are used
+        this.select_lm_list = select_lm_list
 
         # warn if not in J related frame
         if not ( 'j' in str(gwylmo.frame).lower() ):
@@ -108,7 +111,7 @@ class gwylm_radiation_axis_workflow:
         if plot: this.plot()
 
     # Encapsulation of calc angles given domain and type
-    def calc_radiation_axis( this, domain=None, kind = None, safe_domain_range=None, __format__=None, ref_orientation=None ):
+    def calc_radiation_axis( this, domain=None, kind = None, safe_domain_range=None, __format__=None, ref_orientation=None,select_lm_list=None  ):
 
         # Import usefuls
         from numpy import pi
@@ -118,7 +121,16 @@ class gwylm_radiation_axis_workflow:
         domain = 'time' if domain is None else domain
 
         #
-        gwylmo = this.gwylmo
+        gwylmo = this.gwylmo.copy()
+        
+        #
+        if select_lm_list is None:
+            select_lm_list = this.select_lm_list
+        
+        #
+        if select_lm_list is not None:
+            #
+            gwylmo = gwylmo.selectlm( select_lm_list )
 
         # Construct dictionary of multipoles using all multipoles available
         # NOTE that the __format__ toggle may be useful for sanity checks
@@ -246,7 +258,7 @@ class gwylm_radiation_axis_workflow:
 
         import matplotlib as mpl
         from mpl_toolkits.mplot3d import Axes3D
-        from matplotlib.pyplot import figure, figaspect, plot, xlabel, ylabel, xlim, ylim, xscale, yscale, legend, subplot, grid, title, draw, show, savefig, axis, gcf
+        from matplotlib.pyplot import figure, figaspect, plot, xlabel, ylabel, xlim, ylim, xscale, yscale, legend, subplot, grid, title, draw, show, savefig, axis, gcf, gca
         from matplotlib.pyplot import close as close_figure
         from numpy import mod,pi,hstack,array,ones,linalg,arange,zeros_like
         from os.path import join
@@ -272,8 +284,10 @@ class gwylm_radiation_axis_workflow:
 
         #
         if ax is None:
-            fig = figure( figsize=4*figaspect(1) )
-            ax = fig.add_subplot(111, projection='3d')
+            fig = figure( figsize=4*figaspect(1.0) )
+            # fig = figure()
+            # ax = fig.add_subplot(111, projection='3d')
+            ax = gca(projection='3d')
         else:
             fig = gcf()
         

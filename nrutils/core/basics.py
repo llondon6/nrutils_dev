@@ -103,11 +103,13 @@ def intrp_wfarr(wfarr,delta=None,domain=None,verbose = False):
 
     # Only interpolate if current delta is not input delta
     proceed = True
+    reason = 'of an unknown reason'
     if delta is not None:
         d = wfarr[1,0]-wfarr[0,0]
         if verbose: alert('The original dt is %f and the requested on is %f.'%(d,delta))
         if abs(delta-d)/(delta+d) < 1e-6:
             proceed = False
+            reason = 'the input dt is equal to the dt of the data'
             # warning('The waveform already has the desired time step, and so will not be interpolated.')
 
     # If there is need to interpolate, then interpolate.
@@ -139,7 +141,7 @@ def intrp_wfarr(wfarr,delta=None,domain=None,verbose = False):
 
     else:
 
-        alert('The waveform array will %s be interpolated.'%(bold(red('NOT'))))
+        alert('The waveform array will %s be interpolated becuase %s.'%(bold(red('NOT')),reason))
 
         # Otherwise, return the input array
         _wfarr = wfarr
@@ -1123,46 +1125,50 @@ def calc_coprecessing_angles(multipole_dict,       # Dict of multipoles { ... l,
         Z.append(_z)
 
     # Look for point reflection in X
-    X = reflect_unwrap(array(X))
+    X = array(X)
+    # X = reflect_unwrap(array(X))
     Y = array(Y)
     Z = array(Z)
+    
+    #
+    X,Y,Z = reflect_unwrap_3D(X,Y,Z)
 
-    # 3-point vector reflect unwrapping
-    # print safe_domain_range
-    tol = 0.1
-    if safe_domain_range is None:
-        safe_domain_range = lim(abs(domain_vals))
-    safe_domain_range = array(safe_domain_range)
-    from numpy import arange, mean
-    for k in range(len(X))[1:-1]:
-        if k > 0 and k < (len(domain_vals)-1):
+    # # 3-point vector reflect unwrapping
+    # # print safe_domain_range
+    # tol = 0.1
+    # if safe_domain_range is None:
+    #     safe_domain_range = lim(abs(domain_vals))
+    # safe_domain_range = array(safe_domain_range)
+    # from numpy import arange, mean
+    # for k in range(len(X))[1:-1]:
+    #     if k > 0 and k < (len(domain_vals)-1):
 
-            if (abs(domain_vals[k]) > min(abs(safe_domain_range))) and (abs(domain_vals[k]) < max(abs(safe_domain_range))):
+    #         if (abs(domain_vals[k]) > min(abs(safe_domain_range))) and (abs(domain_vals[k]) < max(abs(safe_domain_range))):
 
-                left_x_has_reflected = abs(X[k]+X[k-1]) < tol*abs(X[k-1])
-                left_y_has_reflected = abs(Y[k]+Y[k-1]) < tol*abs(X[k-1])
+    #             left_x_has_reflected = abs(X[k]+X[k-1]) < tol*abs(X[k-1])
+    #             left_y_has_reflected = abs(Y[k]+Y[k-1]) < tol*abs(Y[k-1])
 
-                right_x_has_reflected = abs(X[k]+X[k+1]) < tol*abs(X[k])
-                right_y_has_reflected = abs(Y[k]+Y[k+1]) < tol*abs(X[k])
+    #             right_x_has_reflected = abs(X[k]+X[k+1]) < tol*abs(X[k])
+    #             right_y_has_reflected = abs(Y[k]+Y[k+1]) < tol*abs(Y[k])
 
-                x_has_reflected = right_x_has_reflected or left_x_has_reflected
-                y_has_reflected = left_y_has_reflected or right_y_has_reflected
+    #             x_has_reflected = right_x_has_reflected or left_x_has_reflected
+    #             y_has_reflected = left_y_has_reflected or right_y_has_reflected
 
-                if x_has_reflected and y_has_reflected:
+    #             if x_has_reflected and y_has_reflected:
 
-                    # print domain_vals[k]
+    #                 # print domain_vals[k]
 
-                    if left_x_has_reflected:
-                        X[k:] *= -1
-                    if right_x_has_reflected:
-                        X[k+1:] *= -1
+    #                 if left_x_has_reflected:
+    #                     X[k:] *= -1
+    #                 if right_x_has_reflected:
+    #                     X[k+1:] *= -1
 
-                    if left_y_has_reflected:
-                        Y[k:] *= -1
-                    if right_y_has_reflected:
-                        Y[k+1:] *= -1
+    #                 if left_y_has_reflected:
+    #                     Y[k:] *= -1
+    #                 if right_y_has_reflected:
+    #                     Y[k+1:] *= -1
 
-                    Z[k:] *= -1
+    #                 Z[k:] *= -1
 
     # Make sure that imag parts are gone
     X = double(X)
@@ -1735,60 +1741,62 @@ def find_amp_peak_index( t, amp, phi, plot = False, return_jid=False ):
     Careful function to find peak index for BBH waveform cases
     e.g. when numerical junk is largeer than physical peak.
     '''
-
+    
+    # error('This method is depreciated')
+    
     #
     from numpy import log,argmax,linspace,array
     if plot:
         from matplotlib.pyplot import plot,yscale,xscale,axvline,show,figure,xlim
 
-    # # defiune function for downsampling to speed up algo
-    # def downsample(xx,yy,N):
-    #     from positive import spline
-    #     xx_ = spline( xx, xx )(linspace(xx[0],xx[-1],N))
-    #     return xx_, spline(xx,yy)(xx_)
+    # defiune function for downsampling to speed up algo
+    def downsample(xx,yy,N):
+        from positive import spline
+        xx_ = spline( xx, xx )(linspace(xx[0],xx[-1],N))
+        return xx_, spline(xx,yy)(xx_)
+    
+    # mask and downsample
+    mask =amp>0
+    tt = t[mask]
+    lamp = log( amp[mask] )
+    tt_,lamp_ = downsample(tt,lamp,300)
+    
+    # ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~ #
+    Nknots = 6 # NOTE that this number is KEY to the algorithm: its related to the smalles number of lines needed to resolve two peaks! (4 lines) peak1 is junk peak2 is physical; if Nknots is too large, clustering of knots happens
+    # ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~ #
+    
+    knots,_ = romline(tt_,lamp_,Nknots,positive=True,verbose=True)
+    if not (0 in knots):
+        knots = [0] + [ knot for knot in knots ]
+        Nknots += 1
+    
+    if plot:
+        figure()
+        axvline( tt_[knots[ int(Nknots/2) ]] )
+        plot( tt, lamp )
+        plot( tt_, lamp_ )
+        plot( tt_[knots], lamp_[knots], color='r', lw=3, ls = '--' )
+    
     #
-    # # mask and downsample
-    # mask =amp>0
-    # tt = t[mask]
-    # lamp = log( amp[mask] )
-    # tt_,lamp_ = downsample(tt,lamp,300)
-    #
-    # # ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~ #
-    # Nknots = 6 # NOTE that this number is KEY to the algorithm: its related to the smalles number of lines needed to resolve two peaks! (4 lines) peak1 is junk peak2 is physical; if Nknots is too large, clustering of knots happens
-    # # ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~ #
-    #
-    # knots,_ = romline(tt_,lamp_,Nknots,positive=True,verbose=True)
-    # if not (0 in knots):
-    #     knots = [0] + [ knot for knot in knots ]
-    #     Nknots += 1
-    #
-    # if plot:
-    #     figure()
-    #     axvline( tt_[knots[ int(Nknots/2) ]] )
-    #     plot( tt, lamp )
-    #     plot( tt_, lamp_ )
-    #     plot( tt_[knots], lamp_[knots], color='r', lw=3, ls = '--' )
-    #
-    # #
-    # pks,locs = findpeaks(lamp_[knots])
-    #
-    # # Clean amplitude if needed
-    # if len(pks)>1: # if the peak is not the first knot == if this is not a ringdown only waveform
-    #     refk = find( t>tt_[knots[ int(Nknots/2) ]] )[0]
-    #     clean_amp = amp.copy()
-    #     clean_amp[0:refk] = amp[ find( t>tt_[knots[ 0 ]] )[0] ]
-    # else:
-    #     # nothing need be done
-    #     clean_amp = amp
-    #
-    # # Find peak index
-    # k_amp_max = argmax( clean_amp )
-    #
-    # if plot:
-    #     axvline( t[k_amp_max], color='k' )
-    #     plot( t, log(clean_amp) )
-    #     xlim( t[k_amp_max]-200,t[k_amp_max]+200 )
-    #     show()
+    pks,locs = findpeaks(lamp_[knots])
+    
+    # Clean amplitude if needed
+    if len(pks)>1: # if the peak is not the first knot == if this is not a ringdown only waveform
+        refk = find( t>tt_[knots[ int(Nknots/2) ]] )[0]
+        clean_amp = amp.copy()
+        clean_amp[0:refk] = amp[ find( t>tt_[knots[ 0 ]] )[0] ]
+    else:
+        # nothing need be done
+        clean_amp = amp
+    
+    # Find peak index
+    k_amp_max = argmax( clean_amp )
+    
+    if plot:
+        axvline( t[k_amp_max], color='k' )
+        plot( t, log(clean_amp) )
+        xlim( t[k_amp_max]-200,t[k_amp_max]+200 )
+        show()
 
     # amp_ = smooth( amp.copy(), width=20 ).answer
     amp_ = amp.copy()
