@@ -613,7 +613,7 @@ def scbuild(keyword=None,save=True):
     if isinstance(keyword,str):
         msg = 'Filtering ini files for \"%s\"'%cyan(keyword)
         alert(msg,'scbuild')
-        cpath_list = filter( lambda path: keyword in path, cpath_list )
+        cpath_list = list(filter( lambda path: keyword in path, cpath_list ))
 
     #
     if not cpath_list:
@@ -728,7 +728,7 @@ def sc_add( database_name, simulation_dir ):
     if isinstance(db_to_update,(str,unicode)):
         msg = 'Filtering ini files for \"%s\"'%cyan(db_to_update)
         alert(msg)
-        cpath_list = filter( lambda path: db_to_update in path, cpath_list )
+        cpath_list = list(filter( lambda path: db_to_update in path, cpath_list ))
 
     #
     if not cpath_list:
@@ -925,7 +925,7 @@ def scsearch( catalog = None,           # Manually input list of scentry objects
     if validate_remnant is True:
         from numpy import isnan,sum
         test = lambda k: (sum(isnan( k.xf ))==0) and (isnan(k.mf)==0)
-        catalog = filter( test, catalog )
+        catalog = list(filter( test, catalog ))
 
     # mass-ratio
     qtol = 1e-3
@@ -934,48 +934,48 @@ def scsearch( catalog = None,           # Manually input list of scentry objects
         if isinstance(q,(int,float)): q = [q-qtol,q+qtol]
         # NOTE: this could use error checking
         test = lambda k: k.m1/k.m2 >= min(q) and k.m1/k.m2 <= max(q)
-        catalog = filter( test, catalog )
+        catalog = list(filter( test, catalog ))
 
     # nonspinning
     if nonspinning is True:
         test = lambda k: norm(k.S1)+norm(k.S2) < tol
-        catalog = filter( test, catalog )
+        catalog = list(filter( test, catalog ))
 
     # spin aligned with orbital angular momentum
     if spinaligned is True:
         test = lambda k: allclose( dot(k.S1,k.L1+k.L2) , norm(k.S1)*norm(k.L1+k.L2) , atol=tol ) and allclose( dot(k.S2,k.L1+k.L2) , norm(k.S2)*norm(k.L1+k.L2) , atol=tol ) and not allclose( norm(k.S1)+norm(k.S2), 0.0, atol=tol )
-        catalog = filter( test, catalog )
+        catalog = list(filter( test, catalog ))
 
     # spin anti-aligned with orbital angular momentum
     if spinantialigned is True:
         test = lambda k: allclose( dot(k.S1,k.L1+k.L2) , -norm(k.S1)*norm(k.L1+k.L2) , atol=tol ) and allclose( dot(k.S2,k.L1+k.L2) , -norm(k.S2)*norm(k.L1+k.L2) , atol=tol ) and not allclose( norm(k.S1)+norm(k.S2), 0.0, atol=tol )
-        catalog = filter( test, catalog )
+        catalog = list(filter( test, catalog ))
 
     # precessing
     if precessing is True:
         test = lambda k: not allclose( abs(dot(k.S1+k.S2,k.L1+k.L2)), norm(k.L1+k.L2)*norm(k.S1+k.S2) , atol = tol )
-        catalog = filter( test, catalog )
+        catalog = list(filter( test, catalog ))
 
     # non-precessing, same as spinaligned & spin anti aligned
     nptol = 1e-4
     if nonprecessing is True:
         test = lambda k: allclose( abs(dot(k.S2,k.L1+k.L2)), norm(k.L1+k.L2)*norm(k.S2) , atol = nptol ) and allclose( abs(dot(k.S1,k.L1+k.L2)), norm(k.L1+k.L2)*norm(k.S1) , atol = nptol )
-        catalog = filter( test, catalog )
+        catalog = list(filter( test, catalog ))
 
     # spins have equal magnitude
     if equalspin is True:
         test = lambda k: allclose( k.S1, k.S2, atol = tol )
-        catalog = filter( test, catalog )
+        catalog = list(filter( test, catalog ))
 
     # spins have unequal magnitude
     if unequalspin is True:
         test = lambda k: not allclose( k.S1, k.S2, atol = tol )
-        catalog = filter( test, catalog )
+        catalog = list(filter( test, catalog ))
 
     #
     if antialigned is True:
         test = lambda k: allclose( dot(k.S1+k.S2,k.L1+k.L2)/(norm(k.S1+k.S2)*norm(k.L1+k.L2)), -1.0, atol = tol )
-        catalog = filter( test, catalog )
+        catalog = list(filter( test, catalog ))
 
     # Compare setname strings
     if setname is not None:
@@ -985,7 +985,7 @@ def scsearch( catalog = None,           # Manually input list of scentry objects
         setname = [ k.lower() for k in setname ]
         if isinstance( setname, list ) and len(setname)>0:
             test = lambda k: k.setname.lower() in setname
-            catalog = filter( test, catalog )
+            catalog = list(filter( test, catalog ))
         else:
             msg = 'setname input must be nonempty string or list.'
             error(msg)
@@ -998,7 +998,7 @@ def scsearch( catalog = None,           # Manually input list of scentry objects
         notsetname = [ k.lower() for k in notsetname ]
         if isinstance( notsetname, list ) and len(notsetname)>0:
             test = lambda k: not ( k.setname.lower() in notsetname )
-            catalog = filter( test, catalog )
+            catalog = list(filter( test, catalog ))
         else:
             msg = 'notsetname input must be nonempty string or list.'
             error(msg)
@@ -1011,7 +1011,7 @@ def scsearch( catalog = None,           # Manually input list of scentry objects
         institute = [ k.lower() for k in institute ]
         if isinstance( institute, list ) and len(institute)>0:
             test = lambda k: k.config.institute.lower() in institute
-            catalog = filter( test, catalog )
+            catalog = list(filter( test, catalog ))
         else:
             msg = 'institute input must be nonempty string or list.'
             error(msg)
@@ -1022,7 +1022,13 @@ def scsearch( catalog = None,           # Manually input list of scentry objects
         # If string, make list
         if isinstance( keyword, str ):
             keyword = [keyword]
-        keyword = filter( lambda s: isinstance(s,str), keyword )
+        keyword_filter = filter( lambda s: isinstance(s,str), keyword )
+        if isinstance(keyword,tuple):
+            keyword_filter = tuple(keyword_filter)
+        elif isinstance(keyword,list):
+            keyword_filter = list(keyword_filter)
+        else:
+            error('keyword must be str, list or tuple')
 
         # Determine whether to use AND or OR based on type
         if isinstance( keyword, list ):
@@ -1033,7 +1039,7 @@ def scsearch( catalog = None,           # Manually input list of scentry objects
         else:
             allkeys = False # NOTE that this means: ANY keys will be passed
             if verbose:
-                msg = 'List of keywords found: '+cyan('ANY scentry objects matching will be passed.')+' To pass ALL entries matching the keywords, input the kwywords using a list object.'
+                msg = 'Tuple of keywords found: '+cyan('ANY scentry objects matching will be passed.')+' To pass ALL entries matching the keywords, input the kwywords using a list object.'
                 alert(msg)
 
         # Always lower
@@ -1045,25 +1051,25 @@ def scsearch( catalog = None,           # Manually input list of scentry objects
             # Treat different keys with AND
             for key in keyword:
                 test = lambda k: (key in k.metadata_file_location.lower()) or (key in get_catalog_name(k))
-                catalog = filter( test, catalog )
+                catalog = list(filter( test, catalog ))
         else:
             # Treat different keys with OR
             temp_catalogs = [ catalog for w in keyword ]
             new_catalog = []
             for j,key in enumerate(keyword):
                 test = lambda k: (key in k.metadata_file_location.lower()) or (key in get_catalog_name(k))
-                new_catalog += filter( test, temp_catalogs[j] )
+                new_catalog += list(filter( test, temp_catalogs[j] ))
             catalog = list(set(new_catalog))
 
     # Compare not keyword
     if notkeyword is not None:
         if isinstance( notkeyword, str ):
             notkeyword = [notkeyword]
-        notkeyword = filter( lambda s: isinstance(s,str), notkeyword )
+        notkeyword = list(filter( lambda s: isinstance(s,str), notkeyword ))
         notkeyword = [ k.lower() for k in notkeyword ]
         for w in notkeyword:
             test = lambda k: not ( w in k.metadata_file_location.lower() )
-            catalog = filter( test, catalog )
+            catalog = list(filter( test, catalog ))
 
     # Validate the existance of the related config files and simulation directories
     # NOTE that this effectively requires two reconfigure instances and is surely suboptimal
@@ -1075,7 +1081,7 @@ def scsearch( catalog = None,           # Manually input list of scentry objects
                 warning(msg)
             return ans
         if catalog is not None:
-            catalog = filter( isondisk , catalog )
+            catalog = list(filter( isondisk , catalog ))
 
     # Filter out physically degenerate simuations within a default tolerance
     output_descriptor = magenta(' possibly degenerate')
@@ -1142,7 +1148,7 @@ def scunique( catalog = None, tol = 1e-3, verbose = False ):
             # Create a map of all simulations with matching initial parameters (independently of initial setaration)
 
             # 1. Filter out all matching objects. NOTE that this subset include the current object
-            subset = filter( lambda k: entry.compare2(k,atol=tol), catalog )
+            subset = list(filter( lambda k: entry.compare2(k,atol=tol), catalog ))
 
             # 2. Find index locations of subset
             subdex = [ catalog.index(k) for k in subset ]
@@ -1446,7 +1452,7 @@ class gwf:
         ##########################################################
 
         # Imports
-        from numpy import abs,sign,linspace,exp,arange,angle,diff,ones,isnan,pi,log
+        from numpy import abs,sign,linspace,exp,arange,angle,diff,ones,isnan,pi,log,where
         from numpy import vstack,sqrt,unwrap,arctan,argmax,mod,floor,logical_not
         from scipy.interpolate import InterpolatedUnivariateSpline
         from scipy.fftpack import fft, fftfreq, fftshift, ifft
@@ -1580,15 +1586,26 @@ class gwf:
                 #
                 mask = this.t > ( this.t[0] + 2*this.qnm_prograde_damp_time )
                 mask = mask & (this.amp>(0.01*max(this.amp)))
-                #
-                #print('@: ',this.t[find(mask)[0]])
+                index_mask = where(mask)[0]
+                
                 # 
                 if sum(mask) == 0: warning(red('This waveform may be too short -- it is shorter than its expected ringdown dampping time.'))
+                
                 #
-                k_phi = argmax( abs(this.d2phi[mask]) ) + find(mask)[0]
-                k_amp = argmax(       this.amp[mask]  ) + find(mask)[0]
+                k_phi = index_mask[argmax( abs(this.d2phi[mask]) )] 
+                k_amp = index_mask[argmax( this.amp[mask] )]
+                
+                # print('@: ',this.t[k_amp],k_amp)
+                # from matplotlib.pyplot import plot,show,figure,axvline,figaspect
+                # figure( figsize=2*figaspect(0.618) )
+                # plot( this.t, this.amp, alpha=0.5, lw=2 )
+                # plot( this.t[mask], this.amp[mask], alpha=1, lw=1, color='k', ls='--' )
+                # axvline( this.t[ argmax(this.amp) ], lw=4, color='k', alpha=0.2 )
+                # axvline( this.t[ k_amp ], color='r' )
+                # # axvline( this.t[ mask[0] ], color='r', ls=':' )
+                # show()
+                
                 #
-                # this.k_amp_max = k_amp
                 this.k_amp_max = k_amp
                 this.k_phi_max = k_phi
                 # if abs(this.t[k_phi]-this.t[k_amp])>this.qnm_prograde_damp_time:
@@ -1617,6 +1634,9 @@ class gwf:
             # This pathway is particularly useful for ringdown waveforms whose amp max is at 0, but whose amp morphology is inconsistent with the assumtions made above
             this.k_amp_max = k_amp_max
             this.k_phi_max = k_amp_max
+            
+        #
+        this.t_amp_max = this.t[ this.k_amp_max ]
 
 
         # Estimate true time location of peak amplitude
@@ -1999,7 +2019,7 @@ class gwf:
         from numpy import array
 
         #
-        from matplotlib.pyplot import plot,subplot,figure,tick_params,subplots_adjust,sca
+        from matplotlib.pyplot import plot,subplot,figure,tick_params,subplots_adjust,sca,yscale
         from matplotlib.pyplot import grid,setp,tight_layout,margins,xlabel,legend,ylim,xlim,axvline
         from matplotlib.pyplot import show as shw
         from matplotlib.pyplot import ylabel as yl
@@ -2078,6 +2098,9 @@ class gwf:
         axvline( this.t[this.k_amp_max] )
         if 'startindex' in this.__dict__.keys():
             axvline( this.t[this.startindex] )
+            
+        #
+        # yscale('log')
 
         #--~--~--~--~--~--~--~--~--~--~--~--~--~--~--~--#
         # Time domain phase
@@ -2163,28 +2186,40 @@ class gwf:
                       state = None,     # Index values defining region to be tapered:
                                         # For state=[a,b], if a>b then the taper is 1 at b and 0 at a
                                         # If a<b, then the taper is 1 at a and 0 at b.
-                      window = None):   # optional input: use known taper/window
+                      window = None,    # optional input: use known taper/window
+                      apply = True):   
 
-        # Store the initial state of the waveform array just in case the user wishes to undo the window
-        this.__prevarr__ = this.wfarr
+        # # Store the initial state of the waveform array just in case the user wishes to undo the window
+        # # NOTE that this field has been observed to have not been used in practive and is now deemed worth depreciating
+        # this.__prevarr__ = this.wfarr
+        
+        #
+        if apply:
+            y = this 
+        else:
+            y = this.copy()
 
         # Use low level function
         if (state is not None) and (window is None):
-            window = maketaper( this.t, state)
+            window = maketaper( y.t, state)
         elif (state is None) and (window is None):
             msg = '(!!) either "state" or "window" keyword arguments must be given and not None.'
             error(msg,'gwf.taper')
 
         #
-        wfarr = this.wfarr
-        wfarr[:,1] = window * this.wfarr[:,1]
-        wfarr[:,2] = window * this.wfarr[:,2]
+        wfarr = y.wfarr
+        wfarr[:,1] = window * y.wfarr[:,1]
+        wfarr[:,2] = window * y.wfarr[:,2]
 
         # NOTE that objects cannot be redefined within their methods, but their properties can be changed. For this reason, the line below uses setfields() rather than gwf() to apply the taper.
-        this.setfields( wfarr=wfarr )
+        y.setfields( wfarr=wfarr )
 
         # Set this object's window
-        this.window = this.window * window
+        y.window = y.window * window
+        
+        #
+        if not apply:
+            return y
 
     # Apply mask
     def apply_mask( this, mask=None ):
@@ -2511,6 +2546,51 @@ class gwf:
     def __get_antiderivative__(this,n=1):
         return None
 
+    #
+    def scrub( this, threshold=0.25, smooth_width=40, apply=False, plot=False ):
+        
+        #
+        from numpy import ceil,array
+    
+        #
+        y = this if apply else this.copy()
+        
+        #
+        mask = smoothest_part_by_threshold( y.dphi, threshold=threshold, smooth_width=smooth_width, plot=plot )
+        
+        #
+        window_index_width = int( 1.5*y.qnm_prograde_damp_time / y.dt )
+        window_index_half_width = int(ceil( 0.5*1.5*y.qnm_prograde_damp_time / y.dt ))
+        
+        #
+        k_inspiral_window_start = mask[0]
+        k_inspiral_window_finis = k_inspiral_window_start + window_index_width
+        #
+        inspiral_window_state = [k_inspiral_window_start, k_inspiral_window_finis]
+        inspiral_window = maketaper( y.t, inspiral_window_state )
+        
+        #
+        k_ringdown_window_finis = mask[-1]
+        k_ringdown_window_start = mask[-1] + window_index_half_width
+        k_ringdown_window_start = min( [len(this.t)-1,k_ringdown_window_start] )
+        #
+        ringdown_window_state = [k_ringdown_window_start, k_ringdown_window_finis]
+        ringdown_window = maketaper( y.t, ringdown_window_state )
+        
+        #
+        window = inspiral_window * ringdown_window
+        
+        #
+        y.apply_window( window=window )
+        y.startindex = k_inspiral_window_finis
+        y.endindex = k_ringdown_window_start
+        y.scrub_mask = mask
+        
+        #
+        if not apply: return y
+
+
+
 # Class for waveforms: Psi4 multipoles, strain multipoles (both spin weight -2), recomposed waveforms containing h+ and hx. NOTE that detector response waveforms will be left to pycbc to handle
 class gwylm:
     '''
@@ -2549,7 +2629,8 @@ class gwylm:
         load_dynamics = True, # Toggle for loading timeseries for L,S,J from dynamics
         use_tortoise_for_dynamics = False, # Toggle between tortoise coordinate and flat extraction radius for retarded time mapping between dynamics and waveform frames
         mu=None, # Mass-ratio to apply ONLY if the simulation is an extreme-mass-ratio case. If the simulation is an extreme-mass-ratio case, then this is a required input.
-        verbose               = None ):   # be verbose
+        verbose               = None    # be verbose
+        frame                               # Option to transform into frame upon load
 
         OUTPUT
         ---
@@ -2679,8 +2760,9 @@ class gwylm:
 
 
         #
-        if this.config.is_extrapolated:
-            this.extraction_parameter = inf 
+        if this.config:
+            if this.config.is_extrapolated:
+                this.extraction_parameter = inf 
 
         # Store flag for tortoise coordinate
         this.use_tortoise_for_dynamics = use_tortoise_for_dynamics
@@ -2693,8 +2775,9 @@ class gwylm:
                 this.extraction_radius = None
 
         # 
-        if this.config.is_extrapolated:
-            this.extraction_radius = inf 
+        if this.config:
+            if this.config.is_extrapolated:
+                this.extraction_radius = inf 
 
         # These fields are initiated here for visiility, but they are filled as lists of gwf object in load()
         this.ylm,this.hlm,this.flm = [],[],[] # psi4 (loaded), strain(calculated by default), news(optional non-default)
@@ -3935,6 +4018,57 @@ class gwylm:
         this.endindex_by_amplitude = this.postringdown.left_index
         this.endindex_by_frequency = this.postringdown.frequency_end_index
 
+    #
+    def scrub(this,lm=None,recalc_strain=False, threshold=0.25, smooth_width=40,apply=False,plot=False):
+        
+        '''
+        Apply an aggressive cleaning algorithm to individula multipole moments. 
+        '''
+        
+        #
+        from numpy import array
+        
+        #
+        that = this if apply else this.copy()
+        
+        #
+        if lm is None: lm = that.__lmlist__
+        if len(lm)==2: 
+            if isinstance(lm[0],int):
+                lm = [tuple(lm)]
+        if not isinstance(lm,(list,array,tuple)):
+            error('lm input must be iterable of l,m indices eg [(2,2), (2,1)] or (3,3)')
+        alert(lm)
+        
+        #
+        if recalc_strain:
+            #
+            for y in that.ylm:
+                if (y.l,y.m) in lm:
+                    y.scrub(apply=True,plot=plot)
+            that.calchlm(w22=that.wstart_pn)
+            that.calcflm(w22=that.wstart_pn)
+        else:
+            #
+            for y in that.ylm:
+                if (y.l,y.m) in lm:
+                    y.scrub(apply=True,plot=plot)
+            for h in that.hlm:
+                if (h.l,h.m) in lm:
+                    h.scrub(apply=True,plot=plot)
+            for f in that.flm:
+                if (f.l,f.m) in lm:
+                    f.scrub(apply=True,plot=plot)
+                
+        #
+        if that.__scentry__.config:
+            that.__curate__()
+            
+        #
+        if not apply:
+            return that
+            
+
     # Clean the time domain waveform by removing junk radiation.
     def clean( this, method=None, crop_time=None, force=False ):
 
@@ -4009,6 +4143,20 @@ class gwylm:
 
                 this.endindex_by_frequency -= ( len(this.t) - len(this.t[ mask ]) )
                 this.t = this.t[ mask ]
+                
+            elif method.lower=='scrub':
+                
+                # Apply MASK to children
+                for y in this.ylm:
+                    y.scrub(apply=True)
+                for h in this.hlm:
+                    h.scrub(apply=True)
+                for f in this.flm:
+                    f.scrub(apply=True)
+                
+            else:
+                
+                error('unknown clean method')
 
             # Tag this object as clean
             this.__isclean__ = True
@@ -4739,6 +4887,9 @@ class gwylm:
 
         #
         that.frame = transform_domain.lower()+'-cp-'+kind
+        
+        #
+        that.__enforce_m_relative_phase_orientation__()
 
         #
         return that
@@ -6167,11 +6318,11 @@ class gwfcharstart:
             index_width = min( [ 1+pk_mask[safedex]-pk_mask[start_map], 0.5*(1+y.k_amp_max-pk_mask[ start_map ]) ] )
             
             # 6. Estimate where the waveform begins to turn on. This is approximately where the junk radiation ends. Note that this area will be very depressed upon windowing, so is can be
-            # j_id = int( 1.5*y.qnm_damp_time / y.dt )
+            # j_id = int( 1.5*y.qnm_prograde_damp_time / y.dt )
             if sum(y.amp):
                 (_,j_id) = find_amp_peak_index( y.t, y.amp, y.phi, return_jid=True )
             else:
-                j_id = int( 1.5*y.qnm_damp_time / y.dt )
+                j_id = int( 1.5*y.qnm_prograde_damp_time / y.dt )
             
             # NOTE that the line above is more robust for precessing cases than the line below. There are cases when the optimal emission axis crosses z=0 which causes problems for the line below
             # j_id = pk_mask[ start_map ]

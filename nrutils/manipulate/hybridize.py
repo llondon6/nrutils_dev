@@ -54,7 +54,7 @@ class make_pnnr_hybrid(gwylm):
 
         # Import usefuls
         from scipy.optimize import minimize
-        from numpy import pi,linspace,mean,std,unwrap,angle,exp
+        from numpy import pi,linspace,mean,std,unwrap,angle,exp,roll
 
         # Setup plotting
         __plot__ = plot
@@ -106,7 +106,7 @@ class make_pnnr_hybrid(gwylm):
         # Define methods for additional alignment
         # ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~ #
         # Method: Time shift the PN data
-        pn_time_shift = lambda TSHIFT,PN=pn_y,METH=None: tshift( t, PN, TSHIFT,method=METH ) # roll( pn_y, int(t0/dt) )
+        pn_time_shift = lambda TSHIFT,PN=pn_y,METH=None: roll( pn_y, int(TSHIFT/dt) ) # tshift( t, PN, TSHIFT,method=METH ) # roll( pn_y, int(t0/dt) )
         # Method: Align in phase using average phase difference
         def pn_phi_align(PN,NR,return_phi=False,MSK=mask,phi0=None):
             # Apply an optimal phase shift
