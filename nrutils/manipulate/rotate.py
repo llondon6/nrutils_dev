@@ -284,10 +284,14 @@ class gwylm_radiation_axis_workflow:
 
         #
         if ax is None:
-            fig = figure( figsize=4*figaspect(1.0) )
+            fig = figure( figsize=4*figaspect(4) )
             # fig = figure()
-            # ax = fig.add_subplot(111, projection='3d')
+            #ax = fig.add_subplot(111, projection='3d')
             ax = gca(projection='3d')
+            
+            # See: https://github.com/matplotlib/matplotlib/issues/17172#issuecomment-634964954
+            ax.set_box_aspect((1, 1, 1))
+            
         else:
             fig = gcf()
         
