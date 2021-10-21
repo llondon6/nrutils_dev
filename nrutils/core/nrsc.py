@@ -6553,7 +6553,7 @@ def lvcnr5_to_gwylm(h5dir,lm=None,verbose=True,dt=0.25,lmax=6,clean=True):
 # desired multipoles to load, generate a gwylm object.
 # -~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~ #
 def ls_tdmodes_to_gwylm(
-            apx      ='IMRPhenomTPHM',    # Approximant name; must be compatible with lal convenions
+            apx      ='IMRPhenomTPHM',    # Approximant name; available choices are IMRPhenomTPHM and NRSur7dq4
             eta      = None,           # symmetric mass ratio
             chi1     = None,           # spin1 iterable (Dimensionless)
             chi2     = None,           # spin2 iterable (Dimensionless)
@@ -6624,7 +6624,7 @@ def ls_tdmodes_to_gwylm(
         else:
             time_hI = lalsim.SphHarmTimeSeriesGetMode(hlm, 2, 2).deltaT * arange(len(lalsim.SphHarmTimeSeriesGetMode(hlm, 2, 2).data.data))
         
-        wstart = fmin_hz * (M * lal.MTSUN_SI) / pi
+        wstart = fmin_hz * (M * lal.MTSUN_SI) * pi
         
             # code for getting J
         mag1 = norm(chi1)
@@ -6645,6 +6645,72 @@ def ls_tdmodes_to_gwylm(
         e.xf = af
         e.Sf = af * array([0.,0.,1])
         e.Xf = e.Sf / (e.mf)**2
+        
+    elif apx == "NRSur7dq4":
+        
+        from scipy.interpolate import InterpolatedUnivariateSpline as IUS
+        from scipy.spatial.transform import Rotation as R
+        
+        hlm = lalsim.SimInspiralChooseTDModes(
+                                    0.0, dt * M_SI * lal.MTSUN_SI / lal.MSUN_SI,
+                                    m1_SI, m2_SI, 
+                                    chi1[0], chi1[1], chi1[2], 
+                                    chi2[0], chi2[1], chi2[2],
+                                    fmin_hz, fmin_hz, 
+                                    distance,
+                                    LALpars, lmax, 
+                                    lalsim.SimInspiralGetApproximantFromString(apx))
+        
+        if isinstance(pad,(int,float)):
+            time_hI = lalsim.SphHarmTimeSeriesGetMode(hlm, 2, 2).deltaT * arange(len(lalsim.SphHarmTimeSeriesGetMode(hlm, 2, 2).data.data)+int(pad))
+        else:
+            time_hI = lalsim.SphHarmTimeSeriesGetMode(hlm, 2, 2).deltaT * arange(len(lalsim.SphHarmTimeSeriesGetMode(hlm, 2, 2).data.data))
+        
+        wstart = fmin_hz * (M * lal.MTSUN_SI) * pi
+        
+            # code for getting J
+        mag1 = norm(chi1)
+        theta1 = arccos(chi1[2]/mag1)
+        phi1 = arctan2(chi1[1],chi1[0])
+        mag2 = norm(chi2)
+        theta2 = arccos(chi2[2]/mag2)
+        phi2 = arctan2(chi2[1],chi2[0])
+        
+        L3PN = lal.CreateREAL8Sequence( 1 )
+        fref_orb = lal.CreateREAL8Sequence( 1 )
+        fref_orb.data = [fref_hz / 2.]
+        
+        lalsim.OrbitalAngMom3PNSpinning(L3PN, fref_orb, m1_SI, m2_SI, 1., 0., cos(theta1), phi1, mag1, cos(theta2), phi2, mag2, fref_hz, 5 );
+        l3pn = L3PN.data[0]
+        
+        # generate surrogate dynamics
+        t_dynamics, _, _, _, _, orbphase, chiAx, chiAy, chiAz, chiBx, chiBy, chiBz = lalsim.PrecessingNRSurDynamics(
+                        q, chi1[0], chi1[1], chi1[2], chi2[0], chi2[1], chi2[2],
+                        wstart, 1.0, 0.0, 0.0, 0.0,
+                        0.0, LALpars, lalsim.SimInspiralGetApproximantFromString(apx))
+    
+        
+        # interpolate dynamics to get remnant quantities
+        orbphase_ref = IUS(t_dynamics.data,orbphase.data)(-100)
+        chiAx_ref = IUS(t_dynamics.data,chiAx.data)(-100)
+        chiAy_ref = IUS(t_dynamics.data,chiAy.data)(-100)
+        chiAz_ref = IUS(t_dynamics.data,chiAz.data)(-100)
+        chiBx_ref = IUS(t_dynamics.data,chiBx.data)(-100)
+        chiBy_ref = IUS(t_dynamics.data,chiBy.data)(-100)
+        chiBz_ref = IUS(t_dynamics.data,chiBz.data)(-100)
+        
+        chi1_ref = array([chiAx_ref, chiAy_ref, chiAz_ref])
+        chi2_ref = array([chiBx_ref, chiBy_ref, chiBz_ref])
+        
+        r = R.from_rotvec(orbphase_ref * array([0, 0, 1]))
+        
+        chi1_coorb = r.apply(chi1_ref)
+        chi2_coorb = r.apply(chi2_ref)
+        
+        e.mf = lalsim.NRSur7dq4Remnant(q,chi1_coorb[0],chi1_coorb[1],chi1_coorb[2],chi2_coorb[0],chi2_coorb[1],chi2_coorb[2],"mf",LALpars).data[0]
+        e.Xf = lalsim.NRSur7dq4Remnant(q,chi1_coorb[0],chi1_coorb[1],chi1_coorb[2],chi2_coorb[0],chi2_coorb[1],chi2_coorb[2],"chif",LALpars).data
+        e.xf = norm(e.Xf)
+        e.Sf = e.Xf * (e.mf)**2
         
 
     time_M = time_hI /( M * lal.MTSUN_SI)
