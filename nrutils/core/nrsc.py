@@ -1387,6 +1387,7 @@ class gwf:
         
         # Give this gwf object a qnm_object. NOTE that this may be used for naive feature detection eg of junk radiation. See setfields for more information.
         if this.__is_a_multipole_moment__:
+            from positive.physics import qnmobj
             # Prograde QNM
             this.qnmo_prograde = qnmobj( mf, abs(xf), l,m,0,p=1,use_nr_convention=True,verbose=False,calc_slm=False,calc_rlm=False )
             # Retrograde QNM
@@ -5374,8 +5375,8 @@ class gwylm:
             end_index = find(that.f >= that.lm[2,2]['psi4'].dt/4)[0]
         else:
             if angles_are_arrays:
-                start_index = this.startindex+1
-                end_index = this.endindex+1
+                start_index = this.startindex  #FIXME
+                end_index = this.endindex
             else:
                 start_index = 0
                 end_index = -1
@@ -6120,8 +6121,6 @@ def lswfa( apx      ='IMRPhenomPv2',    # Approximant name; must be compatible w
     return y
 
 
-
-
 # Frequency Domain Domain LALSimulation Waveform Approximant h_plus and cross, but using nrutils data conventions
 def lswfafd( apx      ='IMRPhenomPv2',    # Approximant name; must be compatible with lal convenions
            eta      = None,           # symmetric mass ratio
@@ -6201,9 +6200,6 @@ def lswfafd( apx      ='IMRPhenomPv2',    # Approximant name; must be compatible
 
     #
     return y
-
-
-
 
 # Characterize END of time domain waveform (POST RINGDOWN)
 class gwfcharend:
@@ -6545,6 +6541,205 @@ def lvcnr5_to_gwylm(h5dir,lm=None,verbose=True,dt=0.25,lmax=6,clean=True):
 
     #
     y.characterize_start_end()
+    y.__enforce_m_relative_phase_orientation__(kind='strain')
+    if clean: y.clean()
+
+    #
+    return y
+
+
+# -~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~ #
+# Given the location of an lvcnr h5 file, as well as the
+# desired multipoles to load, generate a gwylm object.
+# -~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~ #
+def ls_tdmodes_to_gwylm(
+            apx      ='IMRPhenomTPHM',    # Approximant name; must be compatible with lal convenions
+            eta      = None,           # symmetric mass ratio
+            chi1     = None,           # spin1 iterable (Dimensionless)
+            chi2     = None,           # spin2 iterable (Dimensionless)
+            fmin_hz  = 30.0,           # phys starting freq in Hz
+            distance = 0.0,
+            lmax     = None,
+            dt       = 0.5,
+            pad      = 2000,
+            clean    = True,
+            verbose  = False ):        # boolean toggle for verbosity
+    
+    import lal
+    import lalsimulation as lalsim
+    from scipy.interpolate import InterpolatedUnivariateSpline as spline
+    from numpy import array,arange,exp,inf,nan,angle,unwrap,linspace,double,arccos,arctan2,cos,zeros,pi,concatenate
+    from nrutils import scentry,gwylm,gwf,eta2q
+    
+    from numpy.linalg import norm
+    
+    e = scentry( None, None )
+
+    # Standardize input mass ratio and convert to component masses
+    M = 70.0
+    q = eta2q(eta)
+    q = double(q)
+    q = max( [q,1.0/q] )
+    m2 = M * 1.0 / (1.0+q)
+    m1 = float(q) * m2
+    
+    fref_hz = fmin_hz
+    
+    m1_SI = m1 * lal.MSUN_SI
+    m2_SI = m2 * lal.MSUN_SI
+    
+    if distance == 0.0:
+        distance = lal.PC_SI
+
+    M_SI = (m1+m2) * lal.MSUN_SI
+    
+    chi1 = array(chi1)
+    chi2 = array(chi2)
+    
+    # add the parameter dict and activate modes
+    LALpars = lal.CreateDict()
+    
+    if apx == "IMRPhenomTPHM":
+    
+        _, alpha, beta, gamma, af = lalsim.SimIMRPhenomTPHM_JModes(
+                                    m1_SI, m2_SI, 
+                                    chi1[0], chi1[1], chi1[2], 
+                                    chi2[0], chi2[1], chi2[2],
+                                    distance, 0.0,
+                                    dt * M_SI * lal.MTSUN_SI / lal.MSUN_SI,
+                                    fmin_hz, fmin_hz, 
+                                    0.0, LALpars, 0)
+        
+        hlm = lalsim.SimIMRPhenomTPHM_L0Modes(
+                                    m1_SI, m2_SI, 
+                                    chi1[0], chi1[1], chi1[2], 
+                                    chi2[0], chi2[1], chi2[2],
+                                    distance, 0.0,
+                                    dt * M_SI * lal.MTSUN_SI / lal.MSUN_SI,
+                                    fmin_hz, fmin_hz, 
+                                    0.0, LALpars, 0)
+        
+        if isinstance(pad,(int,float)):
+            time_hI = lalsim.SphHarmTimeSeriesGetMode(hlm, 2, 2).deltaT * arange(len(lalsim.SphHarmTimeSeriesGetMode(hlm, 2, 2).data.data)+int(pad))
+        else:
+            time_hI = lalsim.SphHarmTimeSeriesGetMode(hlm, 2, 2).deltaT * arange(len(lalsim.SphHarmTimeSeriesGetMode(hlm, 2, 2).data.data))
+        
+        wstart = fmin_hz * (M * lal.MTSUN_SI) / pi
+        
+            # code for getting J
+        mag1 = norm(chi1)
+        theta1 = arccos(chi1[2]/mag1)
+        phi1 = arctan2(chi1[1],chi1[0])
+        mag2 = norm(chi2)
+        theta2 = arccos(chi2[2]/mag2)
+        phi2 = arctan2(chi2[1],chi2[0])
+        
+        L3PN = lal.CreateREAL8Sequence( 1 )
+        fref_orb = lal.CreateREAL8Sequence( 1 )
+        fref_orb.data = [fref_hz / 2.]
+        
+        lalsim.OrbitalAngMom3PNSpinning(L3PN, fref_orb, m1_SI, m2_SI, 1., 0., cos(theta1), phi1, mag1, cos(theta2), phi2, mag2, fref_hz, 5 );
+        l3pn = L3PN.data[0]
+        
+        e.mf = lalsim.SimIMRPhenomXFinalMass2017(eta,chi1[2],chi2[2])
+        e.xf = af
+        e.Sf = af * array([0.,0.,1])
+        e.Xf = e.Sf / (e.mf)**2
+        
+
+    time_M = time_hI /( M * lal.MTSUN_SI)
+    scaling = 1.0 / (M * lal.MTSUN_SI / (distance * lal.MTSUN_SI / lal.MRSUN_SI))
+
+    maxL = lmax if lmax is not None else lalsim.SphHarmTimeSeriesGetMaxL(hlm)
+    minL = lalsim.SphHarmTimeSeriesGetMinL(hlm)
+    
+    hlm_data = dict()
+    lmlist = []
+    
+    for l in range(minL,maxL+1):
+        for m in range(-l,l+1):
+            try:
+                if isinstance(pad, (int,float)):
+                    hlm_data[l,m] = concatenate((lalsim.SphHarmTimeSeriesGetMode(hlm, l, m).data.data * scaling,zeros(int(pad))))
+                else:
+                    hlm_data[l,m] = lalsim.SphHarmTimeSeriesGetMode(hlm, l, m).data.data * scaling
+            except Exception:
+                if verbose: alert('This mode is not available in the data you are accessing.')
+                continue
+            else:
+                lmlist.append([l,m])  
+    
+    
+    e.m1,e.m2 = m1/M, m2/M
+    e.X1,e.X2 = chi1,chi2
+    e.S1,e.S2 = chi1*e.m1**2,chi2*e.m2**2
+
+    e.L = array([0.0, 0.0, 1.0]) * l3pn
+    
+    # hack needed for nrutils to work
+    e.L1 = e.L / 2.0
+    e.L2 = e.L / 2.0
+    
+    e.R1 = zeros(3)
+    e.R2 = zeros(3)
+    e.R = zeros(3)
+    e.b = None
+    
+    e.P1 = zeros(3) 
+    e.P2 = zeros(3)
+    e.Pf = zeros(3)
+    
+    e.S = e.S1 + e.S2
+    e.J = e.S1 + e.S2 + e.L
+    
+    e.wstart = wstart
+    e.wstart_pn = wstart
+
+    e.default_extraction_par = inf
+    e.default_level = None
+    e.config = None
+    e.simname = f'lalsim_tdmodes'
+    e.setname = 'setname'
+    e.label = 'unknown-label'
+    e.eta = e.m1*e.m2 / ( (e.m1+e.m2)**2 )
+
+    #
+    y = gwylm(e,load=False)
+
+    nrtimes = time_M
+    t = arange( min(nrtimes),max(nrtimes)+dt,dt )
+    #
+    done = False
+    
+    #
+    for l,m in lmlist:
+        if verbose: alert('Loading strain for %s'%cyan('(l,m) = (%i,%i)'%(l,m)))
+        try:
+            amp = spline(nrtimes,abs(hlm_data[l,m]))(t)
+            pha = spline(nrtimes,unwrap(angle(hlm_data[l,m])))(t)
+        except:
+            if verbose: alert("couldn't load (l,m)=({0},{1})".format(l,m))
+            break
+
+        z = amp * exp(-1j*pha)
+        wfarr = array([ t, z.real, z.imag ]).T
+        y.hlm.append(  gwf( wfarr,l=l,m=m,kind='$rh_{%i%i}/M$'%(l,m) ,mf=e.mf,xf=e.xf)  )
+
+        # news
+        wfarr = array([ t, spline_diff(t,z.real), spline_diff(t,z.imag) ]).T
+        y.flm.append(  gwf( wfarr,l=l,m=m,kind=r'$r\dot\psi_{%i%i}/M$'%(l,m) ,mf=e.mf,xf=e.xf)  )
+        # psi4
+        wfarr = array([ t, spline_diff(t,z.real,n=2), spline_diff(t,z.imag,n=2) ]).T
+        y.ylm.append(  gwf( wfarr,l=l,m=m,kind=r'$r\psi_{%i%i}/M$'%(l,m) ,mf=e.mf,xf=e.xf)  )
+
+    #
+    y.__lmlist__ = lmlist
+    y.__input_lmlist__ = lmlist
+    if verbose: alert('Curating data.')
+    y.__curate__(__kind__='strain')
+
+    #
+    y.characterize_start_end(nojunk=True)
     y.__enforce_m_relative_phase_orientation__(kind='strain')
     if clean: y.clean()
 
