@@ -6624,7 +6624,7 @@ def ls_tdmodes_to_gwylm(
         else:
             time_hI = lalsim.SphHarmTimeSeriesGetMode(hlm, 2, 2).deltaT * arange(len(lalsim.SphHarmTimeSeriesGetMode(hlm, 2, 2).data.data))
         
-        wstart = fmin_hz * (M * lal.MTSUN_SI) * pi
+        wstart = fmin_hz * (M * lal.MTSUN_SI) * 2.0 * pi
         
             # code for getting J
         mag1 = norm(chi1)
@@ -6666,7 +6666,7 @@ def ls_tdmodes_to_gwylm(
         else:
             time_hI = lalsim.SphHarmTimeSeriesGetMode(hlm, 2, 2).deltaT * arange(len(lalsim.SphHarmTimeSeriesGetMode(hlm, 2, 2).data.data))
         
-        wstart = fmin_hz * (M * lal.MTSUN_SI) * pi
+        wstart = fmin_hz * (M * lal.MTSUN_SI) * 2.0 * pi
         
             # code for getting J
         mag1 = norm(chi1)
@@ -6686,10 +6686,9 @@ def ls_tdmodes_to_gwylm(
         # generate surrogate dynamics
         t_dynamics, _, _, _, _, orbphase, chiAx, chiAy, chiAz, chiBx, chiBy, chiBz = lalsim.PrecessingNRSurDynamics(
                         q, chi1[0], chi1[1], chi1[2], chi2[0], chi2[1], chi2[2],
-                        wstart, 1.0, 0.0, 0.0, 0.0,
+                        wstart/2.0, 1.0, 0.0, 0.0, 0.0,
                         0.0, LALpars, lalsim.SimInspiralGetApproximantFromString(apx))
     
-        
         # interpolate dynamics to get remnant quantities
         orbphase_ref = IUS(t_dynamics.data,orbphase.data)(-100)
         chiAx_ref = IUS(t_dynamics.data,chiAx.data)(-100)
