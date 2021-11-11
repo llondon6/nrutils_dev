@@ -6481,7 +6481,7 @@ def lvcnr5_to_gwylm(h5dir,lm=None,verbose=True,dt=0.25,lmax=6,clean=True):
     e.default_level = None
     e.config = None
     e.simname = h5dir.split('/')[-1].split('.')[0]
-    e.setname = f.attrs['NR-group']+'-'+f.attrs['type']
+    e.setname = str(f.attrs['NR-group'])+'-'+str(f.attrs['type'])
     e.label = 'unknown-label'
     e.eta = e.m1*e.m2 / ( (e.m1+e.m2)**2 )
 
