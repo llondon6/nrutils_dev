@@ -6472,9 +6472,9 @@ def lvcnr5_to_gwylm(h5dir,lm=None,verbose=True,dt=0.25,lmax=6,clean=True):
         e.mf = f['remnant-mass-vs-time']['Y'][-1]
     else:
         from positive.physics import remnant
-        mf, Xf = remnant(e.m1, e.m2, e.X1, e.X2, arxiv='p', L_vec=e.L)
+        mf, xf = remnant(e.m1, e.m2, e.X1, e.X2, arxiv='p', L_vec=e.L)
         e.mf = mf
-        e.xf = sqrt( sum( Xf*Xf ) )
+        e.xf = xf
 
 
     e.default_extraction_par = inf
