@@ -1,6 +1,7 @@
 
 #
 from nrutils.core.basics import *
+from positive.maths import wdelement,wdmatrix
 
 #
 class gwylm_radiation_axis_workflow:
@@ -377,98 +378,241 @@ class gwylm_radiation_axis_workflow:
         return fig,ax
 
 
-# Calculate Widger D-Matrix Element
-def wdelement( ll,         # polar index (eigenvalue) of multipole to be rotated (set of m's for single ll )
-               mp,         # member of {all em for |em|<=l} -- potential projection spaceof m
-               mm,         # member of {all em for |em|<=l} -- the starting space of m
-               alpha,      # -.
-               beta,       #  |- Euler angles for rotation
-               gamma ):    # -'
 
-    #** James Healy 6/18/2012
-    #** wignerDelement
-    #*  calculates an element of the wignerD matrix
-    # Modified by llondon6 in 2012 and 2014
-    # Converted to python by spxll 2016
-    #
-    # This implementation apparently uses the formula given in:
-    # https://en.wikipedia.org/wiki/Wigner_D-matrix
-    #
-    # Specifically, this the formula located here: https://wikimedia.org/api/rest_v1/media/math/render/svg/53fd7befce1972763f7f53f5bcf4dd158c324b55
+    
+#
+def calc_ulterior_angles_helper( lmlist, A,B, ALPHA, BETA, GAMMA, MU=1,smalld_splines=None ):
 
-    #
-    from numpy import sqrt,exp,cos,sin,ndarray# Reference factorial from scipy
-    try:
-        from scipy.misc import factorial
-    except:
-        from scipy.special import factorial
+    '''
 
+    Given 
+
+    lmlist -- List (l,m) in same order in m as A and B inputs. l is fixed
+    A -- Inertial momements at a single frequency 
+    B -- Coprecessing moments at a single fequency (Fourier transform of TD coprecessing moments)
+
+    ALPHA, BETA, GAMMA -- Euler angles for 3D rotation. Each is a dict containing eg alpha_lm with keys (l,m). These dictionaries encode 3*(2*l+1) angles :/
+
+    Determine
+
+    C -- The rotation of B by (-gamma,-beta,-alpha)
+    MU -- a distance measurement between A and C
+
+    Return
+
+    MU -- single number 
+
+    '''
+    
     #
-    if ( (type(alpha) is ndarray) and (type(beta) is ndarray) and (type(gamma) is ndarray) ):
-        alpha,beta,gamma = alpha.astype(float), beta.astype(float), gamma.astype(float)
-    else:
-        alpha,beta,gamma = float(alpha),float(beta),float(gamma)
+    from numpy import array
+    from nrutils import rotate_wfarrs_at_all_times
 
     #
-    coefficient = sqrt( factorial(ll+mp)*factorial(ll-mp)*factorial(ll+mm)*factorial(ll-mm))*exp( 1j*(mp*alpha+mm*gamma) )
+    C = []
+    for k,(l,m) in enumerate(lmlist):
 
-    # NOTE that there may be convention differences where the overall sign of the complex exponential may be negated
-
-    #
-    total = 0
-
-    # find smin
-    if (mm-mp) >= 0 :
-        smin = mm - mp
-    else:
-        smin = 0
-
-    # find smax
-    if (ll+mm) > (ll-mp) :
-        smax = ll-mp
-    else:
-        smax = ll+mm
-
-    #
-    if smin <= smax:
-        for ss in range(smin,smax+1):
-            A = (-1)**(mp-mm+ss)
-            A *= cos(beta/2)**(2*ll+mm-mp-2*ss)  *  sin(beta/2)**(mp-mm+2*ss)
-            B = factorial(ll+mm-ss) * factorial(ss) * factorial(mp-mm+ss) * factorial(ll-mp-ss)
-            total += A/B
-
-    #
-    element = coefficient*total
-    return element
-
-# Calculate Widner D Matrix
-def wdmatrix( l,                # polar l
-              mrange,    # range of m values
-              alpha,
-              beta,
-              gamma,
-              verbose = None ): # let the people know
-
-    #
-    from numpy import arange,array,zeros,complex256
-
-    # Handle the mrange input
-    if mrange is None:
         #
-        mrange = arange( -l, l+1 )
-    else:
-        # basic validation
-        for m in mrange:
-            if abs(m)>l:
-                msg = 'values in m range must not be greater than l'
-                error(msg,'wdmatrix')
+        Cm = MU * rotate_wfarrs_at_all_times( l,m, { (ll,mp):B[k] for k,(ll,mp) in enumerate(lmlist) }, (GAMMA,BETA,ALPHA),angles_are_ulterior=True,smalld_splines=smalld_splines )
+        C.append( Cm )
+    #
+    C = array(C)
+
+    # Given C, estiamte the square "distance" between A and C
+    Z = sum(abs(  (A[:,1]+1j*A[:,2])  -  (C[:,1]+1j*C[:,2])  )**2)
 
     #
-    dim = len(mrange)
-    D = zeros( (dim,dim), dtype=complex256 )
-    for j,mm in enumerate(mrange):
-        for k,mp in enumerate(mrange):
-            D[j,k] = wdelement( l, mp, mm, alpha, beta, gamma )
+    return Z
 
+
+#
+def calc_ulterior_angles( preimage_gwylmo, image_gwylmo, l, kind='psi4', flim=None ):
+    '''
+    
+    INPUTS
+    ---
+    
+    '''
+    
     #
-    return D
+    from numpy import array,pi,zeros_like,mod
+    from scipy.fftpack import fft, fftfreq, fftshift, ifft
+    from positive.maths import wdelement,wigner_smalld_splines
+    from scipy.optimize import minimize,basinhopping,brute
+    
+    #
+    lmlist = [ (ll,mm) for ll,mm in preimage_gwylmo.__lmlist__ if ll==l]
+    FT = lambda X: fftshift( fft( X ) )
+    
+    #
+    f_domain = image_gwylmo.f
+    mask = range(len(f_domain))
+    
+    #
+    if flim:
+        mask = (f_domain>min(flim)) & (f_domain<max(flim))
+        f_domain = f_domain[mask]
+    
+    #
+    NumM = (2*l+1)
+    LENX = 3*NumM
+    X   = []
+    ERR = []
+    
+    # Generate splines to spped up Wigner D-Matrix evaluation
+    smalld_splines = wigner_smalld_splines(l)
+    
+    #
+    for k,f in enumerate(f_domain):
+    
+    
+        '''
+        * We will consider the k'th frequency bin
+        * Let Alm be the inertial frame multipole moments at a single frequency bin
+        * Let Blm be the coprecessing frame moments at a single frequency bin 
+        '''
+        A = array([ preimage_gwylmo[l,m][kind].fd_wfarr[mask][k,:] for l,m in lmlist ])
+        B = array([    image_gwylmo[l,m][kind].fd_wfarr[mask][k,:] for l,m in lmlist ])
+        
+        #
+        def action(X):
+            
+            #
+            lenX = len(X)
+            if lenX != (LENX+1):
+                error('input must have length of 3*(2*l+1)+1=%i'%(LENX+1))
+            if mod(lenX-1,3):
+                error('input must be have len-1 of integer multiple of 3')
+                
+            # Create lists by unpacking vectorized input 
+            alpha_list  = X[        0 : NumM     ]
+            beta_list   = X[     NumM : (2*NumM) ]
+            gamma_list  = X[ (2*NumM) : (3*NumM) ]
+            mu_value    = X[3*NumM]
+            
+            # Create dicts by assuming m ordering in lmlist
+            ALPHA = { mp:alpha_list[j] for j,(_,mp) in enumerate(lmlist) }
+            BETA  = { mp:beta_list[ j]  for j,(_,mp) in enumerate(lmlist) }
+            GAMMA = { mp:gamma_list[j] for j,(_,mp) in enumerate(lmlist) }
+            MU    = mu_value
+            
+            # Calculate and return distance estimate
+            return calc_ulterior_angles_helper( lmlist, A,B, ALPHA, BETA, GAMMA, MU,smalld_splines=smalld_splines )
+        
+        #
+        initial_guess = zeros_like(range(0,LENX+1))
+        if k>0: initial_guess = X[-1]
+        if k==0:
+            foo = basinhopping( action, initial_guess  )
+        else:
+        # bounds = [(0,2*pi) for k in initial_guess]
+            foo = minimize( action, initial_guess  )
+        x0 = foo.x 
+        fval = foo.fun
+        
+        X.append(x0)
+        ERR.append(fval)
+        if mod(k,20)==0:
+            print('.%1.2f(%e)..'%(100*float(k)/len(f_domain),foo.fun),end='')
+        
+    #
+    return (X,ERR,f_domain)
+        
+            
+    
+
+# # Calculate Widger D-Matrix Element
+# def wdelement( ll,         # polar index (eigenvalue) of multipole to be rotated (set of m's for single ll )
+#                mp,         # member of {all em for |em|<=l} -- potential projection spaceof m
+#                mm,         # member of {all em for |em|<=l} -- the starting space of m
+#                alpha,      # -.
+#                beta,       #  |- Euler angles for rotation
+#                gamma ):    # -'
+
+#     #** James Healy 6/18/2012
+#     #** wignerDelement
+#     #*  calculates an element of the wignerD matrix
+#     # Modified by llondon6 in 2012 and 2014
+#     # Converted to python by spxll 2016
+#     #
+#     # This implementation apparently uses the formula given in:
+#     # https://en.wikipedia.org/wiki/Wigner_D-matrix
+#     #
+#     # Specifically, this the formula located here: https://wikimedia.org/api/rest_v1/media/math/render/svg/53fd7befce1972763f7f53f5bcf4dd158c324b55
+
+#     #
+#     from numpy import sqrt,exp,cos,sin,ndarray# Reference factorial from scipy
+#     try:
+#         from scipy.misc import factorial
+#     except:
+#         from scipy.special import factorial
+
+#     #
+#     if ( (type(alpha) is ndarray) and (type(beta) is ndarray) and (type(gamma) is ndarray) ):
+#         alpha,beta,gamma = alpha.astype(float), beta.astype(float), gamma.astype(float)
+#     else:
+#         alpha,beta,gamma = float(alpha),float(beta),float(gamma)
+
+#     #
+#     coefficient = sqrt( factorial(ll+mp)*factorial(ll-mp)*factorial(ll+mm)*factorial(ll-mm))*exp( 1j*(mp*alpha+mm*gamma) )
+
+#     # NOTE that there may be convention differences where the overall sign of the complex exponential may be negated
+
+#     #
+#     total = 0
+
+#     # find smin
+#     if (mm-mp) >= 0 :
+#         smin = mm - mp
+#     else:
+#         smin = 0
+
+#     # find smax
+#     if (ll+mm) > (ll-mp) :
+#         smax = ll-mp
+#     else:
+#         smax = ll+mm
+
+#     #
+#     if smin <= smax:
+#         for ss in range(smin,smax+1):
+#             A = (-1)**(mp-mm+ss)
+#             A *= cos(beta/2)**(2*ll+mm-mp-2*ss)  *  sin(beta/2)**(mp-mm+2*ss)
+#             B = factorial(ll+mm-ss) * factorial(ss) * factorial(mp-mm+ss) * factorial(ll-mp-ss)
+#             total += A/B
+
+#     #
+#     element = coefficient*total
+#     return element
+
+# # Calculate Widner D Matrix
+# def wdmatrix( l,                # polar l
+#               mrange,    # range of m values
+#               alpha,
+#               beta,
+#               gamma,
+#               verbose = None ): # let the people know
+
+#     #
+#     from numpy import arange,array,zeros,complex256
+
+#     # Handle the mrange input
+#     if mrange is None:
+#         #
+#         mrange = arange( -l, l+1 )
+#     else:
+#         # basic validation
+#         for m in mrange:
+#             if abs(m)>l:
+#                 msg = 'values in m range must not be greater than l'
+#                 error(msg,'wdmatrix')
+
+#     #
+#     dim = len(mrange)
+#     D = zeros( (dim,dim), dtype=complex256 )
+#     for j,mm in enumerate(mrange):
+#         for k,mp in enumerate(mrange):
+#             D[j,k] = wdelement( l, mp, mm, alpha, beta, gamma )
+
+#     #
+#     return D

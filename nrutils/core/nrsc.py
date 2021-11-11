@@ -3364,6 +3364,11 @@ class gwylm:
                 wfarr = array( [this.t,y_symmetric_negative.real,y_symmetric_negative.imag] ).T
                 that[l,-m][kind].setfields( wfarr=wfarr )
 
+        # if that[2,2]['psi4'] != [y for y in that.ylm if (y.l,y.m)==(2,2)][0]:
+        #     error('Curation broken!')
+        # else:
+        #     alert('Curatoin OK')
+
         #
         return that
 
@@ -4830,7 +4835,7 @@ class gwylm:
             error('The '+bold(blue('kind'))+' keyword must be set by the user to "strain", "psi4" or "news".')
 
         #
-        if 'J-initial' not in this.frame:
+        if 'j' not in this.frame.lower():
             warning('calculating the co-precessing frame in a non-initial J frame is prone to errors. please consider placing your gwylm object in a frame where J is initially along z-hat via gwylmo.__calc_initial_j_frame__()')
 
         #
