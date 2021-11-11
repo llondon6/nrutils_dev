@@ -6525,14 +6525,14 @@ def lvcnr5_to_gwylm(h5dir,lm=None,verbose=True,dt=0.25,lmax=6,clean=True):
 
         z = amp * exp(1j*pha)
         wfarr = array([ t, z.real, z.imag ]).T
-        y.hlm.append(  gwf( wfarr,l=l,m=m,kind='$rh_{%i%i}/M$'%(l,m) )  )
+        y.hlm.append(  gwf( wfarr,l=l,m=m,mf=e.mf,xf=e.xf,kind='$rh_{%i%i}/M$'%(l,m) )  )
 
         # news
         wfarr = array([ t, spline_diff(t,z.real), spline_diff(t,z.imag) ]).T
-        y.flm.append(  gwf( wfarr,l=l,m=m,kind=r'$r\dot\psi_{%i%i}/M$'%(l,m) )  )
+        y.flm.append(  gwf( wfarr,l=l,m=m,mf=e.mf,xf=e.xf,kind=r'$r\dot\psi_{%i%i}/M$'%(l,m) )  )
         # psi4
         wfarr = array([ t, spline_diff(t,z.real,n=2), spline_diff(t,z.imag,n=2) ]).T
-        y.ylm.append(  gwf( wfarr,l=l,m=m,kind=r'$r\psi_{%i%i}/M$'%(l,m) )  )
+        y.ylm.append(  gwf( wfarr,l=l,m=m,mf=e.mf,xf=e.xf,kind=r'$r\psi_{%i%i}/M$'%(l,m) )  )
 
     #
     y.__lmlist__ = lmlist
