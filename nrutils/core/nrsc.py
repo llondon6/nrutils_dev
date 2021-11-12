@@ -6541,7 +6541,7 @@ def lvcnr5_to_gwylm(h5dir,lm=None,verbose=True,dt=0.25,lmax=6,clean=True):
     f.close()
 
     #
-    y.characterize_start_end()
+    y.characterize_start_end(nojunk=True)
     y.__enforce_m_relative_phase_orientation__(kind='strain')
     if clean: y.clean()
 
