@@ -96,7 +96,7 @@ class match:
 
         # Map template orbital phase values to match
         phi_template_range = linspace(0,2*pi,N_template_phi)
-        match_list = abs( array( map( match_helper, phi_template_range ) ) )
+        match_list = abs( array( list( map( match_helper, phi_template_range ) ) ) )
 
         # Interpolate match over phi_template to estimate maximum
         # intrp_max lives in the "positive" repository
@@ -434,7 +434,7 @@ class match:
 
         # Estimate the maximum match
         roots = spline(template_polarization_range,match_list,k=4).derivative().roots()
-        max_matches = map( matchfun, roots )
+        max_matches = list( map( matchfun, roots ) )
         best_polarization = template_polarization_range[argmax( max_matches )]
         best_match = max( max_matches )
 
@@ -767,7 +767,7 @@ class match:
         this.__set_psd_fun__()
         # NOTE that we input the absolute value of frequencies per the definition of Sn
         from numpy import array
-        this.psd = array( map(this.__psd_fun__,abs(this.f)) )
+        this.psd = array( list(map(this.__psd_fun__,abs(this.f))) )
         # this.__psd_fun__( abs(this.f) )
 
 
