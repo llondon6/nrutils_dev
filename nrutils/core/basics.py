@@ -1511,8 +1511,22 @@ def validate_rotate_complex_waveforms_with_matrix(like_l_multipole_dict,euler_al
     elif len(like_l_multipole_dict)>(2*ref_l+1):
         error('more like-ell multipoles than allowed; check the formatting of the multipoles dict')
         
+    # Check for and handle waveform array inputs
+    output_waveform_arrays = False
+    domain = None
+    for l,m in like_l_multipole_dict:
+        test_passes = len(like_l_multipole_dict[l,m].shape) == 2
+        if test_passes:
+            output_waveform_arrays = True
+            wfarr  = like_l_multipole_dict[l,m]
+            domain = wfarr[:,0]
+            y = wfarr[:,1] + 1j * wfarr[:,2]
+            like_l_multipole_dict[l,m] = y
+        elif test_passes != output_waveform_arrays:
+            error('all values of like_l_multipole_dict must have the same shape')
+        
     #
-    return ref_l,alpha,beta,gamma,IS_TD_TRANSFORM
+    return ref_l,alpha,beta,gamma,IS_TD_TRANSFORM,output_waveform_arrays,domain
 
 #
 def rotate_complex_waveforms_with_matrix(like_l_multipole_dict,euler_alpha_beta_gamma,transform_domain):
@@ -1533,7 +1547,7 @@ def rotate_complex_waveforms_with_matrix(like_l_multipole_dict,euler_alpha_beta_
     
     # Input validation 
     # ---
-    l,alpha,beta,gamma,IS_TD_TRANSFORM = validate_rotate_complex_waveforms_with_matrix(like_l_multipole_dict,euler_alpha_beta_gamma,transform_domain)
+    l,alpha,beta,gamma,IS_TD_TRANSFORM,output_waveform_arrays,domain = validate_rotate_complex_waveforms_with_matrix(like_l_multipole_dict,euler_alpha_beta_gamma,transform_domain)
             
     # Start of main algorithm
     # ---
@@ -1569,10 +1583,48 @@ def rotate_complex_waveforms_with_matrix(like_l_multipole_dict,euler_alpha_beta_
     output = { (l,m):image_vector[k,:] for k,m in enumerate(mspace) }
     
     #
+    if output_waveform_arrays: 
+        #
+        for l,m in output:
+            image_vec = output[l,m]
+            if IS_TD_TRANSFORM:
+                plus   = image_vec.real
+                cross  = image_vec.imag
+            else:
+                plus   =     0.5 * ( image_vec + 1j*image_vec[::-1].conj() )
+                cross  = -1j*0.5 * ( image_vec - 1j*image_vec[::-1].conj() )
+            output[l,m] = array( [ domain, plus, cross ] ).T
+    
+    #
     return output
     
     
+#
+def convert_fd_wfarr_to_td( times, fd_wfarr ):
     
+    #
+    from numpy import array,arange
+    from scipy.fftpack import ifftshift,ifft,fft
+    
+    #
+    f,fd_p,fd_c = fd_wfarr.T
+    df = f[1]-f[0]
+    n  = len(times)
+    dt = 1.0 / ( n * df )
+    # t  = dt * arange(n)
+    t = times
+
+    # 
+    td_re_temp = ifft(ifftshift( fd_p )) * df*n
+    td_im_temp = ifft(ifftshift( fd_c )) * df*n
+    td_y = td_re_temp + 1j*td_im_temp
+
+    # Where the real valued polarizations are polarizations
+    td_re = td_y.real
+    td_im = td_y.imag
+
+    #
+    return array( [t,td_re,td_im], dtype=float ).T
     
 
 
