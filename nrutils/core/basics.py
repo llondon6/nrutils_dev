@@ -1456,6 +1456,8 @@ def validate_rotate_complex_waveforms_with_matrix(like_l_multipole_dict,euler_al
         error('like_l_multipole_dict must be dict')
     else:
         multipole_keys = list(like_l_multipole_dict.keys())
+        if len(multipole_keys)==0:
+            error('You seem to have passed an empty dictionary for the "like_l_multipole_dict" input')
         ref_l = None
         for key in multipole_keys:
             if not isinstance(key,tuple):
@@ -1529,7 +1531,7 @@ def validate_rotate_complex_waveforms_with_matrix(like_l_multipole_dict,euler_al
     return ref_l,alpha,beta,gamma,IS_TD_TRANSFORM,output_waveform_arrays,domain
 
 #
-def rotate_complex_waveforms_with_matrix(like_l_multipole_dict,euler_alpha_beta_gamma,transform_domain):
+def rotate_complex_waveforms_with_matrix(like_l_multipole_dict,euler_alpha_beta_gamma,transform_domain,smalld_splines=None):
     '''
     Given dictionary of multipoles all with the same l, calculate the rotated multipoles
     
@@ -1563,10 +1565,11 @@ def rotate_complex_waveforms_with_matrix(like_l_multipole_dict,euler_alpha_beta_
     preimage_vector = array( [ like_l_multipole_dict[l,mp] for mp in mspace  ] )
     
     # The preimag will be transformed into the "image" by the Wigner representation matrix (aka the D-Matrix). We will call this object rep_matrix. It will be of shape (Nm,Nm,Ns).
-    rep_matrix = zeros( (Nm,Nm,Ns), dtype=complex256 )
+    rep_matrix = zeros( (Nm,Nm,Ns), dtype=complex )
     
     # We can speed up the computation of this matrix (by about a factor of 3) by using spline representations of the wigner small d-matrix functions. So let's do that. NOTE that this usuall incurs aa very small (less than 10^-13) error
-    smalld_splines = wigner_smalld_splines(l)
+    if smalld_splines is None:
+        smalld_splines = wigner_smalld_splines(l)
     
     # Calculate the representation matrix 
     # NOTE that we treat rep_matrix like a pointer :)

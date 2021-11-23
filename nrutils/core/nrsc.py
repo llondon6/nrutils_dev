@@ -2416,6 +2416,7 @@ class gwf:
                                        ref_orientation = None,      # A reference orienation (useful for BAM)
                                        transform_domain=None,
                                        use_matix_rotation=False,       # Domain of transformation ('td','fd')
+                                       smalld_splines=None,
                                        verbose=False ):             # Toggle for letting the people know
 
         #
@@ -2436,7 +2437,7 @@ class gwf:
         like_l_multipoles_dict = { (y.l,y.m): (y.wfarr if transform_domain=='td' else y.fd_wfarr) for y in like_l_multipoles }
 
         #
-        rotated_wfarr = rotate_wfarrs_at_all_times( this.l,this.m, like_l_multipoles_dict, euler_alpha_beta_gamma, ref_orientation=ref_orientation )
+        rotated_wfarr = rotate_wfarrs_at_all_times( this.l,this.m, like_l_multipoles_dict, euler_alpha_beta_gamma, ref_orientation=ref_orientation,smalld_splines=smalld_splines )
 
         # IF domain is frequency domain,
         # THEN convert waveform array into the time domain
@@ -5289,6 +5290,7 @@ class gwylm:
                                        ref_orientation = None,      # A reference orienation (useful for BAM)
                                        transform_domain=None,       # Domain of transformation ('td','fd')
                                        use_legacy=True,
+                                       use_splines=False,
                                        verbose=False ):              # Toggle for letting the people know
 
         '''
@@ -5332,6 +5334,11 @@ class gwylm:
         # ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~- #
         # Rotate multipole data
         # ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~- #
+        
+        #
+        # if not use_legacy:
+        lrange = [ l for l,m in this.lm ]
+        wigner_splines = { l: wigner_smalld_splines(l) if use_splines else None for l in lrange }
 
         # For all kinds
         for kind in kinds:
@@ -5349,7 +5356,7 @@ class gwylm:
                             like_l_multipoles.append( this.lm[lp,mp][kind] )
 
                     # Rotate the current multipole
-                    rotated_gwf = this.lm[lm][kind].__rotate_frame_at_all_times__( like_l_multipoles, euler_alpha_beta_gamma, ref_orientation, transform_domain=transform_domain )
+                    rotated_gwf = this.lm[lm][kind].__rotate_frame_at_all_times__( like_l_multipoles, euler_alpha_beta_gamma, ref_orientation, transform_domain=transform_domain,smalld_splines=wigner_splines[lm[0]] )
 
                     # Store it to the output gwylm object
                     # NOTE that ylm, flm, and hlm must change here, NOT the references created in curate
@@ -5375,37 +5382,13 @@ class gwylm:
                 #
                 for l in lrange:
                     
-                    # #
-                    # like_l_multipoles_dict = { (ll,mm) : this[ll,mm][kind].wfarr if IS_TD_TRANSFORM else this[ll,mm][kind].fd_wfarr for ll,mm in this.lm if ll == l }
-                    
                     #
                     like_l_multipoles_dict = { (ll,mm) : this[ll,mm][kind].y if IS_TD_TRANSFORM else this[ll,mm][kind].fd_y for ll,mm in this.lm if ll == l }
                 
                     #
-                    rotated_wfarr_dict = rotate_complex_waveforms_with_matrix(like_l_multipoles_dict,euler_alpha_beta_gamma,transform_domain)
+                    rotated_wfarr_dict = rotate_complex_waveforms_with_matrix(like_l_multipoles_dict,euler_alpha_beta_gamma,transform_domain,smalld_splines=wigner_splines[l])
                     
-                    # # Store it to the output gwylm object
-                    # # NOTE that ylm, flm, and hlm must change here, NOT the references created in curate
-                    # for lm in rotated_wfarr_dict:
-                    #     rotated_wfarr = rotated_wfarr_dict[lm] if IS_TD_TRANSFORM else convert_fd_wfarr_to_td(that.t,rotated_wfarr_dict[lm])
-                    #     if kind == 'psi4':
-                    #         k = that.ylm.index( that.lm[lm][kind] )
-                    #         that.ylm[k].setfields(rotated_wfarr)
-                    #     elif kind == 'news':
-                    #         k = that.flm.index( that.lm[lm][kind] )
-                    #         that.flm[k].setfields(rotated_wfarr)
-                    #     elif kind == 'strain':
-                    #         k = that.hlm.index( that.lm[lm][kind] )
-                    #         that.hlm[k].setfields(rotated_wfarr)
-                            
-                    # # Apply changes to lm dictionary
-                    # that.__curate__()
-                    
-                    
-                    # for lp,mp in rotated_wfarr_dict:
-                    #     that[lp,mp][kind].setfields( rotated_wfarr_dict[lp,mp] if IS_TD_TRANSFORM else convert_fd_wfarr_to_td(that.t,rotated_wfarr_dict[lp,mp]) )
-                    
-                    
+                    #
                     for lp_mp in rotated_wfarr_dict:
                         #
                         y = rotated_wfarr_dict[lp_mp]
