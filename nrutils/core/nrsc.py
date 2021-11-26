@@ -3302,7 +3302,7 @@ class gwylm:
         return ax
 
     #
-    def __symmetrize__(this,verbose=False,zparity=False,__heuristic__=False):
+    def __symmetrize__(this,verbose=False,zparity=False,xparity=False):
         
         '''
         Symmetrize data according to ideas in https://arxiv.org/pdf/1409.4431.pdf
@@ -3335,13 +3335,32 @@ class gwylm:
 
         #
         that = this.copy()
+            
+        #
+        zparity_transform = lambda X,L,M: ((-1)**L)     * X.conj()
+        antipod_transform = lambda X,L,M: ((-1)**(L+M)) * X.conj()
+        xparity_transform = lambda X,L,M: ((-1)**M)     * X.conj()
+        
+        #
+        antipod = True
+        
+        #
+        if xparity:
+            zparity = False
+            antipod = False
+            transform = xparity_transform
+            alert('Using x-y-parity symmetrization',verbose=verbose)
+        
         if zparity:
-            transform = lambda X,L,M: ( (-1)**L if not __heuristic__ else (-1)**M ) * X.conj()
+            mparity = False
+            antipod = False
+            transform = zparity_transform
             alert('Using z-parity symmetrization',verbose=verbose)
-        else: # Use the antipodal symmetrization
-            transform = lambda X,L,M: ((-1)**(L+M)) * X.conj()
+        
+        if antipod or not ( xparity or zparity ):
+            transform = antipod_transform
             alert('Using antipodal symmetrization',verbose=verbose)
-
+        
         #
         for kind in kinds:
 
@@ -3350,10 +3369,23 @@ class gwylm:
 
             #
             for l,m in select_lm:
+                
+                # #
+                # alert((l,m))
 
                 #
-                y_positive = this[l,+m][kind].y
-                y_negative = this[l,-m][kind].y
+                y_positive = that[l,+m][kind].y 
+                y_negative = that[l,-m][kind].y 
+                
+                # # See just below appendix eqn B4 of https://arxiv.org/pdf/2004.06503.pdf
+                # if change_phase_convention:
+                #     u = (-1) * ( (-1j)**m )
+                #     v = (-1) * ( (-1j)**-m )
+                #     if kind =='psi4':
+                #         print('>> ',(l,m),u,v)
+                #     # Here we divide assuming the factors are already in the waveforms
+                #     y_positive *= u 
+                #     y_negative *= v
 
                 #
                 y_transformed_negative = transform(y_negative,l,m)
@@ -3361,9 +3393,15 @@ class gwylm:
                 #
                 y_symmetric_positive = 0.5 * ( y_positive + y_transformed_negative )
                 y_symmetric_negative = transform(y_symmetric_positive,l,m)
-
+                
+                # #
+                # if change_phase_convention:
+                #     # Here we multiply to put the factors back in
+                #     y_positive /= u 
+                #     y_negative /= v
+                    
                 #
-                wfarr = array( [this.t,y_symmetric_positive.real,y_symmetric_positive.imag] ).T
+                wfarr = array( [that.t,y_symmetric_positive.real,y_symmetric_positive.imag] ).T
                 that[l,+m][kind].setfields( wfarr=wfarr )
 
                 #
