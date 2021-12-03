@@ -5470,8 +5470,8 @@ class gwylm:
             end_index = find(that.f >= that.lm[2,2]['psi4'].dt/4)[0]
         else:
             if angles_are_arrays:
-                start_index = this.startindex  #FIXME
-                end_index = this.endindex
+                start_index = this.startindex + 1  #FIXME
+                end_index = this.endindex + 1
             else:
                 start_index = 0
                 end_index = -1
