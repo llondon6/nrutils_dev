@@ -2415,7 +2415,9 @@ class gwf:
                                        like_l_multipoles,           # List of available multipoles with same l
                                        euler_alpha_beta_gamma,      # List of euler angles
                                        ref_orientation = None,      # A reference orienation (useful for BAM)
-                                       transform_domain=None,       # Domain of transformation ('td','fd')
+                                       transform_domain=None,
+                                       use_matix_rotation=False,       # Domain of transformation ('td','fd')
+                                       smalld_splines=None,
                                        verbose=False ):             # Toggle for letting the people know
 
         #
@@ -2436,43 +2438,47 @@ class gwf:
         like_l_multipoles_dict = { (y.l,y.m): (y.wfarr if transform_domain=='td' else y.fd_wfarr) for y in like_l_multipoles }
 
         #
-        rotated_wfarr = rotate_wfarrs_at_all_times( this.l,this.m, like_l_multipoles_dict, euler_alpha_beta_gamma, ref_orientation=ref_orientation )
+        rotated_wfarr = rotate_wfarrs_at_all_times( this.l,this.m, like_l_multipoles_dict, euler_alpha_beta_gamma, ref_orientation=ref_orientation,smalld_splines=smalld_splines )
 
         # IF domain is frequency domain,
         # THEN convert waveform array into the time domain
         if transform_domain.lower() == 'fd':
-            from numpy import array
-            from scipy.fftpack import ifftshift,ifft,fft
-            that.raw_transformed_fd_wfarr = rotated_wfarr.copy()
-            f,fd_p,fd_c = rotated_wfarr.T
-            t     = this.t
+            
+            #
+            rotated_wfarr = convert_fd_wfarr_to_td( that.t, rotated_wfarr )
+            
+            # from numpy import array
+            # from scipy.fftpack import ifftshift,ifft,fft
+            # that.raw_transformed_fd_wfarr = rotated_wfarr.copy()
+            # f,fd_p,fd_c = rotated_wfarr.T
+            # t     = this.t
 
-            ## DIAGNOSTIC PLOTTING
-            # if (this.l,this.m)==(2,2):
-            #     alert('diagnostic plotting for '+red(this.kind)+': ')
-            #     from matplotlib.pyplot import plot,show,loglog,xscale,yscale
-            #     from numpy import sqrt
-            #     ff = abs(f)
-            #     loglog(ff,abs(fd_p+1j*fd_c))
-            #     show()
+            # ## DIAGNOSTIC PLOTTING
+            # # if (this.l,this.m)==(2,2):
+            # #     alert('diagnostic plotting for '+red(this.kind)+': ')
+            # #     from matplotlib.pyplot import plot,show,loglog,xscale,yscale
+            # #     from numpy import sqrt
+            # #     ff = abs(f)
+            # #     loglog(ff,abs(fd_p+1j*fd_c))
+            # #     show()
 
-            # # the FD rotation introduces a non-trivial phase shift
-            # # that results in a complex term in the TD polarizations
-            # # which must be included. As a result, the code below can be incorrect:
-            # # td_re = ifft(ifftshift( fd_p )).real * this.df*this.n
-            # # td_im = ifft(ifftshift( fd_c )).real * this.df*this.n
+            # # # the FD rotation introduces a non-trivial phase shift
+            # # # that results in a complex term in the TD polarizations
+            # # # which must be included. As a result, the code below can be incorrect:
+            # # # td_re = ifft(ifftshift( fd_p )).real * this.df*this.n
+            # # # td_im = ifft(ifftshift( fd_c )).real * this.df*this.n
 
-            # NOTE that the commented block above incorrectly assumes that the rotated TD + and x components should be real. Instead, the new + and x should be detefined by the real and imag parts of the complex combination as seen below. 
-            td_re_temp = ifft(ifftshift( fd_p )) * this.df*this.n
-            td_im_temp = ifft(ifftshift( fd_c )) * this.df*this.n
-            td_y = td_re_temp + 1j*td_im_temp
+            # # NOTE that the commented block above incorrectly assumes that the rotated TD + and x components should be real. Instead, the new + and x should be detefined by the real and imag parts of the complex combination as seen below. 
+            # td_re_temp = ifft(ifftshift( fd_p )) * this.df*this.n
+            # td_im_temp = ifft(ifftshift( fd_c )) * this.df*this.n
+            # td_y = td_re_temp + 1j*td_im_temp
 
-            # Where the real valued polarizations are polarizations
-            td_re = td_y.real
-            td_im = td_y.imag
+            # # Where the real valued polarizations are polarizations
+            # td_re = td_y.real
+            # td_im = td_y.imag
 
-            rotated_wfarr = array( [t,td_re,td_im], dtype=float ).T
-            # NOTE that there can be an overall time shift at this stage
+            # rotated_wfarr = array( [t,td_re,td_im], dtype=float ).T
+            # # NOTE that there can be an overall time shift at this stage
 
         # Reset related fields using the new data
         that.setfields( rotated_wfarr )
@@ -3297,7 +3303,7 @@ class gwylm:
         return ax
 
     #
-    def __symmetrize__(this,verbose=False,zparity=False,__heuristic__=False):
+    def __symmetrize__(this,verbose=False,zparity=False,xparity=False):
         
         '''
         Symmetrize data according to ideas in https://arxiv.org/pdf/1409.4431.pdf
@@ -3330,13 +3336,32 @@ class gwylm:
 
         #
         that = this.copy()
+            
+        #
+        zparity_transform = lambda X,L,M: ((-1)**L)     * X.conj()
+        antipod_transform = lambda X,L,M: ((-1)**(L+M)) * X.conj()
+        xparity_transform = lambda X,L,M: ((-1)**M)     * X.conj()
+        
+        #
+        antipod = True
+        
+        #
+        if xparity:
+            zparity = False
+            antipod = False
+            transform = xparity_transform
+            alert('Using x-y-parity symmetrization',verbose=verbose)
+        
         if zparity:
-            transform = lambda X,L,M: ( (-1)**L if not __heuristic__ else (-1)**M ) * X.conj()
+            mparity = False
+            antipod = False
+            transform = zparity_transform
             alert('Using z-parity symmetrization',verbose=verbose)
-        else: # Use the antipodal symmetrization
-            transform = lambda X,L,M: ((-1)**(L+M)) * X.conj()
+        
+        if antipod or not ( xparity or zparity ):
+            transform = antipod_transform
             alert('Using antipodal symmetrization',verbose=verbose)
-
+        
         #
         for kind in kinds:
 
@@ -3345,10 +3370,23 @@ class gwylm:
 
             #
             for l,m in select_lm:
+                
+                # #
+                # alert((l,m))
 
                 #
-                y_positive = this[l,+m][kind].y
-                y_negative = this[l,-m][kind].y
+                y_positive = that[l,+m][kind].y 
+                y_negative = that[l,-m][kind].y 
+                
+                # # See just below appendix eqn B4 of https://arxiv.org/pdf/2004.06503.pdf
+                # if change_phase_convention:
+                #     u = (-1) * ( (-1j)**m )
+                #     v = (-1) * ( (-1j)**-m )
+                #     if kind =='psi4':
+                #         print('>> ',(l,m),u,v)
+                #     # Here we divide assuming the factors are already in the waveforms
+                #     y_positive *= u 
+                #     y_negative *= v
 
                 #
                 y_transformed_negative = transform(y_negative,l,m)
@@ -3356,14 +3394,25 @@ class gwylm:
                 #
                 y_symmetric_positive = 0.5 * ( y_positive + y_transformed_negative )
                 y_symmetric_negative = transform(y_symmetric_positive,l,m)
-
+                
+                # #
+                # if change_phase_convention:
+                #     # Here we multiply to put the factors back in
+                #     y_positive /= u 
+                #     y_negative /= v
+                    
                 #
-                wfarr = array( [this.t,y_symmetric_positive.real,y_symmetric_positive.imag] ).T
+                wfarr = array( [that.t,y_symmetric_positive.real,y_symmetric_positive.imag] ).T
                 that[l,+m][kind].setfields( wfarr=wfarr )
 
                 #
                 wfarr = array( [this.t,y_symmetric_negative.real,y_symmetric_negative.imag] ).T
                 that[l,-m][kind].setfields( wfarr=wfarr )
+
+        # if that[2,2]['psi4'] != [y for y in that.ylm if (y.l,y.m)==(2,2)][0]:
+        #     error('Curation broken!')
+        # else:
+        #     alert('Curatoin OK')
 
         #
         return that
@@ -4812,7 +4861,7 @@ class gwylm:
 
 
     # output corotating waveform
-    def __calc_coprecessing_frame__(this,safe_domain_range=None,verbose=None,transform_domain=None,__format__=None,ref_orientation=None,kind=None,plot=False,select_lm_list=None):
+    def __calc_coprecessing_frame__(this,safe_domain_range=None,verbose=None,transform_domain=None,__format__=None,ref_orientation=None,kind=None,plot=False,select_lm_list=None,use_legacy=True):
 
         '''
         Output gwylm object in coprecessing frame, where the optimal emission axis is always along z
@@ -4831,7 +4880,7 @@ class gwylm:
             error('The '+bold(blue('kind'))+' keyword must be set by the user to "strain", "psi4" or "news".')
 
         #
-        if 'J-initial' not in this.frame:
+        if 'j' not in this.frame.lower():
             warning('calculating the co-precessing frame in a non-initial J frame is prone to errors. please consider placing your gwylm object in a frame where J is initially along z-hat via gwylmo.__calc_initial_j_frame__()')
 
         #
@@ -4883,7 +4932,7 @@ class gwylm:
         gamma = foo.radiation_axis['%s_gamma'%transform_domain]
 
         #
-        that = this.__rotate_frame_at_all_times__( [-gamma,-beta,-alpha], transform_domain=transform_domain )
+        that = this.__rotate_frame_at_all_times__( [-gamma,-beta,-alpha], transform_domain=transform_domain, use_legacy=use_legacy )
         that.previous_radiation_axis_info = foo
 
         #
@@ -5279,6 +5328,8 @@ class gwylm:
                                        euler_alpha_beta_gamma,      # List of euler angles
                                        ref_orientation = None,      # A reference orienation (useful for BAM)
                                        transform_domain=None,       # Domain of transformation ('td','fd')
+                                       use_legacy=True,
+                                       use_splines=False,
                                        verbose=False ):              # Toggle for letting the people know
 
         '''
@@ -5298,6 +5349,10 @@ class gwylm:
             error('Transform domain must be in %s'%str(allowed_transform_domains))
         else:
             alert( 'Transforming frame using %s angles.'%yellow(transform_domain.upper()),verbose=verbose )
+        IS_TD_TRANSFORM = 'td' == transform_domain.lower()
+        if IS_TD_TRANSFORM:
+            from positive import green
+            alert(green('TIME DOMAIN')+' rotation specified')
 
         #
         transform_is_td_but_complex_angles_given = (transform_domain.lower()=='td') and sum( abs(array(euler_alpha_beta_gamma).flatten().imag) ) > 0
@@ -5318,36 +5373,76 @@ class gwylm:
         # ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~- #
         # Rotate multipole data
         # ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~- #
+        
+        #
+        # if not use_legacy:
+        lrange = [ l for l,m in this.lm ]
+        wigner_splines = { l: wigner_smalld_splines(l) if use_splines else None for l in lrange }
 
         # For all kinds
         for kind in kinds:
 
-            # For all multipoles
-            for lm in this.lm:
+            if use_legacy:
+                
+                # For all multipoles
+                for lm in this.lm:
 
-                # Create list of this objects gwfs with the same kind and the same l
-                like_l_multipoles = []
-                for lp,mp in this.lm:
-                    l,m = lm
-                    if lp == l:
-                        like_l_multipoles.append( this.lm[lp,mp][kind] )
+                    # Create list of this objects gwfs with the same kind and the same l
+                    like_l_multipoles = []
+                    for lp,mp in this.lm:
+                        l,m = lm
+                        if lp == l:
+                            like_l_multipoles.append( this.lm[lp,mp][kind] )
 
-                # Rotate the current multipole
-                rotated_gwf = this.lm[lm][kind].__rotate_frame_at_all_times__( like_l_multipoles, euler_alpha_beta_gamma, ref_orientation, transform_domain=transform_domain )
+                    # Rotate the current multipole
+                    rotated_gwf = this.lm[lm][kind].__rotate_frame_at_all_times__( like_l_multipoles, euler_alpha_beta_gamma, ref_orientation, transform_domain=transform_domain,smalld_splines=wigner_splines[lm[0]] )
 
-                # Store it to the output gwylm object
-                # NOTE that ylm, flm, and hlm must change here, NOT the references created in curate
-                if kind == 'psi4':
-                    k = that.ylm.index( that.lm[lm][kind] )
-                    that.ylm[k] = rotated_gwf
-                elif kind == 'news':
-                    k = that.flm.index( that.lm[lm][kind] )
-                    that.flm[k] = rotated_gwf
-                elif kind == 'strain':
-                    k = that.hlm.index( that.lm[lm][kind] )
-                    that.hlm[k] = rotated_gwf
-                # Apply changes to lm dictionary
-                that.__curate__()
+                    # Store it to the output gwylm object
+                    # NOTE that ylm, flm, and hlm must change here, NOT the references created in curate
+                    if kind == 'psi4':
+                        k = that.ylm.index( that.lm[lm][kind] )
+                        that.ylm[k] = rotated_gwf
+                    elif kind == 'news':
+                        k = that.flm.index( that.lm[lm][kind] )
+                        that.flm[k] = rotated_gwf
+                    elif kind == 'strain':
+                        k = that.hlm.index( that.lm[lm][kind] )
+                        that.hlm[k] = rotated_gwf
+                    # Apply changes to lm dictionary
+                    that.__curate__()
+                    
+            else: # If don't use legacy
+                
+                # error('this function should be updated to use rotate_complex_waveforms_with_matrix')
+                
+                #
+                lrange = [ l for l,m in this.lm ]
+                
+                #
+                for l in lrange:
+                    
+                    #
+                    like_l_multipoles_dict = { (ll,mm) : this[ll,mm][kind].y if IS_TD_TRANSFORM else this[ll,mm][kind].fd_y for ll,mm in this.lm if ll == l }
+                
+                    #
+                    rotated_wfarr_dict = rotate_complex_waveforms_with_matrix(like_l_multipoles_dict,euler_alpha_beta_gamma,transform_domain,smalld_splines=wigner_splines[l])
+                    
+                    #
+                    for lp_mp in rotated_wfarr_dict:
+                        #
+                        y = rotated_wfarr_dict[lp_mp]
+                        if IS_TD_TRANSFORM:
+                            wfarr = array([that.t,y.real,y.imag]).T
+                        else:
+                            yp =  0.5      * ( y + 1j*y[::-1].conj() )
+                            yx = -0.5 * 1j * ( y - 1j*y[::-1].conj() )
+                            wfarr = array([that.f,yp,yx]).T
+                            wfarr = convert_fd_wfarr_to_td(that.t,wfarr)
+                        #
+                        that[lp_mp][kind].setfields( wfarr )
+                    
+                    # # Apply changes to lm dictionary
+                    # that.__curate__()
 
         # ~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~- #
         # Rotate related metadata??

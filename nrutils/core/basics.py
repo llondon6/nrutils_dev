@@ -1175,7 +1175,7 @@ def calc_coprecessing_angles(multipole_dict,       # Dict of multipoles { ... l,
     Y = double(Y)
     Z = double(Z)
 
-    #
+    # Detect whether time or frequency domain waveform arrays are provided
     IS_FD = (0.5 == round(float(sum(domain_vals > 0))/len(domain_vals), 2))
 
     #################################################
@@ -1316,351 +1316,15 @@ def calc_coprecessing_angles(multipole_dict,       # Dict of multipoles { ... l,
 
 
 
-# # Given a dictionary of multipole data, calculate the Euler angles corresponding to a co-precessing frame
-# def calc_coprecessing_angles( multipole_dict,       # Dict of multipoles { ... l,m:data_lm ... }
-#                               domain_vals = None,   # The time or freq series for multipole data
-#                               ref_orientation = None, # e.g. initial J; used for breaking degeneracies in calculation
-#                               return_xyz = False,
-#                               safe_domain_range = None,
-#                               verbose = None ):
-
-#     '''
-#     Given a dictionary of multipole data, calculate the Euler angles corresponding to a co-precessing frame
-
-#     Key referece: https://arxiv.org/pdf/1304.3176.pdf
-#     Secondary ref: https://arxiv.org/pdf/1205.2287.pdf
-
-#     INPUT
-#     ---
-#     multipole_dict,       # dict of multipoles { ... l,m:data_lm ... }
-#     t,                    # The time series corresponding to multipole data; needed
-#                             only to calculate gamma; Optional
-#     verbose,              # Toggle for verbosity
-
-#     OUTPUT
-#     ---
-#     alpha,beta,gamma euler angles as defined in https://arxiv.org/pdf/1205.2287.pdf
-
-#     AUTHOR
-#     ---
-#     Lionel London (spxll) 2017
-#     '''
-
-#     # Import usefuls
-#     from scipy.linalg import eig,norm
-#     from scipy.integrate import cumtrapz
-#     from numpy import arctan2,sin,arcsin,pi,ones,arccos,double,array
-#     from numpy import unwrap,argmax,cos,array,sqrt,sign,argmin,round,median,mean
-
-#     # Handle optional input
-#     if ref_orientation is None: ref_orientation = ones(3)
-
-#     #-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-#
-#     # Enforce that multipole data is array typed with a well defined length
-#     #-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-#
-#     y = multipole_dict
-#     for l,m in y:
-#         if isinstance( y[l,m], (float,int) ):
-#             y[l,m] = array( [ y[l,m], ] )
-#         else:
-#             if not isinstance(y[l,m],dict):
-#                 # Some input validation
-#                 if domain_vals is None: error( 'Since your multipole data is a series, you must also input the related domain_vals (i.e. times or frequencies) array' )
-#                 if len(domain_vals) != len(y[l,m]): error('domain_vals array and multipole data not of same length')
-
-
-#     #-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-#
-#     # Calculate the emission tensor corresponding to the input data
-#     #-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-#
-#     L = calc_Lab_tensor( multipole_dict )
-
-#     #-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-#
-#     # Compute the eigenvectors and values of this tensor
-#     #-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-#
-
-#     # NOTE that members of L have the same length as each y[l,m]; the latter has been
-#     # forced to always have a length above
-
-#     # Initialize idents for angles. NOTE that gamma will be handled below
-#     alpha,beta = [],[]
-#     X,Y,Z = [],[],[]
-
-#     #
-#     # reference_z_scale = None
-#     old_dom_dex = None
-
-#     # For all multipole instances
-#     ref_x,ref_y,ref_z = None,None,None
-#     flip_z_convention = False
-#     for k in range( len(L[0,0,:]) ):
-
-#         # Select the emission matrix for this instance, k
-#         _L = L[:,:,k]
-
-#         # Compute the eigen vals and vecs for this instance
-#         vals,vec = eig( _L )
-
-#         # Find the dominant direction's index
-#         dominant_dex = argmax( vals )
-#         if old_dom_dex is None: old_dom_dex = dominant_dex
-#         if old_dom_dex != dominant_dex:
-#             # print dominant_dex
-#             old_dom_dex = dominant_dex
-
-#         # Select the corresponding vector
-#         dominant_vec = vec[ :, dominant_dex ]
-
-#         # There is a z axis degeneracy that we will break here
-#         # by imposing that the z component is always consistent with the initial L
-
-#         if not flip_z_convention:
-#             if sign(dominant_vec[-1]) == -sign(ref_orientation[-1]): dominant_vec *= -1
-#         else:
-#             if sign(dominant_vec[-1]) ==  sign(ref_orientation[-1]): dominant_vec *= -1
-
-#         # dominant_vec *= sign(domain_vals[k])
-
-#         # Extract the components of the dominant eigenvector
-#         _x,_y,_z = dominant_vec
-
-#         # Store reference values if they are None
-#         if ref_x==None:
-#             ref_x = _x
-#             ref_y = _y
-#             ref_z = _z
-#         else:
-#             if (ref_x*_x < 0) and (ref_y*_y < 0):
-#                 _x *= -1
-#                 _y *= -1
-#                 _x *= -1
-
-#         # Store unit components for reference in the next iternation
-#         ref_x = _x
-#         ref_y = _y
-#         ref_z = _z
-
-#         # Look for and handle trivial cases
-#         if abs(_x)+abs(_y) < 1e-8 :
-#             _x = _y = 0
-
-#         #
-#         X.append(_x);Y.append(_y);Z.append(_z)
-
-#     # Look for point reflection in X
-#     #
-#     # c = 2*pi 
-#     # X,Y,Z = [ unwrap( c*array(Q) )/c for Q in (X,Y,Z) ]
-        
-#     from numpy import isnan
-#     for Q in [X,Y,Z]:
-#         if sum(isnan(Q)):
-#             error('them nans')
-        
-#     X = array(X,dtype=double)
-#     Y = array(Y,dtype=double)
-#     Z = array(Z,dtype=double)
-
-#     # 3-point vector reflect unwrapping
-#     # print safe_domain_range
-#     tol = 0.1
-#     if safe_domain_range is None: safe_domain_range = lim(abs(domain_vals))
-#     safe_domain_range = array( safe_domain_range )
-#     from numpy import arange,mean
-#     for k in range(len(X))[1:-1]:
-#         if k>0 and k<(len(domain_vals)-1):
-
-#             if (abs(domain_vals[k])>min(abs(safe_domain_range))) and (abs(domain_vals[k])<max(abs(safe_domain_range))):
-
-#                 left_x_has_reflected = abs(X[k]+X[k-1])<tol*abs(X[k-1])
-#                 left_y_has_reflected = abs(Y[k]+Y[k-1])<tol*abs(X[k-1])
-
-#                 right_x_has_reflected = abs(X[k]+X[k+1])<tol*abs(X[k])
-#                 right_y_has_reflected = abs(Y[k]+Y[k+1])<tol*abs(X[k])
-
-#                 x_has_reflected = right_x_has_reflected or left_x_has_reflected
-#                 y_has_reflected = left_y_has_reflected or right_y_has_reflected
-
-#                 if x_has_reflected and y_has_reflected:
-
-#                     # print domain_vals[k]
-
-#                     if left_x_has_reflected:
-#                         X[k:] *=-1
-#                     if right_x_has_reflected:
-#                         X[k+1:] *= -1
-
-#                     if left_y_has_reflected:
-#                         Y[k:] *=-1
-#                     if right_y_has_reflected:
-#                         Y[k+1:] *= -1
-
-#                     Z[k:] *= -1
-
-#     #
-#     IS_FD = ( 0.5 == round(float(sum(domain_vals>0))/len(domain_vals),2) )
-#     if IS_FD:
-#         alert('The domain values seem evenly split between positive and negative values. Thus, we will interpret the input as corresponding to '+green('FREQUENCY DOMAIN')+' data.')
-#     else:
-#         alert('The domain values seem unevenly split between positive and negative values. Thus, we will interpret the input as corresponding to '+green('TIME DOMAIN')+' data.')
-    
-
-#     #################################################
-#     # Reflect Y according to nrutils conventions    #
-#     Y = -Y                                          #
-#     #################################################
-
-#     a = array(ref_orientation)/norm(ref_orientation)
-#     B = array([X,Y,Z]).T
-#     b = (B.T/norm(B,axis=1)).T
-#     xb,yb,zb = b.T
-#     test_quantity = a[0]*xb+a[1]*yb+a[2]*zb
-
-#     if IS_FD:
-
-#         k = domain_vals>0
-#         mask = (domain_vals>=min(safe_domain_range)) & (domain_vals<=max(safe_domain_range))
-#         if (test_quantity[mask][0])<0:
-#             X[k] = -X[k]
-#             Y[k] = -Y[k]
-#             Z[k] = -Z[k]
-#         mask = (-domain_vals>=min(safe_domain_range)) & (-domain_vals<=max(safe_domain_range))
-
-#         k = domain_vals<0
-#         if 1*(test_quantity[mask][0])<0:
-#             X[k] = -X[k]
-#             Y[k] = -Y[k]
-#             Z[k] = -Z[k]
-
-#         # Finally, flip negative frequency values consistent with real-valued plus and cross waveforms in the co-precessing frame. In some or most cases, this step simply reverses the above.
-#         from numpy import median
-#         mask = (abs(domain_vals)>=min(safe_domain_range)) & (abs(domain_vals)<=max(safe_domain_range))
-
-#         k = domain_vals[mask] < 0
-#         kp = domain_vals[mask] >= 0
-
-#         if sign(median(Z[mask][k])) != -sign(median(Z[mask][kp])):
-#             k_ = domain_vals < 0
-#             X[k_] = -X[k_]
-#             Y[k_] = -Y[k_]
-#             Z[k_] = -Z[k_]
-            
-#         if (sign(median(Z[mask][k])) == -sign(ref_orientation[-1])):
-#             k_ = domain_vals < 0
-#             X[k_] = -X[k_]
-#             Y[k_] = -Y[k_]
-#             Z[k_] = -Z[k_]
-#         if (sign(median(Z[mask][kp])) == -sign(ref_orientation[-1])):
-#             kp_ = domain_vals < 0
-#             X[kp_] = -X[kp_]
-#             Y[kp_] = -Y[kp_]
-#             Z[kp_] = -Z[kp_]
-
-#         safe_positive_mask = (domain_vals >= min(safe_domain_range) ) & (domain_vals <= max(safe_domain_range))
-#         safe_negative_mask = (-domain_vals >= min(safe_domain_range)) & (
-#             -domain_vals <= max(safe_domain_range))
-            
-#         Zp = Z[ safe_positive_mask ]
-#         Zm = Z[ safe_negative_mask ][::-1]
-            
-#         def calc_another_test_quantity(XX,YY,ZZ):
-            
-#             safe_positive_mask = (domain_vals >= min(safe_domain_range) ) & (domain_vals <= max(safe_domain_range))
-#             safe_negative_mask = (-domain_vals >= min(safe_domain_range)) & (
-#             -domain_vals <= max(safe_domain_range))
-            
-#             Xp = XX[ safe_positive_mask ]
-#             Yp = YY[ safe_positive_mask ]
-#             Zp = ZZ[ safe_positive_mask ]
-            
-#             mask = safe_negative_mask
-#             Xm = XX[mask][::-1]
-#             Ym = YY[mask][::-1]
-#             Zm = ZZ[mask][::-1]
-            
-#             return sign( median( Xp*Xm + Yp*Ym + Zp*Zm ) )
-            
-#         another_test_quantity = calc_another_test_quantity(X,Y,Z)
-#         if another_test_quantity == -1:
-#             if Zp[0]*ref_orientation[-1] < 0:
-#                 X[domain_vals > 0] *= -1
-#                 Y[domain_vals > 0] *= -1
-#                 Z[domain_vals > 0] *= -1
-#             if Zm[0]*ref_orientation[-1] < 0:
-#                 X[domain_vals < 0] *= -1
-#                 Y[domain_vals < 0] *= -1
-#                 Z[domain_vals < 0] *= -1
-#         if calc_another_test_quantity(X, Y, Z) == -1:
-#             error('unable to correctly reflect positive and negative frequency ends')
-
-#     else:
-
-#         mask = (domain_vals>=min(safe_domain_range)) & (domain_vals<=max(safe_domain_range))
-#         if 1*(test_quantity[mask][0])<0:
-#             warning('flipping manually for negative domain')
-#             X = -X
-#             Y = -Y
-#             Z = -Z
-
-#     # One more unwrap step
-#     if not IS_FD:
-#         c = 2*pi
-#         X,Y,Z = [ unwrap(c*Q)/c for Q in (X,Y,Z) ]
-#         R = sqrt( X**2 + Y**2 + Z**2 )
-#         X,Y,Z = [ Q/R for Q in (X,Y,Z) ]
-
-#     # -~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~- #
-#     #                          Calculate Angles                           #
-#     # -~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~- #
-
-#     alpha = arctan2(Y,X)
-#     beta  = arccos(Z)
-
-#     # Make sure that angles are unwrapped
-#     alpha = unwrap( alpha )
-#     beta  = unwrap( beta  )
-
-#     # Calculate gamma (Eq. A4 of of arxiv:1304.3176)
-#     if len(alpha) > 1 :
-#         k = 1
-#         # NOTE that spline_diff and spline_antidiff live in positive.maths
-#         gamma = - spline_antidiff( domain_vals, cos(beta) * spline_diff(domain_vals,alpha,k=k), k=k  )
-#         gamma = unwrap( gamma )
-#         # Enforce like integration constant for neg and positive frequency gamma
-#         if IS_FD:
-            
-#             safe_positive_mask = (domain_vals >= min(safe_domain_range) ) & (domain_vals <= max(safe_domain_range))
-#             safe_negative_mask = (-domain_vals >= min(safe_domain_range)) & (
-#             -domain_vals <= max(safe_domain_range))
-            
-#             gamma[safe_negative_mask] = gamma[safe_negative_mask]-mean(gamma[safe_negative_mask]) + mean(gamma[safe_positive_mask])
-            
-#             # neg_mask = domain_vals<0
-#             # _mask = (-domain_vals)>0.01
-#             # mask_ =  domain_vals>0.01
-#             # if sum(neg_mask):
-#             #     gamma[neg_mask] = gamma[neg_mask] - gamma[_mask][-1] + gamma[mask_][0]
-#     else:
-#         # NOTE that this is the same as above, but here we're choosing an integration constant such that the value is zero. Above, no explicit integration constant is chosen.
-#         gamma = 0
-
-#     # Return answer
-#     if return_xyz == 'all':
-#         #
-#         return alpha,beta,gamma,X,Y,Z
-#     elif return_xyz:
-#         #
-#         return X,Y,Z
-#     else:
-#         return alpha,beta,gamma
-
-
-
 # Given dictionary of multipoles all with the same l, calculate the roated multipole with (l,mp)
 def rotate_wfarrs_at_all_times( l,                          # the l of the new multipole (everything should have the same l)
                                 m,                          # the m of the new multipole
                                 like_l_multipoles_dict,     # dictionary in the format { (l,m): array([domain_values,+,x]) }
                                 euler_alpha_beta_gamma,
-                                ref_orientation = None ):             #
+                                ref_orientation = None,
+                                angles_are_ulterior=False,
+                                smalld_splines=None,
+                                leaver=False ):             #
 
     '''
     Given dictionary of multipoles all with the same l, calculate the roated multipole with (l,mp).
@@ -1677,61 +1341,294 @@ def rotate_wfarrs_at_all_times( l,                          # the l of the new m
 
     #
     alpha,beta,gamma = euler_alpha_beta_gamma
+    
+    # Validate like_l_multipoles_dict input 
+    lvals = set([ l for l,m in like_l_multipoles_dict.keys() ])
+    if len(lvals)>1:
+        error('All ell values of like_l_multipoles_dict must be same. Instread found %s'%str(lvals))
 
     #
     if not ( ref_orientation is None ) :
         error('The use of "ref_orientation" has been depreciated for this function.')
 
-    # Handle the default behavior for the reference orientation
-    if ref_orientation is None:
-        ref_orientation = ones(3)
-
-    # Apply the desired reflection for the reference orientation. NOTE that this is primarily useful for BAM run which have an atypical coordinate setup if Jz<0
-    gamma *= sign( ref_orientation[-1] )
-    alpha *= sign( ref_orientation[-1] )
-
-    # Test to see if the original wfarr is complex and if so set the new wfarr to be complex as well
-    wfarr_type = type( like_l_multipoles_dict[list(like_l_multipoles_dict.keys())[0]][:,1][0] )
-    # print('>> --- ',wfarr_type)
-    # print('>> --- ',isinstance( like_l_multipoles_dict[list(like_l_multipoles_dict.keys())[0]][:,1][0], (complex,float) ))
-
+    # Detect whether time or frequency domain waveform arrays are provided
+    # NOTE that not all of the code immediately below may be used
+    test_wfarr = like_l_multipoles_dict[list(like_l_multipoles_dict.keys())[0]]
+    if len(test_wfarr.shape)==2:
+        domain_vals = test_wfarr[:,0]
+        IS_FD = (0.5 == round(float(sum(domain_vals > 0))/len(domain_vals), 2))
+        IS_FD = IS_FD or (test_wfarr[:,1].imag != 0)
+        IS_MULTI_SAMPLED = True
+    elif len(test_wfarr.shape)==1:
+        IS_FD = (test_wfarr[1].imag != 0) or (test_wfarr[2].imag != 0)
+        IS_MULTI_SAMPLED = False
+    else:
+        error('waveform arrays must be of shape 2 or 1')
+    
     #
-    if wfarr_type == complex128:
+    if not isinstance(alpha,dict):
+        # Test to see if the original wfarr is complex and if so set the new wfarr to be complex as well
+        wfarr_type = type( like_l_multipoles_dict[list(like_l_multipoles_dict.keys())[0]][:,1][0] )
+
+        #
+        if wfarr_type == complex128:
+            new_plus  = 0 + 0j
+            new_cross = 0 + 0j
+        else:
+            new_plus  = 0
+            new_cross = 0
+    else:
         new_plus  = 0 + 0j
         new_cross = 0 + 0j
-    else:
-        new_plus  = 0
-        new_cross = 0
         
-    for lm in like_l_multipoles_dict:
+    for l_mp in like_l_multipoles_dict:
         # See eq A9 of arxiv:1012:2879
-        l,mp = lm
-        old_wfarr = like_l_multipoles_dict[lm]
+        l,mp = l_mp
+        old_wfarr = like_l_multipoles_dict[l_mp]
 
         #
         # y_mp = old_wfarr[:,1] + 1j*old_wfarr[:,2]
         # new_ylm += wdelement(l,m,mp,alpha,beta,gamma) * y_mp
 
+        # NOTE that here it is (m,mp) rather than (mp,m) so that mp is associated with gamma as is done in A9 of arxiv:1012:2879. NOTE also that here we use a sign convention for alpha and gamma that is negatived relative to arxiv:1012:2879
+        d = wdelement(l,m,mp,alpha,beta,gamma,leaver=leaver,smalld_splines=smalld_splines) if not angles_are_ulterior else wdelement(l,m,mp,alpha[mp],beta[mp],gamma[mp],leaver=leaver,smalld_splines=smalld_splines)
+
         #
-        d = wdelement(l,m,mp,alpha,beta,gamma)
+        # d = wdelement(l,m,mp,alpha,beta,gamma) if not angles_are_ulterior else wdelement(l,m,mp,alpha[m],beta[m],gamma[m])
+        
         a,b = d.real,d.imag
         #
-        p = old_wfarr[:,1]
-        c = old_wfarr[:,2]
-        #
+        if len(old_wfarr.shape)==2:
+            p = old_wfarr[:,1]
+            c = old_wfarr[:,2]
+        else:
+            p = old_wfarr[1]
+            c = old_wfarr[2]
+            
+        # #
+        # if IS_MULTI_SAMPLED:
+        #     y_mp = p + 1j*c
+        #     y_contribution = d * y_mp 
+        #     if IS_FD:
+        #         plus_contribution  =     0.5 * (y_contribution + y_contribution.conj()[::-1])
+        #         cross_contribution = -1j*0.5 * (y_contribution - y_contribution.conj()[::-1])
+        #     else:
+        #         plus_contribution  =     0.5 * (y_contribution + y_contribution.conj())
+        #         cross_contribution = -1j*0.5 * (y_contribution - y_contribution.conj())
+        #         if abs(plus_contribution[0]-plus_contribution[0].real)>0:
+        #             error('TD ROTATIONS SHOULD have real valued plus and cross parts')
+        #         else:
+        #             plus_contribution = plus_contribution.real
+        #             cross_contribution = cross_contribution.real
+        # else:
+        #     #
+        #     plus_contribution  += a*p - b*c
+        #     cross_contribution += b*p + a*c
+        # #
+        # new_plus  += plus_contribution
+        # new_cross += cross_contribution
+        
         new_plus  += a*p - b*c
         new_cross += b*p + a*c
 
     # Construct the new waveform array
-    t = old_wfarr[:,0]
+    t = old_wfarr[:,0] if len(old_wfarr.shape)==2 else old_wfarr[0]
 
     #
-    # ans = array( [ t, new_ylm.real, new_ylm.imag ] ).T
     ans = array( [ t, new_plus, new_cross ] ).T
 
     # Return the answer
     return ans
 
+
+#
+def validate_rotate_complex_waveforms_with_matrix(like_l_multipole_dict,euler_alpha_beta_gamma,transform_domain):
+    '''
+    validate inputs for rotate_complex_waveforms_with_matrix
+    '''
+    
+    #
+    from numpy import array,ndarray 
+    
+    
+    GIVEN_NUMERIC_DATA = False
+    if not isinstance(like_l_multipole_dict,dict):
+        error('like_l_multipole_dict must be dict')
+    else:
+        multipole_keys = list(like_l_multipole_dict.keys())
+        if len(multipole_keys)==0:
+            error('You seem to have passed an empty dictionary for the "like_l_multipole_dict" input')
+        ref_l = None
+        for key in multipole_keys:
+            if not isinstance(key,tuple):
+                error('keys of the like_l_multipole_dict must be tuples')
+            else:
+                if len(key)!=2:
+                    error('like_l_multipole_dict keys must be length 2')
+                else:
+                    ll,mm = key 
+                    if ref_l is None: ref_l = ll
+                    if ll != ref_l:
+                        error('all multipoles in like_l_multipole_dict must have the same value of l')
+                    if (not isinstance(ll,int)) or (not isinstance(mm,int)):
+                        error('key values of like_l_multipole_dict must be integers')
+                    if abs(mm)>ll:
+                        print(mm,ll)
+                        error('improper value of m found in mutlipole_dict keys')
+                    if ll<=1:
+                        error('improper value of l found in like_l_multipole_dict keys')
+                    yy = like_l_multipole_dict[ll,mm]
+                    GIVEN_NUMERIC_DATA = isinstance(yy,(float,complex))
+    if not isinstance(ref_l,int):
+        error('l must be int')
+    if (ref_l<=0) or (ref_l<2):
+        error('l must be positive and greater than 1')
+    if not isinstance(euler_alpha_beta_gamma,(tuple,list,ndarray)):
+        if isinstance(euler_alpha_beta_gamma,ndarray):
+            if len(euler_alpha_beta_gamma.shape)!=2:
+                error('if ndarray, euler_alpha_beta_gamma must be 2D array')
+            if euler_alpha_beta_gamma.shape(1)!=3:
+                error('euler_alpha_beta_gamma must be ordered iterable of length 3')
+            elif len(euler_alpha_beta_gamma)==3:
+                alpha = euler_alpha_beta_gamma[0]
+                beta  = euler_alpha_beta_gamma[1]
+                gamma = euler_alpha_beta_gamma[2]
+            else:
+                error('unknown formatting of euler_alpha_beta_gamma')
+        else:
+            error('unknown formatting of euler_alpha_beta_gamma')
+    else:
+        alpha,beta,gamma = euler_alpha_beta_gamma
+    if not isinstance(transform_domain,str):
+        error('transform domain must be string: "td", "time", or "fd", "freq"')
+    else:
+        if transform_domain.lower() in ("td", "time"):
+            IS_TD_TRANSFORM = True 
+        elif transform_domain.lower() in ("fd", "freq","frequency"):
+            IS_TD_TRANSFORM = False 
+        else:
+            error('unknown transform domain given, transform domain must be string: "td", "time", or "fd", "freq"')
+    if len(like_l_multipole_dict) < (2*ref_l+1):
+        warning('the number of like-ell multipoles provided in like_l_multipole_dict is not equal to the maximum allowed number. this may cause unexpected or incorrect results')
+    elif len(like_l_multipole_dict)>(2*ref_l+1):
+        error('more like-ell multipoles than allowed; check the formatting of the multipoles dict')
+        
+    # Check for and handle waveform array inputs
+    output_waveform_arrays = False
+    domain = None
+    for l,m in like_l_multipole_dict:
+        test_passes = len(like_l_multipole_dict[l,m].shape) == 2
+        if test_passes:
+            output_waveform_arrays = True
+            wfarr  = like_l_multipole_dict[l,m]
+            domain = wfarr[:,0]
+            y = wfarr[:,1] + 1j * wfarr[:,2]
+            like_l_multipole_dict[l,m] = y
+        elif test_passes != output_waveform_arrays:
+            error('all values of like_l_multipole_dict must have the same shape')
+        
+    #
+    return ref_l,alpha,beta,gamma,IS_TD_TRANSFORM,output_waveform_arrays,domain
+
+#
+def rotate_complex_waveforms_with_matrix(like_l_multipole_dict,euler_alpha_beta_gamma,transform_domain,smalld_splines=None):
+    '''
+    Given dictionary of multipoles all with the same l, calculate the rotated multipoles
+    
+    * l,                        spherical harmonic polar index 
+    * like_l_multipole_dict,    dict with keys (l',m') and values given by comlpex waveforms. If
+                                transform domain is td then the complex waveform is hplus+1j*hcross, else if transform domain is fd then the complex waveform is the fourier transform of the td counterpart
+    * euler_alpha_beta_gamma,   the Euler angles alpha, beta gamma in an ordered interable with 
+                                the order as stated 
+    * transform_domain,         domain of the rotation. must be "td", "time", or "fd", "freq"
+    
+    '''
+    
+    #
+    from numpy import ndarray,array,complex256,zeros,einsum,dot,matmul,zeros_like,pi,mod
+    
+    # Input validation 
+    # ---
+    l,alpha,beta,gamma,IS_TD_TRANSFORM,output_waveform_arrays,domain = validate_rotate_complex_waveforms_with_matrix(like_l_multipole_dict,euler_alpha_beta_gamma,transform_domain)
+            
+    # Start of main algorithm
+    # ---
+    
+    # Define space of m values within the given l subspace of the spherical harmonics 
+    # This list defines the order labeling that will be used throughout 
+    mspace = list(range(-l,l+1))
+    
+    # If each multipole has Ns samples, and there are Nm multipoles with like l, 
+    # then create a "vector", preimage_vector of shape (Nm,Ns)
+    Nm = len(mspace)
+    Ns = len( like_l_multipole_dict[ l,mspace[0] ] )
+    preimage_vector = array( [ like_l_multipole_dict[l,mp] for mp in mspace  ] )
+    
+    # The preimag will be transformed into the "image" by the Wigner representation matrix (aka the D-Matrix). We will call this object rep_matrix. It will be of shape (Nm,Nm,Ns).
+    rep_matrix = zeros( (Nm,Nm,Ns), dtype=complex )
+    
+    # We can speed up the computation of this matrix (by about a factor of 3) by using spline representations of the wigner small d-matrix functions. So let's do that. NOTE that this usuall incurs aa very small (less than 10^-13) error
+    if smalld_splines is None:
+        smalld_splines = wigner_smalld_splines(l)
+    
+    # Calculate the representation matrix 
+    # NOTE that we treat rep_matrix like a pointer :)
+    wdmatrix( l, mspace, alpha,beta,gamma, smalld_splines=smalld_splines, out=rep_matrix )
+    
+    # Apply the operation encapsulated by rep_matrix to preimage_vector. 
+    # -- Is there a way to do this without using a for-loop?
+    # -- NOTE that we transpose rep_matrix[:,:,k] so that alpha and gamma 
+    #    are treated in the same way they have been constructed.
+    image_vector = zeros_like( preimage_vector )
+    for k in range(Ns): image_vector[:,k] = matmul( rep_matrix[:,:,k].T, preimage_vector[:,k] )
+        
+    #
+    output = { (l,m):image_vector[k,:] for k,m in enumerate(mspace) }
+    
+    #
+    if output_waveform_arrays: 
+        #
+        for l,m in output:
+            image_vec = output[l,m]
+            if IS_TD_TRANSFORM:
+                plus   = image_vec.real
+                cross  = image_vec.imag
+            else:
+                plus   =     0.5 * ( image_vec + 1j*image_vec[::-1].conj() )
+                cross  = -1j*0.5 * ( image_vec - 1j*image_vec[::-1].conj() )
+            output[l,m] = array( [ domain, plus, cross ] ).T
+    
+    #
+    return output
+    
+    
+#
+def convert_fd_wfarr_to_td( times, fd_wfarr ):
+    
+    #
+    from numpy import array,arange
+    from scipy.fftpack import ifftshift,ifft,fft
+    
+    #
+    f,fd_p,fd_c = fd_wfarr.T
+    df = f[1]-f[0]
+    n  = len(times)
+    dt = 1.0 / ( n * df )
+    # t  = dt * arange(n)
+    t = times
+
+    # 
+    td_re_temp = ifft(ifftshift( fd_p )) * df*n
+    td_im_temp = ifft(ifftshift( fd_c )) * df*n
+    td_y = td_re_temp + 1j*td_im_temp
+
+    # Where the real valued polarizations are polarizations
+    td_re = td_y.real
+    td_im = td_y.imag
+
+    #
+    return array( [t,td_re,td_im], dtype=float ).T
+    
 
 
 # Careful function to find peak index for BBH waveform cases
