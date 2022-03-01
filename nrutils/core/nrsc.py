@@ -1,4 +1,3 @@
-
 '''
 Modules for Numerical Relativity Simulation Catalog:
 
@@ -2579,6 +2578,10 @@ class gwylm:
             waveform_times = this.t[ (this.t>this.t[this.startindex]) & (this.t<this[2,2]['psi4'].intrp_t_amp_max) ]
             this.load_dynamics(verbose=verbose,waveform_times=waveform_times)
 
+        # Define remnant momentum 
+        this.__calc_radiated_quantities__(use_mask=False,enforce_initial_J_consistency=False)
+        this.Pf = this.remnant['P'][-1]
+        this.__scentry__.Pf = this.Pf
 
     # Allow class to be indexed
     def __getitem__(this,index):
@@ -2976,6 +2979,65 @@ class gwylm:
         #
         return that
 
+    #                                                                                                                                                                                                       
+    def __symmetrize2__(this,verbose=False):
+
+        #
+        from numpy import array, exp, pi
+
+        #
+        kinds = this[2,2].keys()
+
+        #
+        alert('Symmetrising multipole moments in: %s'%magenta(this.simname),verbose=verbose, header=True)
+
+        #
+        if not ('cp' in this.frame):
+            warning('WE ARE BORG. You have asked us to symmetrise in a frame'+' (%s)'%red(str(this.frame))+' that is not co-precessing. If the system is precessing, or generally not in an L-aligned frame, then using this function will result in nonsense. We are sorry for this unavoidable reality. RESISTANCE IS FUTILE.')
+
+        #
+        select_lm = [ (l,m) for l,m in this.__lmlist__ if m>=0 ]
+
+        #
+        that = this.copy()
+        transform = lambda X,L,M: ((-1)**(L+M)) * X.conj()
+
+        #
+        for kind in kinds:
+
+            #
+            alert('Symmetrising %s'%red(kind),verbose=verbose)
+
+            #
+            for l,m in select_lm:
+
+                #
+                A_positive = this[l,+m][kind].amp
+                A_negative = this[l,-m][kind].amp
+
+                A_symmetric = 0.5 * ( A_positive + (-1)**(l+m)*A_negative )
+
+                p_positive = this[l,+m][kind].phi
+                p_negative = this[l,-m][kind].phi
+
+                p_symmetric = 0.5 * ( p_positive - p_negative )
+                
+                #
+                y_symmetric_positive = A_symmetric * exp( 1j*p_symmetric )
+                y_symmetric_negative = transform(y_symmetric_positive,l,m)
+
+                #
+                wfarr = array( [this.t,y_symmetric_positive.real,y_symmetric_positive.imag] ).T
+                that[l,+m][kind].setfields( wfarr=wfarr )
+
+                #
+                wfarr = array( [this.t,y_symmetric_negative.real,y_symmetric_negative.imag] ).T
+                that[l,-m][kind].setfields( wfarr=wfarr )
+
+        #
+        return that
+
+    
     #
     def plot_3d_S(this,ax=None,view=None,color='#0392ff',mask=None):
         '''Plot total spin S on the sphere'''
@@ -4078,6 +4140,45 @@ class gwylm:
         return that
 
     #
+    def __calc_final_j_frame__(this,verbose=False):
+        '''
+        Rotate multipoles such that initial L is parallel to z-hat
+        '''
+
+        # Import usefuls
+        from numpy import arccos,arctan2,array,linalg,cos,sin,dot,zeros,ones
+        from scipy.interpolate import InterpolatedUnivariateSpline as IUS
+        
+        #
+        this.__calc_radiated_quantities__(use_mask=False,enforce_initial_J_consistency=False)
+
+        Xf_norm = linalg.norm(this.Xf)
+        thetaXf = arccos(this.Xf[2]/Xf_norm)
+        phiXf   = arctan2(this.Xf[1],this.Xf[0])
+
+        # Define gamma and beta accordingly
+        beta  = -thetaXf
+        gamma = -phiXf
+
+        # Define zeta0 (i.e. -alpha) such that J_initial is along the y-z plane at the initial time step
+        P_new = rotate3 ( this.Pf, 0, beta , gamma )
+        zeta0 = arctan2( P_new.T[1].real, P_new.T[0].real )
+        alpha = -zeta0
+        # print rotate3 ( this.Pf, 0, 0,alpha )/linalg.norm(rotate3 ( this.Pf, alpha, 0,0 ))
+
+        # Bundle rotation angles
+        angles = [ alpha, beta, gamma ]
+
+        # perform rotation
+        that = this.__rotate_frame_at_all_times__(angles,verbose=verbose)
+
+        #
+        that.frame = 'J-Final'
+
+        #
+        return that
+    
+    #
     def __calc_initial_l_frame__(this,verbose=False):
         '''
         Rotate multipoles such that initial L is parallel to z-hat
@@ -5072,9 +5173,10 @@ class gwylm:
         a = lambda l,m: sqrt( (l-m)*(l+m+1.0) ) / ( l*(l+1) )
         b = lambda l,m: (1.0/(2*l)) * sqrt( ( (l-2)*(l+2)*(l+m)*(l+m-1.0) )/( (2*l-1)*(2*l+1) ) )
         c = lambda l,m: m*2.0 / ( l*(l+1) )
-        d = lambda l,m: (1.0/l) * sqrt( (l-2)*(l+2)*(l-m)*(l+float(m))/( (2*l-1)*(2*l+1) ) )
+        d = lambda l,m: (1.0/l) * sqrt( (l-2.0)*(l+2)*(l-m)*(l+m)/( (2.0*l-1)*(2*l+1) ) )
 
         # Define shorthand for accessing strain and news
+        this.__curate__()
         f  = lambda l,m: this.lm[l,m]['news'].y   if (l,m) in this.lm else nothing
 
         # Sum over l,m ; NOTE that the overall scale factors will be applied later
@@ -5082,14 +5184,14 @@ class gwylm:
             # Eq. 3.14
             dPp += f(l,m) * ( a(l,m)*f(l,m+1).conj() + b(l,-m)*f(l-1,m+1).conj() - b(l+1,m+1)*f(l+1,m+1).conj() )
             # Eq. 3.15
-            dPz += f(l,m) * ( c(l,m)*f(l,m).conj() * d(l,m)*f(l-1,m).conj() + d(l+1,m)*f(l+1,m).conj() )
+            dPz += f(l,m) * ( c(l,m)*f(l,m).conj() + d(l,m)*f(l-1,m).conj() + d(l+1,m)*f(l+1,m).conj() )
 
         # Apply overall operations
-        dPp =  dPp.imag / ( 8*pi )
-        dPz =  dPz.imag / ( 16*pi )
+        dPp =  dPp / ( 8*pi )
+        dPz =  dPz / ( 16*pi )
 
         # Unpack in-place linear momentum rate
-        dPx,dPy = dPp.real,dPp.imag
+        dPx,dPy = dPp.real, -dPp.imag
 
         # Integrate to get angular momentum
         Px = spline_antidiff( this.t[mask],dPx[mask],k=3 )
@@ -5097,8 +5199,28 @@ class gwylm:
         Pz = spline_antidiff( this.t[mask],dPz[mask],k=3 )
 
         #
-        ans = vstack([Px,Py,Pz]).T
-        return ans
+        dP = vstack([dPx,dPy,dPz]).T
+        P = vstack([Px,Py,Pz]).T
+        P = P - P[0] - (this.P1+this.P2)
+
+        # Validate reality of z momentum
+        ImdPz = dPz.imag 
+        test_quantity = sum(abs(ImdPz))/len(ImdPz)
+        if test_quantity>1e-6:
+            if __force__: 
+                prompt = warning 
+            else:
+                prompt = error
+            #    
+            prompt('The z component of the radiated linear momentum has a non-trivial complex valued part of ~%s when it should not.'%(red(str(test_quantity))) + \
+                   ('By passing __force__=True, you have asked that an error not be thrown here.' \
+                    if __force__ else 'If this is known to NOT be a bug, please use teh __force__=True input to disable this message.'))
+        
+        # Now that we have tested the reality of Pz, cast types as reals    
+        P = P.real 
+        dP = dP.real
+
+        return P
 
     #
     def __calc_radiated_angular_momentum__(this,mask):
