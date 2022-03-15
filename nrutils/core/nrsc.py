@@ -6359,7 +6359,7 @@ class gwfcharstart:
     def __init__( this,                 # the object to be created
                   y,                    # input gwf object who'se start behavior will be characterised
                   shift     = 3,        # The size of the turn on region in units of waveform cycles.
-                  __smooth__ = True,
+                  __smooth__ = True, 
                   verbose   = False,
                   nojunk = False ):  # tag to identify data with no junk radiation at waveform start
 
@@ -6656,6 +6656,7 @@ def ls_tdmodes_to_gwylm(
             fmin_hz  = 30.0,           # phys starting freq in Hz
             distance = 0.0,
             lmax     = None,
+            mode_list = None,
             dt       = 0.5,
             pad      = 2000,
             clean    = True,
@@ -6666,6 +6667,8 @@ def ls_tdmodes_to_gwylm(
     from scipy.interpolate import InterpolatedUnivariateSpline as spline
     from numpy import array,arange,exp,inf,nan,angle,unwrap,linspace,double,arccos,arctan2,cos,zeros,pi,concatenate
     from nrutils import scentry,gwylm,gwf,eta2q
+    
+    import matplotlib.pyplot as plt
     
     from numpy.linalg import norm
     
@@ -6694,26 +6697,33 @@ def ls_tdmodes_to_gwylm(
     
     # add the parameter dict and activate modes
     LALpars = lal.CreateDict()
+
+    if mode_list != None:
+        mode_array = lalsim.SimInspiralCreateModeArray()
+        for mode in mode_list:
+            lalsim.SimInspiralModeArrayActivateMode(mode_array, mode[0], mode[1])
+        lalsim.SimInspiralWaveformParamsInsertModeArray(LALpars, mode_array)
+
     
     if apx == "IMRPhenomTPHM":
     
         _, alpha, beta, gamma, af = lalsim.SimIMRPhenomTPHM_JModes(
-                                    m1_SI, m2_SI, 
-                                    chi1[0], chi1[1], chi1[2], 
-                                    chi2[0], chi2[1], chi2[2],
-                                    distance, 0.0,
-                                    dt * M_SI * lal.MTSUN_SI / lal.MSUN_SI,
-                                    fmin_hz, fmin_hz, 
-                                    0.0, LALpars, 0)
+                                        m1_SI, m2_SI, 
+                                        chi1[0], chi1[1], chi1[2], 
+                                        chi2[0], chi2[1], chi2[2],
+                                        distance, 0.0,
+                                        dt * M_SI * lal.MTSUN_SI / lal.MSUN_SI,
+                                        fmin_hz, fmin_hz, 
+                                        0.0, LALpars, 0)
         
         hlm = lalsim.SimIMRPhenomTPHM_L0Modes(
-                                    m1_SI, m2_SI, 
-                                    chi1[0], chi1[1], chi1[2], 
-                                    chi2[0], chi2[1], chi2[2],
-                                    distance, 0.0,
-                                    dt * M_SI * lal.MTSUN_SI / lal.MSUN_SI,
-                                    fmin_hz, fmin_hz, 
-                                    0.0, LALpars, 0)
+                                        m1_SI, m2_SI, 
+                                        chi1[0], chi1[1], chi1[2], 
+                                        chi2[0], chi2[1], chi2[2],
+                                        distance, 0.0,
+                                        dt * M_SI * lal.MTSUN_SI / lal.MSUN_SI,
+                                        fmin_hz, fmin_hz, 
+                                        0.0, LALpars, 0)
         
         if isinstance(pad,(int,float)):
             time_hI = lalsim.SphHarmTimeSeriesGetMode(hlm, 2, 2).deltaT * arange(len(lalsim.SphHarmTimeSeriesGetMode(hlm, 2, 2).data.data)+int(pad))
@@ -6829,8 +6839,7 @@ def ls_tdmodes_to_gwylm(
                 continue
             else:
                 lmlist.append([l,m])  
-    
-    
+
     e.m1,e.m2 = m1/M, m2/M
     e.X1,e.X2 = chi1,chi2
     e.S1,e.S2 = chi1*e.m1**2,chi2*e.m2**2
