@@ -805,7 +805,7 @@ class match:
                     data_path = nrutils.__path__[0]+'/data/ZERO_DET_high_P.dat'
                     psd_arr = loadtxt( data_path )
                     # Validate and unpack the psd array
-                    if psd_arr.shape[-1] is 2:
+                    if psd_arr.shape[-1] == 2:
                         psd_f,psd_vals = psd_arr[:,0],psd_arr[:,1]*psd_arr[:,1]
                     else:
                         error('Improperly formatted psd array given. Instead of having two columns, it has %i'%psd_arry.shape[-1])
@@ -813,7 +813,7 @@ class match:
                     data_path = nrutils.__path__[0]+'/data/H1L1-AVERAGE_PSD-1127271617-1027800.txt'
                     psd_arr = loadtxt( data_path )
                     # Validate and unpack the psd array
-                    if psd_arr.shape[-1] is 2:
+                    if psd_arr.shape[-1] == 2:
                         psd_f,psd_vals = psd_arr[:,0],psd_arr[:,1]
                     else:
                         error('Improperly formatted psd array given. Instead of having two columns, it has %i'%psd_arry.shape[-1])
