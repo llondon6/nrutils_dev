@@ -901,17 +901,18 @@ def calc_Lab_tensor( multipole_dict ):
     y = multipole_dict
 
     # Allow user to input real and imag parts separately -- this helps with sanity checks
-    if isinstance( y[2,2], dict ):
+    ref_key = list(y.keys())[0]
+    if isinstance( y[ref_key], dict ):
         #
-        if not ( ('real' in y[2,2]) and ('imag' in y[2,2]) ):
-            error('You\'ve entered a multipole dictionary with separate real and imaginary parts. This must be formatted such that y[2,2]["real"] gives the real part and ...')
+        if not ( ('real' in y[ref_key]) and ('imag' in y[ref_key]) ):
+            error('You\'ve entered a multipole dictionary with separate real and imaginary parts. This must be formatted such that y[ref_key]["real"] gives the real part and ...')
         #
         x = {}
         lmlist = y.keys()
         for l,m in lmlist:
             x[l,m]        = y[l,m]['real'] + 1j*y[l,m]['imag']
             x[l,m,'conj'] = x[l,m].conj()
-    elif isinstance( y[2,2], (float,int,complex,ndarray) ):
+    elif isinstance( y[ref_key], (float,int,complex,ndarray) ):
         #
         x = {}
         lmlist = y.keys()
@@ -923,10 +924,10 @@ def calc_Lab_tensor( multipole_dict ):
 
 
     # Check type of dictionary values and pre-allocate output
-    if isinstance( y[2,2], (float,int,complex) ):
+    if isinstance( y[ref_key], (float,int,complex) ):
         L = zeros( (3,3), dtype=complex )
-    elif isinstance( y[2,2], ndarray ):
-        L = zeros( (3,3,len(y[2,2])), dtype=complex )
+    elif isinstance( y[ref_key], ndarray ):
+        L = zeros( (3,3,len(y[ref_key])), dtype=complex )
     else:
         error('Dictionary values of handled type; must be float or array')
 
@@ -938,7 +939,7 @@ def calc_Lab_tensor( multipole_dict ):
     #-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-#
 
     # Pre-allocate elements
-    I0,I1,I2,Izz = zeros_like(y[2,2]), zeros_like(y[2,2]), zeros_like(y[2,2]), zeros_like(y[2,2])
+    I0,I1,I2,Izz = zeros_like(y[ref_key]), zeros_like(y[ref_key]), zeros_like(y[ref_key]), zeros_like(y[ref_key])
 
     # Sum contributions from input multipoles
     for l,m in lmlist:
@@ -1011,7 +1012,8 @@ def calc_coprecessing_angles(multipole_dict,       # Dict of multipoles { ... l,
     # Import usefuls
     from scipy.linalg import eig, norm
     from scipy.integrate import cumtrapz
-    from numpy import arctan2, sin, arcsin, pi, ones, arccos, double, array
+    from scipy.stats import mode
+    from numpy import arctan2, sin, arcsin, pi, ones, arccos, double, array, diff
     from numpy import unwrap, argmax, cos, array, sqrt, sign, argmin, round, median
 
     # Handle optional input
@@ -1133,44 +1135,7 @@ def calc_coprecessing_angles(multipole_dict,       # Dict of multipoles { ... l,
     #
     X,Y,Z = reflect_unwrap_3D(X,Y,Z)
 
-    # # 3-point vector reflect unwrapping
-    # # print safe_domain_range
-    # tol = 0.1
-    # if safe_domain_range is None:
-    #     safe_domain_range = lim(abs(domain_vals))
-    # safe_domain_range = array(safe_domain_range)
-    # from numpy import arange, mean
-    # for k in range(len(X))[1:-1]:
-    #     if k > 0 and k < (len(domain_vals)-1):
-
-    #         if (abs(domain_vals[k]) > min(abs(safe_domain_range))) and (abs(domain_vals[k]) < max(abs(safe_domain_range))):
-
-    #             left_x_has_reflected = abs(X[k]+X[k-1]) < tol*abs(X[k-1])
-    #             left_y_has_reflected = abs(Y[k]+Y[k-1]) < tol*abs(Y[k-1])
-
-    #             right_x_has_reflected = abs(X[k]+X[k+1]) < tol*abs(X[k])
-    #             right_y_has_reflected = abs(Y[k]+Y[k+1]) < tol*abs(Y[k])
-
-    #             x_has_reflected = right_x_has_reflected or left_x_has_reflected
-    #             y_has_reflected = left_y_has_reflected or right_y_has_reflected
-
-    #             if x_has_reflected and y_has_reflected:
-
-    #                 # print domain_vals[k]
-
-    #                 if left_x_has_reflected:
-    #                     X[k:] *= -1
-    #                 if right_x_has_reflected:
-    #                     X[k+1:] *= -1
-
-    #                 if left_y_has_reflected:
-    #                     Y[k:] *= -1
-    #                 if right_y_has_reflected:
-    #                     Y[k+1:] *= -1
-
-    #                 Z[k:] *= -1
-
-    # Make sure that imag parts are gone
+    # Make sure that imag parts are gone (i.e. the arrays are only complex type becuase the waveforms are of that type)
     X = double(X)
     Y = double(Y)
     Z = double(Z)
@@ -1278,7 +1243,44 @@ def calc_coprecessing_angles(multipole_dict,       # Dict of multipoles { ... l,
     # -~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~- #
     #                          Calculate Angles                           #
     # -~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~- #
+    alpha,beta,gamma = convert_oed_to_euler_angles(domain_vals,X,Y,Z)
+    
+    #
+    if IS_FD:
+        mask = (domain_vals >= min(safe_domain_range)) & (
+                domain_vals <= max(safe_domain_range))
+        test_quantity = mode(sign( diff(beta[mask]) ))[0]
+        if test_quantity > 0:
+            # Flip OED 
+            warning('Flipping optimal emission direction so that beta is predominantly decreasing')
+            X = -X
+            Y = -Y
+            Z = -Z
+            alpha,beta,gamma = convert_oed_to_euler_angles(domain_vals,X,Y,Z)
 
+    # -~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~- #
+    # Return answer                                                       #
+    # -~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~- #
+    if return_xyz == 'all':
+        #
+        return alpha, beta, gamma, X, Y, Z
+    elif return_xyz:
+        #
+        return X, Y, Z
+    else:
+        return alpha, beta, gamma
+
+#
+def convert_oed_to_euler_angles(domain_vals,X,Y,Z):
+    '''
+    Convert optimal emission direction to euler angles
+    '''
+    
+    #
+    from numpy import arctan2,arccos,unwrap,cos 
+    from positive import spline_antidiff
+    
+    #
     alpha = arctan2(Y, X)
     beta = arccos(Z)
 
@@ -1303,18 +1305,8 @@ def calc_coprecessing_angles(multipole_dict,       # Dict of multipoles { ... l,
     else:
         # NOTE that this is the same as above, but here we're choosing an integration constant such that the value is zero. Above, no explicit integration constant is chosen.
         gamma = 0
-
-    # Return answer
-    if return_xyz == 'all':
-        #
-        return alpha, beta, gamma, X, Y, Z
-    elif return_xyz:
-        #
-        return X, Y, Z
-    else:
-        return alpha, beta, gamma
-
-
+    
+    return alpha,beta,gamma
 
 # Given dictionary of multipoles all with the same l, calculate the roated multipole with (l,mp)
 def rotate_wfarrs_at_all_times( l,                          # the l of the new multipole (everything should have the same l)
@@ -1336,11 +1328,22 @@ def rotate_wfarrs_at_all_times( l,                          # the l of the new m
     '''
 
     # Import usefuls
-    from numpy import exp, pi, array, ones, sign, complex128
+    from numpy import exp, pi, array, ones, sign, complex128, ndarray
     from nrutils.manipulate.rotate import wdelement
 
     #
     alpha,beta,gamma = euler_alpha_beta_gamma
+    
+    # Test for arrays
+    angles_are_arrays = isinstance( alpha, ndarray ) and isinstance( beta, ndarray ) and isinstance( gamma, ndarray )
+    # Enforce arrays
+    if not angles_are_arrays:
+        alpha = array([alpha])
+        beta = array([beta])
+        gamma = array([gamma])
+    
+    # print(alpha,beta,gamma)
+    # error()
     
     # Validate like_l_multipoles_dict input 
     lvals = set([ l for l,m in like_l_multipoles_dict.keys() ])

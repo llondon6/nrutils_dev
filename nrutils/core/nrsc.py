@@ -1857,7 +1857,7 @@ class gwf:
         from matplotlib.pyplot import show as shw
         from matplotlib.pyplot import ylabel as yl
         from matplotlib.pyplot import title as ttl
-        from numpy import ones,sqrt,hstack,array,sign
+        from numpy import ones,sqrt,hstack,array,sign,unwrap
 
         #from matplotlib import rc
         #rc('font', **{'family': 'serif', 'serif': ['Computer Modern']})
@@ -1960,7 +1960,7 @@ class gwf:
         grid(color=gclr, linestyle='-')
         ax[2].set_xscale('log', nonposx='clip')
         #
-        plot( sign(this.m if this.m is not None else 1)*this.f[pos_mask], this.fd_dphi[pos_mask], color=sqrt(clr[0]) )
+        plot( sign(this.m if this.m is not None else 1)*this.f[pos_mask], unwrap(this.fd_dphi[pos_mask],discont=4000), color=sqrt(clr[0]) )
         if ref_gwf:
             plot( sign(that.m if that.m is not None else 1)*that.f[that_pos_mask], that.fd_dphi[that_pos_mask], color=sqrt(clr[0]), linewidth=that_lwid, alpha=that_alpha )
         # if this.m!=0: pylim( sign(this.m if this.m is not None else 1)*this.f[pos_mask], this.fd_dphi[pos_mask] )
@@ -2561,7 +2561,7 @@ class gwf:
         #
         y = this if apply else this.copy()
         
-        #
+        #h
         mask = smoothest_part_by_threshold( y.dphi, threshold=threshold, smooth_width=smooth_width, plot=plot )
         
         #
@@ -2584,7 +2584,7 @@ class gwf:
         ringdown_window = maketaper( y.t, ringdown_window_state )
         
         #
-        window = inspiral_window * ringdown_window
+        window = inspiral_window #* ringdown_window
         
         #
         y.apply_window( window=window )
@@ -2707,6 +2707,9 @@ class gwylm:
 
         #
         this.frame = 'raw-simulation'
+        
+        #
+        this.root_lm = (2,2)
 
         # #
         # if fftfactor is None:
@@ -2866,7 +2869,7 @@ class gwylm:
         # Populate a dictionary which contains the time series for source dynamics
         if scentry_obj.config:
             if load_dynamics:
-                waveform_times = this.t[ (this.t>this.t[this.startindex]) & (this.t<this[2,2]['psi4'].intrp_t_amp_max) ]
+                waveform_times = this.t[ (this.t>this.t[this.startindex]) & (this.t<this[this.root_lm]['psi4'].intrp_t_amp_max) ]
                 this.load_dynamics(verbose=verbose,waveform_times=waveform_times)
             
         # If an extreme mass ratio case, then scale to a fiducial mass-ratio 
@@ -3013,8 +3016,8 @@ class gwylm:
             this.lm[(f.l,f.m)]['news'] = f
             
         #
-        this.t = this[2,2][__kind__].t
-        this.f = this[2,2][__kind__].f
+        this.t = this[this.root_lm][__kind__].t
+        this.f = this[this.root_lm][__kind__].f
 
     # Validate inputs to constructor
     def __valinputs__(this,thisfun,lm=None,lmax=None,scentry_obj=None,multipole_dictionary=None):
@@ -3028,13 +3031,13 @@ class gwylm:
 
         # Default multipolar values
         if (lm is None) and (lmax is None):
-            lm = [2,2]
+            lm = [this.root_lm]
 
-        # Determine whether the lm input is a songle mode (e.g. [2,2]) or a list of modes (e.g. [[2,2],[3,3]] )
+        # Determine whether the lm input is a songle mode (e.g. [this.root_lm]) or a list of modes (e.g. [[this.root_lm],[3,3]] )
         if len( shape(lm) ) == 2 :
             if shape(lm)[1] != 2 :
                 # raise error
-                msg = '"lm" input must be iterable of length 2 (e.g. lm=[2,2]), or iterable of shape (X,2) (e.g. [[2,2],[3,3],[4,4]])'
+                msg = '"lm" input must be iterable of length 2 (e.g. lm=[this.root_lm]), or iterable of shape (X,2) (e.g. [[this.root_lm],[3,3],[4,4]])'
                 error(msg,thisfun)
 
         # Raise error upon nonsensical multipolar input
@@ -3073,7 +3076,7 @@ class gwylm:
                         l,m = k
                         this.__lmlist__.append( (l,m) )
                     else:
-                        msg = '(__make_lmlist__) Found list of multipole indeces (e.g. [[2,2],[3,3]]), but length of one of the index values is not two. Please check your lm input.'
+                        msg = '(__make_lmlist__) Found list of multipole indeces (e.g. [[this.root_lm],[3,3]]), but length of one of the index values is not two. Please check your lm input.'
                         error(msg)
             else: # Else, if lm is a single mode index
                 #
@@ -3083,15 +3086,15 @@ class gwylm:
         # Store the input lm list
         this.__input_lmlist__ = list(this.__lmlist__)
         # Always load the m=l=2 waveform
-        if not (  (2,2) in this.__lmlist__  ):
+        if not (  this.root_lm in this.__lmlist__  ):
             msg = 'The l=m=2 multipole will be loaded in order to determine important characteristice of all modes such as noise floor and junk radiation location.'
             warning(msg,'gwylm')
-            this.__lmlist__.append( (2,2) )
+            this.__lmlist__.append( this.root_lm )
 
-        # Always put (2,2) at the front of the list
+        # Always put this.root_lm at the front of the list
         a = list(this.__lmlist__)
-        a.pop( a.index((2,2)) )
-        this.__lmlist__ = [(2,2)] + a
+        a.pop( a.index(this.root_lm) )
+        this.__lmlist__ = [this.root_lm] + a
 
         # Let the people know
         if this.verbose:
@@ -3229,7 +3232,7 @@ class gwylm:
         #
         if not 'dynamics' in this.__dict__:
             error('Dynamics must be loaded in order to plot 3D trajectories. One must generate the gwylm object with load_dynamics=True for correct behavior.')
-            # waveform_times = this.t[ (this.t>this.t[this.startindex]) & (this.t<this[2,2]['psi4'].intrp_t_amp_max) ]
+            # waveform_times = this.t[ (this.t>this.t[this.startindex]) & (this.t<this[this.root_lm]['psi4'].intrp_t_amp_max) ]
             # this.load_dynamics(waveform_times=waveform_times)
 
         # Collect components
@@ -3321,7 +3324,7 @@ class gwylm:
         from numpy import array
 
         #
-        kinds = this[2,2].keys()
+        kinds = this[this.root_lm].keys()
 
         #
         alert('Symmetrising multipole moments in: %s'%magenta(this.simname),verbose=verbose, header=True)
@@ -3337,7 +3340,7 @@ class gwylm:
         that = this.copy()
             
         #
-        zparity_transform = lambda X,L,M: ((-1)**L)     * X.conj()
+        zparity_transform = lambda X,L,M: ((-1)**L)     * X.conj() 
         antipod_transform = lambda X,L,M: ((-1)**(L+M)) * X.conj()
         xparity_transform = lambda X,L,M: ((-1)**M)     * X.conj()
         
@@ -3408,7 +3411,7 @@ class gwylm:
                 wfarr = array( [this.t,y_symmetric_negative.real,y_symmetric_negative.imag] ).T
                 that[l,-m][kind].setfields( wfarr=wfarr )
 
-        # if that[2,2]['psi4'] != [y for y in that.ylm if (y.l,y.m)==(2,2)][0]:
+        # if that[this.root_lm]['psi4'] != [y for y in that.ylm if (y.l,y.m)==(2,2)][0]:
         #     error('Curation broken!')
         # else:
         #     alert('Curatoin OK')
@@ -3494,16 +3497,16 @@ class gwylm:
         #
         this.__curate__()
         #
-        t22 = this.lm[2,2][this.config.__disk_data_kind__].t
+        t22 = this.lm[this.root_lm][this.config.__disk_data_kind__].t
         n22 = len(t22)
         #
         for lm in this.lm:
-            if lm != (2,2):
+            if lm != this.root_lm:
                 ylm = this.lm[lm][this.config.__disk_data_kind__]
                 if len(ylm.t) != n22:
                     #
                     if True: #this.verbose:
-                        warning('[valpsi4multipoles] The (l,m)=(%i,%i) multipole was found to not have the same length as its (2,2) counterpart. The offending waveform will be interpolated on the l=m=2 time series.'%lm,'gwylm')
+                        warning('[valpsi4multipoles] The (l,m)=(%i,%i) multipole was found to not have the same length as its %s counterpart. The offending waveform will be interpolated on the l=m=2 time series.'%(lm[0],lm[1],str(this.root_lm)),'gwylm')
                     # Interpolate the mode at t22, and reset fields
                     wfarr = intrp_wfarr(ylm.wfarr,domain=t22)
                     # Reset the fields
@@ -3550,7 +3553,7 @@ class gwylm:
 
         # Default multipolar values
         if lm is None:
-            lm = [2,2]
+            lm = [this.root_lm]
 
         # Raise error upon nonsensical multipolar input
         if lm is not None:
@@ -3837,10 +3840,10 @@ class gwylm:
         # Determine the peak realtive time series
         if kind in ('h','strain'):
             kind = 'strain'
-            peak_relative_time = this.lm[2,2]['strain'].t - this.lm[2,2]['strain'].intrp_t_amp_max
+            peak_relative_time = this.lm[this.root_lm]['strain'].t - this.lm[this.root_lm]['strain'].intrp_t_amp_max
         elif kind in ('y','psi4'):
             kind = 'psi4'
-            peak_relative_time = this.lm[2,2]['psi4'].t - this.lm[2,2]['psi4'].intrp_t_amp_max
+            peak_relative_time = this.lm[this.root_lm]['psi4'].t - this.lm[this.root_lm]['psi4'].intrp_t_amp_max
         else:
             error('kind can only be "strain" or "psi4", not %s'%(str(kind)))
         # Define the mask which selects for time
@@ -3850,7 +3853,7 @@ class gwylm:
         else:
             k = find( this.t >= time )[0]
         # Store actual time referened for waveform
-        real_time = this.lm[2,2][kind].t[k]
+        real_time = this.lm[this.root_lm][kind].t[k]
 
         # Recompose the waveform at this time evaluated over the source's sky
         Z = zeros( X.shape, dtype=complex )
@@ -3869,7 +3872,7 @@ class gwylm:
             title = r'$|%s(t)|$'%( 'h' if kind == 'strain' else r'\psi_4' )
 
         #
-        title += ', $t = %1.4f$'%this.lm[2,2][kind].t[k]
+        title += ', $t = %1.4f$'%this.lm[this.root_lm][kind].t[k]
 
         xlabels = ['$210^\circ$', '$240^\circ$','$270^\circ$','$300^\circ$','$330^\circ$',
                    '$0^\circ$', '$30^\circ$', '$60^\circ$', '$90^\circ$','$120^\circ$', '$150^\circ$']
@@ -3907,8 +3910,8 @@ class gwylm:
         if verbose is None: verbose = this.verbose
         if kind is None: kind = 'psi4'
         # Validate kind of data to save
-        if not ( kind in this.lm[2,2] ):
-            error('Unknown "kind" given: %s. Must be in %s.'%(kind,this.lm[2,2].keys()))
+        if not ( kind in this.lm[this.root_lm] ):
+            error('Unknown "kind" given: %s. Must be in %s.'%(kind,this.lm[this.root_lm].keys()))
         # Handle default output dir
         if outdir is None: outdir = expanduser('~/Desktop/')
 
@@ -4027,18 +4030,18 @@ class gwylm:
 
         # # Look for the l=m=2 psi4 multipole
         # if len( this.ylm ):
-        #     y22 = this.lm[2,2]['psi4']
+        #     y22 = this.lm[this.root_lm]['psi4']
         # elif len( this.hlm ):
-        #     y22 = this.lm[2,2]['strain']
+        #     y22 = this.lm[this.root_lm]['strain']
         # else:
         #     # If it doesnt exist in this.ylm, then load it
-        #     y22 = this.load(lm=[2,2],output=True,dt=this.dt)
+        #     y22 = this.load(lm=[this.root_lm],output=True,dt=this.dt)
 
         # Look for the l=m=2 psi4 multipole
         if this.config:
-            y22 = this.lm[2,2][this.config.__disk_data_kind__]
+            y22 = this.lm[this.root_lm][this.config.__disk_data_kind__]
         else:
-            y22 = this.lm[2,2]['psi4']
+            y22 = this.lm[this.root_lm]['psi4']
 
         #%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&#
         # Characterize the START of the waveform (pre-inspiral)      #
@@ -4056,7 +4059,7 @@ class gwylm:
         else:
             #
             warning('No initial orbital separation found in metadata. The wstart_pn field will be set to the initial ferquency of the l=m=2 strain multipole.')
-            this.wstart_pn = this[2,2]['strain'].dphi[0]
+            this.wstart_pn = this[this.root_lm]['strain'].dphi[0]
 
         #%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&%%&#
         # Characterize the END of the waveform (post-ringdown)       #
@@ -4138,7 +4141,7 @@ class gwylm:
                 # y22_list = filter( lambda y: y.l==y.m==2, this.ylm )
                 # # If it doesnt exist in this.ylm, then load it
                 # if 0==len(y22_list):
-                #     y22 = this.load(lm=[2,2],output=True,dt=this.dt)
+                #     y22 = this.load(lm=[this.root_lm],output=True,dt=this.dt)
                 # else:
                 #     y22 = y22_list[0]
 
@@ -4235,7 +4238,7 @@ class gwylm:
                 verbose=False): # Let the people know
 
         # Make sure that the l=m=2 multipole exists
-        if not ( (2,2) in this.lm.keys() ):
+        if not ( this.root_lm in this.lm.keys() ):
             msg = 'There must be a l=m=2 multipole prewsent to estimate the waveform\'s ringdown part.'
             error(msg,'gwylm.ringdown')
 
@@ -4384,7 +4387,7 @@ class gwylm:
         from scipy.interpolate import InterpolatedUnivariateSpline as spline
 
         # Make sure that the l=m=2 multipole exists
-        if not ( (2,2) in this.lm.keys() ):
+        if not ( this.root_lm in this.lm.keys() ):
             msg = 'There must be a l=m=2 multipole prewsent to estimate the waveform\'s ringdown part.'
             error(msg,'gwylm.ringdown')
 
@@ -4393,7 +4396,7 @@ class gwylm:
             alert('Time will be listed relative to the peak of %s.'%cyan('strain' if use_peak_strain else 'luminosity'))
 
         # # Retrieve the l=m=2 component
-        # ref_gwf = this.lm[2,2][  'strain' if use_peak_strain else 'news'  ]
+        # ref_gwf = this.lm[this.root_lm][  'strain' if use_peak_strain else 'news'  ]
         # # ref_gwf = [ a for a in (this.hlm if use_peak_strain else this.flm) if a.l==a.m==2 ][0]
 
         # #
@@ -4572,19 +4575,50 @@ class gwylm:
         if kind is None:
             kind = 'psi4'
 
-        # Use the 2,2, multipole one cycle after wstart to determine INITIAL phase direction
-        mask = arange(this.startindex,this.startindex + int(2*pi/this.wstart/this.dt) )
-        dphi = this[2,2][kind].dphi[mask]
-        m=2
-
+        # Use the root multipole one cycle after wstart to determine INITIAL phase direction
+        #
+        ref_gwfo = this[this.root_lm][kind]
+        if tuple(this.root_lm) != (2,2):
+            alert(red('Using scubbed waveform to determine whether initial phase is increasing or decreasing.'))
+            ref_gwfo = this[this.root_lm][kind].scrub()
+        #
+        if not ('startindex' in ref_gwfo.__dict__):
+            ref_gwfo.startindex = 0
+        mask = arange(ref_gwfo.startindex+ int(0.1*(this.root_lm[-1]/2.0)*2*pi/this.wstart/this.dt),ref_gwfo.startindex + int((this.root_lm[-1]/2.0)*2*pi/this.wstart/this.dt) )
+        mask = mask[ mask<ref_gwfo.n ]
+        dphi = ref_gwfo.dphi[mask]
+        m=this.root_lm[-1]
+        
+        # from matplotlib.pyplot import plot,show,figure,title,xlim,ylim
+        # figure() 
+        # title(r'$(\ell,m)=(%i,%i)$'%this.root_lm)
+        # plot( this.t, ref_gwfo.dphi,lw=3 ) 
+        # plot( this.t[mask], ref_gwfo.dphi[mask],lw=3 ) 
+        # xlim( lim(this.t[mask],dilate=0.1) )
+        # ylim( limy(this.t, ref_gwfo.dphi) )
+        # show()
+        
+        #
+        if 'cp' in this.frame:
+            from numpy import array
+            ref_orientation = array([0,0,1])
+        else:
+            ref_orientation = this.L
+            
         if int(scipy_version.split('.')[1])<16:
             # Account for old scipy functionality
-            external_sign_convention = sign(this.L[-1]) * sign(m) * mode( sign( dphi ) )[0][0]
+            external_sign_convention = sign(ref_orientation[-1]) * sign(m) * mode( sign( dphi ) )[0][0]
             initially_msign_matches_wsign = sign(m) == mode( sign( dphi ) )[0][0]
         else:
             # Account for modern scipy functionality
-            external_sign_convention = sign(this.L[-1]) * sign(m) * mode( sign( dphi ) ).mode[0]
+            external_sign_convention = sign(ref_orientation[-1]) * sign(m) * mode( sign( dphi ) ).mode[0]
             initially_msign_matches_wsign = sign(m) == mode( sign( dphi ) ).mode[0]
+            
+        # print('>> ',this.frame)
+        # print('>> ',this.L)
+        # print('>> ',ref_orientation)
+        # print('>> ',external_sign_convention)
+        
         # if initially_msign_matches_wsign: alert('## initall, m and td freq have same sign.')
         this.external_sign_convention = external_sign_convention
 
@@ -4603,7 +4637,7 @@ class gwylm:
                     this[l,m][kind] = y
 
             #
-            if not ( this[2,2]['psi4'] in this.ylm ):
+            if not ( this[this.root_lm]['psi4'] in this.ylm ):
                 error('Curation error!')
             
         # for l,m in this.lm:
@@ -4860,7 +4894,7 @@ class gwylm:
 
 
     # output corotating waveform
-    def __calc_coprecessing_frame__(this,safe_domain_range=None,verbose=None,transform_domain=None,__format__=None,ref_orientation=None,kind=None,plot=False,select_lm_list=None,use_legacy=True):
+    def __calc_coprecessing_frame__(this,safe_domain_range=None,verbose=None,transform_domain=None,__format__=None,ref_orientation=None,kind=None,plot=False,select_lm_list=None,use_legacy=True,enforce_m_relative_phase_orientation=True):
 
         '''
         Output gwylm object in coprecessing frame, where the optimal emission axis is always along z
@@ -4938,7 +4972,8 @@ class gwylm:
         that.frame = transform_domain.lower()+'-cp-'+kind
         
         #
-        that.__enforce_m_relative_phase_orientation__()
+        if enforce_m_relative_phase_orientation:
+            that.__enforce_m_relative_phase_orientation__()
 
         #
         return that
@@ -5038,6 +5073,9 @@ class gwylm:
     def selectlm( this, lmlist, verbose=False ):
         
         #
+        from numpy import argmax
+        
+        #
         that = this.copy()
         
         #
@@ -5045,6 +5083,13 @@ class gwylm:
         that.ylm = [ y for y in this.ylm if (y.l,y.m) in lmlist ]
         that.flm = [ y for y in this.flm if (y.l,y.m) in lmlist ]
         that.hlm = [ y for y in this.hlm if (y.l,y.m) in lmlist ]
+        
+        # We must set a new reference (l,m) to be used for curation and other tasks. Note that the default is (2,2) as defined in the class constructor.
+        # max_amp = [ y.amp[y.k_amp_max] for y in that.ylm ]
+        # y_root = that.ylm[ argmax( max_amp ) ]
+        xlist = [ l+m for l,m in lmlist ]
+        k = argmax(xlist)
+        that.root_lm = lmlist[k]
         
         #
         that.__curate__()
@@ -5083,7 +5128,7 @@ class gwylm:
         # u = this.ringdown(T0=0,T1=20) if ref_gwylmo is None else ref_gwylmo
         # dphi = -angle(u.lm[2,1]['psi4'].phi[0])
         # ans = this.rotate( dphi=dphi, dpsi=0, verbose=verbose, apply=apply )
-        # dpsi = -angle(u.lm[2,2]['psi4'].phi[0])
+        # dpsi = -angle(u.lm[this.root_lm]['psi4'].phi[0])
         # ans = this.rotate( dphi=0, dpsi=dpsi, verbose=verbose, apply=apply )
 
         #
@@ -5230,7 +5275,7 @@ class gwylm:
         kind = 'strain' if kind is None else kind
         if not kind in ('strain','psi4'): error('unknown kind given')
         that,zref = this.lengthalign( yref, apply=apply, kind=kind )
-        shift = -that.lm[2,2][kind].intrp_t_amp_max + zref.lm[2,2][kind].intrp_t_amp_max
+        shift = -that.lm[this.root_lm][kind].intrp_t_amp_max + zref.lm[this.root_lm][kind].intrp_t_amp_max
         that.tshift( shift=shift )
         if not apply: return that,zref
 
@@ -5458,6 +5503,7 @@ class gwylm:
             alpha = array([alpha])
             beta = array([beta])
             gamma = array([gamma])
+            euler_alpha_beta_gamma = (alpha,beta,gamma)
 
         # #
         # if transform_domain == 'fd':
@@ -5466,7 +5512,7 @@ class gwylm:
         if transform_domain == 'fd':
             start_index = find(that.f >= that.wstart_pn/(2*pi))[0]
             warning('Note that metadata vectors for initial data will be rotated according to positive frequency angles.')
-            end_index = find(that.f >= that.lm[2,2]['psi4'].dt/4)[0]
+            end_index = find(that.f >= that.lm[this.root_lm]['psi4'].dt/4)[0]
         else:
             if angles_are_arrays:
                 start_index = this.startindex+1
@@ -5563,7 +5609,7 @@ class gwylm:
                     J,L,S,L1,L2,S1,S2,R1,R2 = J_,L_,S_,L1_,L2_,S1_,S2_,R1_,R2_
 
                     # from numpy import pi
-                    # f = this[2,2]['psi4'].dphi/(2*pi)
+                    # f = this[this.root_lm]['psi4'].dphi/(2*pi)
                     # _alpha = spline( this.f )
 
                     # a = spline(this.t, _alpha)(times_used)
@@ -5693,7 +5739,7 @@ class gwylm:
         # Define a work function
         def action( Mfxf ):
             # NOTE that the dominant psi4 multipole is referenced below. The prange is [-1,1] so that percessing systems are generally handled. Other options setting optimize speed. 
-            f = qnmfit(g.lm[2,2]['psi4'],Mfxf=Mfxf,statsfit=False,greedy=False,prange=[-1,1],nrange=nrange,lmax=2,nodd=False)
+            f = qnmfit(g.lm[this.root_lm]['psi4'],Mfxf=Mfxf,statsfit=False,greedy=False,prange=[-1,1],nrange=nrange,lmax=2,nodd=False)
             return f.frmse
 
 
@@ -5711,7 +5757,7 @@ class gwylm:
         mf,xf = Q.x
 
         #
-        fo = qnmfit(g.lm[2,2]['psi4'],Mfxf=Q.x,statsfit=False,greedy=False,prange=[-1,1],nrange=nrange,lmax=2)
+        fo = qnmfit(g.lm[this.root_lm]['psi4'],Mfxf=Q.x,statsfit=False,greedy=False,prange=[-1,1],nrange=nrange,lmax=2)
 
         # Apply to the input gwylm object if requested
         if apply_result:
@@ -5810,7 +5856,7 @@ class gwylm:
         remnant['mask'] = mask
         remnant['time_used'] = radiated['time_used']
         remnant['M'] = 1 - radiated['E']
-        remnant['Mw'] = remnant['M'] * this.lm[2,2]['psi4'].dphi[ mask ]/2
+        remnant['Mw'] = remnant['M'] * this.lm[this.root_lm]['psi4'].dphi[ mask ]/2
 
         # Calculate the internal angular momentum by using either the final or initial angular momentum values
         remnant['J'] = -radiated['J']
@@ -5985,7 +6031,7 @@ class gwylm:
 
         #
         w_orb_min = this.wstart_pn/2
-        w_orb_merger = this[2,2]['psi4'].dphi[ this[2,2]['psi4'].k_amp_max ]/2
+        w_orb_merger = this[this.root_lm]['psi4'].dphi[ this[this.root_lm]['psi4'].k_amp_max ]/2
 
         #
         if pn_w_orb_min is None: pn_w_orb_min = 0.8*w_orb_min
@@ -6363,7 +6409,7 @@ class gwfcharstart:
     def __init__( this,                 # the object to be created
                   y,                    # input gwf object who'se start behavior will be characterised
                   shift     = 3,        # The size of the turn on region in units of waveform cycles.
-                  __smooth__ = True,
+                  __smooth__ = not True,
                   verbose   = False,
                   nojunk = False ):  # tag to identify data with no junk radiation at waveform start
 

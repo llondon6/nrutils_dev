@@ -141,12 +141,12 @@ class gwylm_radiation_axis_workflow:
         else:
             mp = { (l,m) : ( gwylmo.lm[l,m][kind].y if domain in ('t','time') else gwylmo.lm[l,m][kind].fd_y ) for l,m in gwylmo.lm  }
         # Domain values: time or freq
-        domain_vals = gwylmo.lm[2,2][kind].t if domain in ('t','time') else gwylmo.lm[2,2][kind].f
+        domain_vals = gwylmo.lm[gwylmo.root_lm][kind].t if domain in ('t','time') else gwylmo.lm[gwylmo.root_lm][kind].f
 
         #
         if safe_domain_range is None:
-            domain_min = domain_vals[gwylmo.preinspiral.right_index] if domain in ('t','time') else gwylmo.wstart_pn/(2*pi)
-            domain_max = domain_vals[gwylmo.postringdown.left_index] if domain in ('t','time') else gwylmo.lm[2,2][kind].dt/pi
+            domain_min = domain_vals[gwylmo.preinspiral.right_index] if domain in ('t','time') else abs(gwylmo.root_lm[-1]/2) * gwylmo.wstart_pn/(2*pi)
+            domain_max = domain_vals[gwylmo.postringdown.left_index] if domain in ('t','time') else abs(gwylmo.root_lm[-1]/2) * gwylmo.lm[gwylmo.root_lm][kind].dt/pi
             safe_domain_range = [domain_min,domain_max]
 
         # Calculate corotating angles using low-level function
@@ -200,8 +200,8 @@ class gwylm_radiation_axis_workflow:
         lw = 1.5
 
         #
-        domain_min = domain_vals[gwylmo.preinspiral.right_index] if domain in ('t','time') else gwylmo.wstart_pn/(2*pi)
-        domain_max = domain_vals[gwylmo.postringdown.left_index] if domain in ('t','time') else gwylmo.lm[2,2][kind].dt/pi
+        domain_min = domain_vals[gwylmo.preinspiral.right_index] if domain in ('t','time') else abs(gwylmo.root_lm[-1]/2) * gwylmo.wstart_pn/(2*pi)
+        domain_max = domain_vals[gwylmo.postringdown.left_index] if domain in ('t','time') else abs(gwylmo.root_lm[-1]/2) * gwylmo.lm[gwylmo.root_lm][kind].dt/pi
 
         #
         mask = (domain_vals>=domain_min) & (domain_vals<=domain_max)
@@ -210,14 +210,14 @@ class gwylm_radiation_axis_workflow:
         ax1 = subplot(3,1,1)
         title( gwylmo.simname )
         if domain in ('t','time'):
-            plot( domain_vals, gwylmo.lm[2,2][kind].plus, color=grey, linewidth = lw )
-            plot( domain_vals, gwylmo.lm[2,2][kind].cross, color=0.8*grey, linewidth = lw )
-            plot( domain_vals, gwylmo.lm[2,2][kind].amp, linewidth = lw, label=r'$\psi_{22}$' )
+            plot( domain_vals, gwylmo.lm[gwylmo.root_lm][kind].plus, color=grey, linewidth = lw )
+            plot( domain_vals, gwylmo.lm[gwylmo.root_lm][kind].cross, color=0.8*grey, linewidth = lw )
+            plot( domain_vals, gwylmo.lm[gwylmo.root_lm][kind].amp, linewidth = lw, label=r'$\psi_{%i%i}$'%gwylmo.root_lm )
             yscale('log',nonposy='clip')
         else:
-            plot( domain_vals, gwylmo.lm[2,2][kind].fd_amp, linewidth = lw, label=r'$\psi_{22}$' )
+            plot( domain_vals, gwylmo.lm[gwylmo.root_lm][kind].fd_amp, linewidth = lw, label=r'$\psi_{%i%i}$'%gwylmo.root_lm )
             xscale('log'); yscale('log')
-            ylim( lim(gwylmo.lm[2,2][kind].fd_amp[mask]) )
+            ylim( lim(gwylmo.lm[gwylmo.root_lm][kind].fd_amp[mask]) )
         grid()
         legend( frameon=False, loc='best' )
 
@@ -259,7 +259,7 @@ class gwylm_radiation_axis_workflow:
 
         import matplotlib as mpl
         from mpl_toolkits.mplot3d import Axes3D
-        from matplotlib.pyplot import figure, figaspect, plot, xlabel, ylabel, xlim, ylim, xscale, yscale, legend, subplot, grid, title, draw, show, savefig, axis, gcf, gca
+        from matplotlib.pyplot import figure, figaspect, plot, xlabel, ylabel, xlim, ylim, xscale, yscale, legend, subplot, grid, title, draw, show, savefig, axis, gcf, gca, axis
         from matplotlib.pyplot import close as close_figure
         from numpy import mod,pi,hstack,array,ones,linalg,arange,zeros_like
         from os.path import join
@@ -285,13 +285,15 @@ class gwylm_radiation_axis_workflow:
 
         #
         if ax is None:
-            fig = figure( figsize=4*figaspect(4) )
-            # fig = figure()
-            #ax = fig.add_subplot(111, projection='3d')
-            ax = gca(projection='3d')
-            
-            # See: https://github.com/matplotlib/matplotlib/issues/17172#issuecomment-634964954
-            ax.set_box_aspect((1, 1, 1))
+            alert(mpl.__version__)
+            if mpl.__version__ >= '3.3.4':
+                fig = figure( figsize=4*figaspect(1) )
+                ax = gca(projection='3d')
+                # See: https://github.com/matplotlib/matplotlib/issues/17172#issuecomment-634964954
+                ax.set_box_aspect((1, 1, 1))
+            else:
+                fig = figure(figsize=4*figaspect(1))
+                ax = fig.add_subplot(111, projection='3d')
             
         else:
             fig = gcf()
@@ -318,7 +320,7 @@ class gwylm_radiation_axis_workflow:
             #
             mask = arange( gwylmo.startindex+1, gwylmo.endindex_by_frequency+1 )
         else:
-            mask = (abs(gwylmo.f)>gwylmo.wstart_pn/(2*pi)) & (abs(gwylmo.f)<gwylmo.lm[2,2][kind].dt/4)
+            mask = (abs(gwylmo.f)>gwylmo.wstart_pn/(2*pi)) & (abs(gwylmo.f)<gwylmo.lm[gwylmo.root_lm][kind].dt/4)
 
 
         #
