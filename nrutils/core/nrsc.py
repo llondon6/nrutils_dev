@@ -3305,6 +3305,55 @@ class gwylm:
         return ax
 
     #
+    def __cpsymmetrize__(this,verbose=False,domain=None,kind=None,safe_domain_range=None):
+        
+        # Import usefuls
+        from numpy import array
+
+        #
+        if domain in (None,'td'):
+            domain = 'td'
+            alert('Using the '+red('Time Domain')+' coprecessing frame for cleaning.')
+        elif domain in ('fd','FD','frequency_domain','freq'):
+            domain = 'fd'
+            alert('Using the '+red('Frequency Domain') +
+                ' coprecessing frame for cleaning.')
+        else:
+            error('Unknown coprecessing domain option:'+str(domain))
+        #
+        if kind is None:
+            kind = 'psi4'
+
+        #
+        if safe_domain_range is None:
+            safe_domain_range=[0.009,0.3]
+        
+        #
+        y = this
+
+        # Put in frame where j init is zhat
+        y0 = y.__calc_initial_j_frame__()
+
+        # Calc coprecessing frame wf TD
+        y1 = y0.__calc_coprecessing_frame__(verbose=True, safe_domain_range=safe_domain_range,transform_domain=domain,kind=kind)
+
+        # Duplicate for manipulation
+        y2 = y1.__symmetrize__(zparity=True)
+
+        # Re-wrap with the original TD or FD angles
+        alpha  = y1.radiation_axis_info.radiation_axis['%s_alpha'%domain]
+        beta   = y1.radiation_axis_info.radiation_axis['%s_beta' %domain]
+        gamma  = y1.radiation_axis_info.radiation_axis['%s_gamma'%domain]
+        angles = ( alpha,beta,gamma )
+        # ---
+        y3     = y2.__rotate_frame_at_all_times__( angles, transform_domain=domain )
+        y3.frame = y.frame
+
+        # Return answer
+        answer = y3
+        return answer
+        
+        
     def __symmetrize__(this,verbose=False,zparity=False,xparity=False):
         
         '''
