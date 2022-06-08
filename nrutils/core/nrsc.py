@@ -285,7 +285,7 @@ class scentry:
                 this.learn_metadata()
                 this.label = sclabel( this )
             except:
-                emsg = sys.exc_info()[1].message
+                emsg = str(sys.exc_info()[1].message)
                 this.log += '%80s'%' [FATALERROR] The metadata failed to be read. There may be an external formatting inconsistency. It is being marked as invalid with None. The system says: %s'%emsg
                 if this.verbose: warning( 'The following error message will be logged: '+red(emsg),'scentry')
                 this.isvalid = None # An external program may use this to do something
@@ -3305,7 +3305,7 @@ class gwylm:
         return ax
 
     #
-    def __cpsymmetrize__(this,verbose=False,domain=None,kind=None,safe_domain_range=None):
+    def __cpsymmetrize__(this,verbose=False,domain=None,kind=None,safe_domain_range=None,hmclean=False):
         
         # Import usefuls
         from numpy import array
@@ -3339,6 +3339,18 @@ class gwylm:
 
         # Duplicate for manipulation
         y2 = y1.__symmetrize__(zparity=True)
+        
+        # Remove higher multipole data
+        if hmclean:
+            # 
+            ll,mm = y.root_lm
+            for lm in y2.lm:
+                l,m = lm
+                if (l,abs(m)) != (ll,mm):
+                    for kind in y2.lm[lm]:
+                        wfarr = y2[lm][kind].wfarr
+                        wfarr[:,1:] *= 1e-10
+                        y2[lm][kind].setfields( wfarr )
 
         # Re-wrap with the original TD or FD angles
         alpha  = y1.radiation_axis_info.radiation_axis['%s_alpha'%domain]
