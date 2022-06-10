@@ -284,9 +284,10 @@ class scentry:
             try:
                 this.learn_metadata()
                 this.label = sclabel( this )
-            except:
-                emsg = str(sys.exc_info()[1].message)
-                this.log += '%80s'%' [FATALERROR] The metadata failed to be read. There may be an external formatting inconsistency. It is being marked as invalid with None. The system says: %s'%emsg
+            except Exception as e:
+                # emsg = str(sys.exc_info()[1].message)
+                emsg = str(e)
+                #this.log += '%80s'%' [FATALERROR] The metadata failed to be read. There may be an external formatting inconsistency. It is being marked as invalid with None. The system says: %s'%emsg
                 if this.verbose: warning( 'The following error message will be logged: '+red(emsg),'scentry')
                 this.isvalid = None # An external program may use this to do something
                 this.label = 'invalid!'

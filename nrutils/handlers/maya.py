@@ -180,7 +180,7 @@ def learn_metadata( metadata_file_location ):
     else:
         # Use bash's tail to get the last row in the file
         cmd = 'tail -n 1 %s' % hn_file
-        data_string = bash(cmd)
+        data_string = bash(cmd).decode('utf-8')
         # If the string is empty, then there was an error
         if not data_string:
             msg = 'The system failed using tail to get the remnant state from \"%s\"'%cyan(cmd)
