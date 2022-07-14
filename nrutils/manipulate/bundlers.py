@@ -44,6 +44,10 @@ def nr2h5( nr_strain_data, nr_meta_data, output_path=None, verbose=False ):
     def physf( f, M ): return f/mass_sec(M)
     # ------------------------------------------------------- #
 
+    # Function to convert string to bytes
+    def to_bytes(string):
+        return bytes(string, encoding="utf-8")
+
 
     # ---- Define useful things for input checking & file handling ---- #
     # Make "mkdir" function for directories
@@ -165,11 +169,11 @@ def nr2h5( nr_strain_data, nr_meta_data, output_path=None, verbose=False ):
         write_spline( phase_tmp, time_data, nr_strain_data[(l,m)]['phase'] )
 
         # Open the temporary h5 file, and then copy its high level group contents to the main h5 file under the appropriate group
-        tmp_amp_h5 = h5py.File( amp_tmp )
-        h5py.h5o.copy( tmp_amp_h5.id , '/', h5f.id, '/amp_l%i_m%i' % lm )
+        tmp_amp_h5 = h5py.File( amp_tmp , 'r' )
+        h5py.h5o.copy( tmp_amp_h5.id , to_bytes('/'), h5f.id, to_bytes('/amp_l%i_m%i' % lm) )
         #
-        tmp_phase_h5 = h5py.File( phase_tmp )
-        h5py.h5o.copy( tmp_phase_h5.id , '/', h5f.id, '/phase_l%i_m%i' % lm)
+        tmp_phase_h5 = h5py.File( phase_tmp , 'r' )
+        h5py.h5o.copy( tmp_phase_h5.id , to_bytes('/'), h5f.id, to_bytes('/phase_l%i_m%i' % lm) )
 
         # delete temporary h5 files
         remove( amp_tmp ); remove( phase_tmp )
