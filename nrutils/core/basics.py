@@ -1763,3 +1763,80 @@ def find_amp_peak_index( t, amp, phi, plot = False, return_jid=False ):
         ans = k_amp_max
         if return_jid: ans = (0,0)
         return ans
+
+# Low level function for smoothing raw waveform array data amplitude and phase derivative separately
+def smooth_wfarr(wfarr,width=30,verbose=False,plot=False):
+    
+    '''
+    Given waveform array (wfarr) with columns [t,+,x] (strain of derivatives thereof), 
+    compute the instanteneous phase derivative, smooth it, and then output the reconstructed 
+    polarizations. This is a low level routine inteneded for CAREFUL data quality 
+    manipulation. 
+    '''
+    
+    #
+    from numpy import unwrap,angle,vstack,exp,mean
+    from positive import intrp_diff,spline_antidiff
+    
+    #
+    t,p,c = wfarr.T
+    y = p + 1j * c
+    
+    #
+    phi = unwrap(angle(y))
+    dphi = intrp_diff( t, phi )
+    
+    #
+    s_dphi = smooth( dphi, width=width ).answer
+    
+    #
+    s_phi = spline_antidiff( t, s_dphi )
+    
+    #
+    amp = abs(y)
+    s_amp = smooth( amp, width=width ).answer
+    
+    #
+    mask = (t>500) & (t<1000)
+    shift = mean(phi[mask]-s_phi[mask])
+    alert('corrective phase shift = '+str(shift),verbose=verbose)
+    s_phi += shift
+    
+    #
+    s_y = s_amp * exp( 1j * s_phi )
+    s_p = s_y.real
+    s_c = s_y.imag
+    
+    #
+    s_wfarr = vstack([t,s_p,s_c]).T
+    
+    #
+    if plot:
+        
+        #
+        from matplotlib.pyplot import plot,figure,show,figaspect,xlabel,ylabel,yscale,subplots,sca
+        
+        #
+        fig,ax = subplots(2,1,figsize=2*figaspect(2*0.618))
+        ax = ax.flatten()
+        
+        #
+        sca(ax[0])
+        plot( t, phi )
+        plot( t, s_phi )
+        xlabel(r'$t/M$')
+        xlabel(r'$d\phi_{\ell m}/dt$')
+        
+        #
+        sca(ax[1])
+        plot( t, amp )
+        plot( t, s_amp )
+        yscale('log')
+        xlabel(r'$t/M$')
+        xlabel(r'$|h_{\ell m}|$')
+        
+        #
+        show()
+    
+    #
+    return s_wfarr

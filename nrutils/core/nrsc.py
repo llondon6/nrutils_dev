@@ -1331,6 +1331,7 @@ class gwf:
                   preinspiral           = None, # Holder for information about the raw waveform's turn-on
                   postringdown          = None, # Holder for information about the raw waveform's turn-off
                   k_amp_max = None,
+                  __is_recomposed__ = False,
                   verbose = False ):    # Verbosity toggle
 
         #
@@ -1392,6 +1393,15 @@ class gwf:
             this.qnmo_prograde = qnmobj( mf, abs(xf), l,m,0,p=1,use_nr_convention=True,verbose=False,calc_slm=False,calc_rlm=False )
             # Retrograde QNM
             this.qnmo_retrograde = qnmobj( mf, abs(xf), l,m,0,p=-1,use_nr_convention=True,verbose=False,calc_slm=False,calc_rlm=False )
+        
+        
+        # Use input to tag this multipole as recomposed or not. A recomposed waveform is a linear combinaiton of miltipole moments weighted by the appropriate spherical harmonics which themselves are evaluated at a sky location around the source's center of mass
+        this.__is_recomposed__ = __is_recomposed__
+        
+        # We want to store some QNM information for recomposed waveforms for use in data formatting and feature recognition (ie we want to know something about expected length and time scales)
+        if this.__is_recomposed__:
+            # Prograde QNM
+            this.qnmo_prograde_l2m2 = qnmobj( mf, abs(xf), 2,2,0,p=1,use_nr_convention=True,verbose=False,calc_slm=False,calc_rlm=False )
 
         this.setfields(wfarr=wfarr,dt=dt,k_amp_max=k_amp_max)
 
@@ -1585,7 +1595,22 @@ class gwf:
                 # * any supposed junk radiation both presents and damps away on the ringdown time scale (I've always been skeptical of this argument, but it's a useful heuristic)
                 # * the waveform is long enough for this timescale to not iclude the peak radiation
                 #
-                mask = this.t > ( this.t[0] + 2*this.qnm_prograde_damp_time )
+                if this.__is_recomposed__:
+                    #
+                    this.qnm_prograde_wdamp_l2m2 = this.qnmo_prograde_l2m2.CW.imag
+                    this.qnm_prograde_fdamp_l2m2 = this.qnm_prograde_wdamp_l2m2 / (2*pi)
+                    # The time needed for one e-fold 
+                    this.qnm_prograde_damp_time_l2m2 = 1.0 / this.qnm_prograde_fdamp_l2m2
+                    expected_junk_timescale = 2*this.qnm_prograde_damp_time_l2m2
+                    #
+                elif this.__is_a_multipole_moment__:
+                    #
+                    expected_junk_timescale = 2*this.qnm_prograde_damp_time
+                else:
+                    error('There is a minor logic bug that I dearly ask you to fix: gwf must either be a multipole moment, or recomposed. But something else has happened for your case.')
+                    
+                # we multiply expected_junk_timescale by 2 for good measure (ie its a heuristic)
+                mask = this.t > ( this.t[0] + 2*expected_junk_timescale )
                 mask = mask & (this.amp>(0.01*max(this.amp)))
                 index_mask = where(mask)[0]
                 
@@ -2596,6 +2621,23 @@ class gwf:
         #
         if not apply: return y
 
+    #
+    def __smooth__(this,width):
+        
+        '''
+        NOTE that outputs copy
+        '''
+        
+        #
+        that = this.copy()
+        
+        #
+        that.wfarr = smooth_wfarr(that.wfarr,width)
+        that.setfields()
+        
+        #
+        return that
+        
 
 
 # Class for waveforms: Psi4 multipoles, strain multipoles (both spin weight -2), recomposed waveforms containing h+ and hx. NOTE that detector response waveforms will be left to pycbc to handle
@@ -2605,7 +2647,7 @@ class gwylm:
     '''
 
     # Class constructor
-    def __init__( this,scentry_obj, lm=None, lmax=None, dt=0.15, load=None, clean=True, extraction_parameter=None, level=None, w22=None, lowpass=None, calcstrain=None, calcnews=None, enforce_polarization_convention=None, fftfactor=None, pad=None, __M_RELATIVE_SIGN_CONVENTION__=None, initial_j_align=None, load_dynamics=True,use_tortoise_for_dynamics=False,mutipole_dictionary=None, verbose=None, wfarr_dict=None, enforce_m_relative_sign_convention=True,mu=None,__USETDINTEGRATION__=False ):
+    def __init__( this,scentry_obj, lm=None, lmax=None, dt=0.15, load=None, clean=True, extraction_parameter=None, level=None, w22=None, lowpass=None, calcstrain=None, calcnews=None, enforce_polarization_convention=None, fftfactor=None, pad=None, __M_RELATIVE_SIGN_CONVENTION__=None, initial_j_align=None, load_dynamics=True,use_tortoise_for_dynamics=False,mutipole_dictionary=None, verbose=None, wfarr_dict=None, enforce_m_relative_sign_convention=True,mu=None,__USETDINTEGRATION__=False, smooth_upon_load=False ):
 
         '''
 
@@ -2687,6 +2729,9 @@ class gwylm:
 
         # Validate the lm input
         this.__valinputs__(thisfun,lm=lm,lmax=lmax,scentry_obj=scentry_obj)
+
+        #
+        this.smooth_upon_load = smooth_upon_load
 
         #
         this.__USETDINTEGRATION__ = __USETDINTEGRATION__
@@ -3754,6 +3799,13 @@ class gwylm:
                             kind='$rM%s_{%i%i}$'%(kind2texlabel(this.config.__disk_data_kind__),l,m) )
 
             #
+            if this.smooth_upon_load:
+                #
+                smooth_width = this.smooth_upon_load if isinstance(this.smooth_upon_load,int) else 20
+                wfarr = smooth_wfarr(wfarr,smooth_width)
+                alert(  '(%s,%s)>> smoothing multipole amplitude and phase dertivative by %s samples'%( magenta(str(l)),magenta(str(m)),blue(str(smooth_width)) ), verbose=this.verbose  )
+            
+            #
             y_ = mkgwf(wfarr)
 
             # use array data to construct gwf object with multipolar fields
@@ -4584,9 +4636,19 @@ class gwylm:
     def tshift( this, shift=0, method=None, apply=True ):
         # shift each mode
         ans = this if apply else this.copy()
-        for z in ans.lm:
-            for k in ans.lm[z]:
-                ans.lm[z][k].tshift( shift=shift, method=method, apply=apply )
+        
+        #
+        for k in ('ylm','flm','hlm'):
+            for y in ans.__dict__[k]:
+                y.tshift( shift=shift, method=method, apply=True )
+        
+        # #
+        # for z in ans.lm:
+        #     for k in ans.lm[z]:
+        #         ans.lm[z][k].tshift( shift=shift, method=method, apply=apply )
+                
+        #
+        ans.__curate__()
         #
         if not apply: return ans
 
@@ -5070,7 +5132,7 @@ class gwylm:
             Z = dot( M,Y )[:,0]
             wfarr = array( [ alm[0].t, Z.real, Z.imag ] ).T
             # return the ouput
-            return gwf( wfarr, kind=kind, ref_scentry = this.__scentry__ )
+            return gwf( wfarr, kind=kind, ref_scentry = this.__scentry__, __is_recomposed__=True, mf=this.mf, xf=this.xf )
 
         #
         if kind=='psi4':
@@ -5079,6 +5141,9 @@ class gwylm:
             y = __recomp__( this.hlm, kind=r'$r\,h(t,\theta,\phi)/M$' )
         elif kind=='news':
             y = __recomp__( this.flm, kind=r'$r\,\dot{h}(t,\theta,\phi)/M$' )
+
+        #
+        y.qnm_prograde_damp_time_l2m2 = this[2,2]['psi4'].qnm_prograde_damp_time
 
         #
         return y
@@ -6234,7 +6299,26 @@ class gwylm:
             else:
                 warning('We cannot check the consistency of dynamics and metadata information.')
 
-
+    #
+    def __smooth__(this,width):
+        
+        '''
+        Smooth amplitude and phase derivative of each gwf object and reset derived fields
+        '''
+        
+        #
+        if (width<=0) or not isinstance(width,int):
+            error('smooth width must be positive integer')
+        
+        #
+        that = this.copy()
+        for z in that.lm:
+            for k in that.lm[z]:
+                that.lm[z][k] = this.lm[z][k].__smooth__(width)
+        
+        #
+        return that       
+        
 
     #
     def __flip_cross_sign_convention__(this):
